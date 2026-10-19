@@ -45,13 +45,14 @@ export async function api<T = any>(method: string, path: string, body?: unknown,
 }
 
 /** Transport for the sync engine: returns HTTP errors instead of throwing, throws only when the network is unreachable. */
-export async function httpFetch(method: string, path: string, body?: unknown, init: { org?: string; raw?: Blob | Uint8Array; contentType?: string; blob?: boolean } = {}, retry = true): Promise<{ status: number; data: any; blob?: Blob }> {
+export async function httpFetch(method: string, path: string, body?: unknown, init: { org?: string; raw?: Blob | Uint8Array; contentType?: string; blob?: boolean; headers?: Record<string, string> } = {}, retry = true): Promise<{ status: number; data: any; blob?: Blob }> {
   const headers: Record<string, string> = { "x-lang": getLang() };
   if (init.raw !== undefined) headers["content-type"] = init.contentType ?? "application/octet-stream";
   else headers["content-type"] = "application/json";
   if (auth) headers.authorization = `Bearer ${auth.access_token}`;
   const org = init.org ?? orgId;
   if (org) headers["x-org-id"] = org;
+  if (init.headers) for (const [k, v] of Object.entries(init.headers)) if (v) headers[k] = v;
   const r = await fetch("/api" + path, { method, headers, body: init.raw !== undefined ? (init.raw as BodyInit) : body === undefined ? undefined : JSON.stringify(body) });
   if (r.status === 401 && retry && auth && (await refresh())) return httpFetch(method, path, body, init, false);
   if (init.blob && r.ok) return { status: r.status, data: null, blob: await r.blob() };

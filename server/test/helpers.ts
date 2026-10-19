@@ -33,7 +33,7 @@ export async function setup(): Promise<Ctx> {
     limits: { requestLink: 10000, verify: 10000, accept: 10000, refresh: 10000 },
     ocr: { apiKey: "test-key", model: "test-model", fetch: fetchMock },
   });
-  const s = await seed(h.db, { superadminEmail: "nicolas@example.test", testSites: true });
+  const s = await seed(h.db, { superadminEmail: "nicolas@example.test", testSites: true, storage });
   const ctx = { h, app, mailer, storage, hub, orgDE: s.orgs[0].id, orgES: s.orgs[1].id, roleId: {}, superToken: "", ocrCalls, ocrAnswer } as Ctx;
   ctx.superToken = (await login(ctx, "nicolas@example.test")).access_token;
   ctx.roleId = Object.fromEntries(((await call(ctx, "GET", "/admin/roles", { token: ctx.superToken, org: ctx.orgES })).body as { key: string; id: string }[]).map((r) => [r.key, r.id]));

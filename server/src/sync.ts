@@ -6,11 +6,12 @@ import {
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "./audit";
+import { recipientsOfVehicle } from "./reports";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, effectivePermissions, filterFields, type Principal, type VehicleRef } from "./permissions";
 import {
-  memberships, orgSettings, photos, stations, syncOps, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
+  campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import type { Storage } from "./storage";
 
@@ -310,6 +311,21 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       return commit(tx, u, row, { colibri: op.colibri as never, colibriFile: file as never }, ["colibri"], [], op.type, { after: { imported: op.colibri.imported, reportTotal: op.colibri.reportTotal } });
     }
 
+    case "report.send": {
+      const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
+      need(u, op.report.type === "kva" ? "kva.envoyer" : "rapport_reparation.envoyer", ref);
+      const [ex] = await tx.select().from(reportSends).where(eq(reportSends.id, op.report.id));
+      if (ex) {
+        if (ex.vehicleId !== row.id || ex.sentBy !== u.id) throw new Reject("not_allowed");
+        return { status: "ok", orgId: row.orgId, seq: row.seq };
+      }
+      const recipients = await recipientsOfVehicle(tx, row, op.report.type);
+      if (!recipients.length) throw new Reject("report_no_recipients");
+      await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id });
+      await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "report", entityId: op.report.id, after: { vehicleId: row.id, type: op.report.type, recipients } });
+      return { status: "ok", orgId: row.orgId, seq: row.seq };
+    }
+
     case "photo.add": {
       const p = op.photo;
       const { row, ref } = await lockVehicle(tx, u, p.vehicleId);
@@ -517,5 +533,25 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     people = rows.map((r) => ({ id: r.id, name: r.name || r.email }));
   }
   const priceSafe = visibleSettings(u, orgId, settings);
-  return { stations: st, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people };
+  // master data for the pickers
+  const internal = u.isSuperadmin || u.grants.some((g) => g.orgId === orgId && ["station", "assigne", "campagne"].includes(g.scope));
+  const myGrants = u.grants.filter((g) => g.orgId === orgId);
+  const insRows = await db.select().from(insurers).where(eq(insurers.orgId, orgId)).orderBy(asc(insurers.name));
+  const wantIns = new Set([...vs.map((v) => v.insurerId).filter(Boolean), ...myGrants.map((g) => g.scopeInsurerId).filter(Boolean)] as string[]);
+  const linkRows = await db.select().from(stationInsurers).innerJoin(stations, eq(stations.id, stationInsurers.stationId)).where(eq(stations.orgId, orgId));
+  const visibleIds = new Set(list.map((x) => x.id));
+  const campRows = await db.select().from(campaigns).where(eq(campaigns.orgId, orgId)).orderBy(asc(campaigns.name));
+  const campLinks = await db.select().from(campaignStations);
+  const wantCamp = new Set([...vs.map((v) => v.campaignId).filter(Boolean), ...myGrants.map((g) => g.scopeCampaignId).filter(Boolean)] as string[]);
+  const compRows = await db.select().from(companies).where(and(eq(companies.orgId, orgId), eq(companies.active, true))).orderBy(asc(companies.name));
+  const maySplit = u.isSuperadmin || perms.has("repartition_interne.voir");
+  const techRows = maySplit ? await db.select().from(technicians).where(and(eq(technicians.orgId, orgId), eq(technicians.active, true))).orderBy(asc(technicians.name)) : [];
+  return {
+    stations: st, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
+    stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
+    campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),
+    companies: compRows.map((co) => ({ id: co.id, name: co.name, address: co.address, taxId: co.taxId, email: co.email, footer: co.footer, hasLogo: !!co.logoKey, logo: (co.logoMeta as { kind: "jpg" | "png"; width: number; height: number } | null) ?? null })),
+    technicians: techRows.map((tc) => ({ id: tc.id, name: tc.name, userId: tc.userId, defaultPctPdr: Number(tc.defaultPctPdr), defaultPctDemontage: Number(tc.defaultPctDemontage) })),
+  };
 }

@@ -28,6 +28,13 @@ export function Basis({ v }: { v: LocalVehicle }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const zust: string[] = x.zustand ?? [];
   const sites = f.refs?.stations ?? [];
+  const companies = f.refs?.companies ?? [];
+  // legacy vehicles (before letterheads) map their old logo switch onto the seeded companies
+  const currentCompany = x.companyId && companies.some((co) => co.id === x.companyId) ? x.companyId : (x.logo === "none" ? companies.find((co) => !co.hasLogo) : companies.find((co) => co.hasLogo))?.id ?? companies[0]?.id ?? "";
+  const linked = new Set((f.refs?.stationInsurers ?? []).filter((l) => l.stationId === v.clientStationId).map((l) => l.insurerId));
+  // only insurers that work with this customer carrosserie (all of them when none is linked yet); the current one stays selectable
+  const insurerOptions = (f.refs?.insurers ?? []).filter((i) => !linked.size || linked.has(i.id) || i.id === v.insurerId);
+  const campaignOptions = (f.refs?.campaigns ?? []).filter((cp) => !cp.stationIds.length || (v.stationId && cp.stationIds.includes(v.stationId)) || cp.id === v.campaignId);
 
   const importScan = async (file: File) => {
     setInfo(t("readingScan"));
@@ -66,10 +73,34 @@ export function Basis({ v }: { v: LocalVehicle }) {
         <Seg value={land} options={[{ value: "DE", label: "🇩🇪 Deutschland · BVAT" }, { value: "ES", label: "🇪🇸 España · IVA 21 %" }]}
           onChange={(l) => { set({ land: l, stundensatz: prices ? (l === "ES" ? f.calc.rateES : f.calc.rateDE) : undefined } as HeaderFields); void setPrefs(f.db, { land: l }); }} />
       </Field>
-      <Field label={t("logoLabel")} hint={x.logo === "none" ? t("logoHintNone") : t("logoHintPdr")}>
-        <Seg value={x.logo === "none" ? "none" : "pdr"} options={[{ value: "pdr", label: t("logoPdr") }, { value: "none", label: t("logoNone") }]}
-          onChange={(l) => { set({ logo: l }); void setPrefs(f.db, { logo: l }); }} />
-      </Field>
+      {(f.refs?.insurers.length ?? 0) > 0 && (
+        <Field label={t("insurer")}>
+          <select className="sel" disabled={!edit} value={v.insurerId ?? ""} onChange={(e) => set({ insurerId: e.target.value || null })}>
+            <option value="">—</option>
+            {insurerOptions.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </Field>
+      )}
+      {(f.refs?.campaigns.length ?? 0) > 0 && (
+        <Field label={t("campaign")}>
+          <select className="sel" disabled={!edit} value={v.campaignId ?? ""} onChange={(e) => set({ campaignId: e.target.value || null })}>
+            <option value="">—</option>
+            {campaignOptions.map((cp) => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
+          </select>
+        </Field>
+      )}
+      {companies.length > 0 ? (
+        <Field label={t("letterhead")} hint={t("letterheadHint")}>
+          <select className="sel" disabled={!edit} value={currentCompany} onChange={(e) => { set({ companyId: e.target.value }); void setPrefs(f.db, { lastCompanyId: e.target.value }); }}>
+            {companies.map((co) => <option key={co.id} value={co.id}>{co.name}{co.hasLogo ? "" : ` (${t("noLogo")})`}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <Field label={t("logoLabel")} hint={x.logo === "none" ? t("logoHintNone") : t("logoHintPdr")}>
+          <Seg value={x.logo === "none" ? "none" : "pdr"} options={[{ value: "pdr", label: t("logoPdr") }, { value: "none", label: t("logoNone") }]}
+            onChange={(l) => { set({ logo: l }); void setPrefs(f.db, { logo: l }); }} />
+        </Field>
+      )}
       {f.can("colibri.importer") && (
         <Field>
           <button className="seg" style={{ width: "100%", borderColor: "var(--navy)", fontWeight: 700 }} onClick={() => fileRef.current?.click()}>📄 {t("colibriImportBtn")}</button>

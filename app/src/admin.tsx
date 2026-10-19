@@ -10,7 +10,7 @@ const isDefaultName = (key: string | null | undefined, name: string) => !!key &&
 const roleLabel = (key: string | null | undefined, name: string) => (isDefaultName(key, name) ? tOr("r." + key, name) : name);
 const roleDesc = (key: string | null | undefined, name: string, desc: string) => (isDefaultName(key, name) ? tOr("rd." + key, desc) : desc);
 
-function useLoad<T>(path: string, deps: unknown[] = []) {
+export function useLoad<T>(path: string, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [err, setErr] = useState("");
   const reload = useCallback(async () => {
@@ -21,12 +21,12 @@ function useLoad<T>(path: string, deps: unknown[] = []) {
   return { data, err, reload };
 }
 
-function Err({ msg }: { msg: string }) { return msg ? <div className="err">{msg}</div> : null; }
-function Card({ title, children, actions }: { title?: string; children: ReactNode; actions?: ReactNode }) {
+export function Err({ msg }: { msg: string }) { return msg ? <div className="err">{msg}</div> : null; }
+export function Card({ title, children, actions }: { title?: string; children: ReactNode; actions?: ReactNode }) {
   return <div className="card">{(title || actions) && <div className="row"><h3 className="grow" style={{ margin: 0 }}>{title}</h3>{actions}</div>}{children}</div>;
 }
 
-async function act(fn: () => Promise<unknown>, setErr: (m: string) => void, done?: () => void) {
+export async function act(fn: () => Promise<unknown>, setErr: (m: string) => void, done?: () => void) {
   try { await fn(); setErr(""); done?.(); } catch (e) { setErr((e as Error).message); }
 }
 

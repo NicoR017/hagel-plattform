@@ -1,0 +1,233 @@
+import { useEffect, useState } from "react";
+import { api, httpFetch } from "./api";
+import { act, Card, Err, useLoad } from "./admin";
+import { t } from "./i18n";
+
+interface Station { id: string; type: string; name: string; active: boolean }
+interface Insurer { id: string; name: string; reportEmails: string[]; sendReports: boolean; reportsToSend: string; stationIds: string[] }
+
+const emails = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+
+// ---------------------------------------------------------------- insurers
+export function InsurersPage() {
+  const list = useLoad<Insurer[]>("/admin/insurers");
+  const sites = useLoad<Station[]>("/admin/stations");
+  const [f, setF] = useState<{ id?: string; name: string; emails: string; send: boolean; which: string } | null>(null);
+  const [err, setErr] = useState("");
+  const carros = (sites.data ?? []).filter((s) => s.type === "carrosserie" && s.active);
+  const toggleLink = (insurerId: string, stationId: string, on: boolean) => {
+    // the API replaces the whole list of a carrosserie: rebuild it from what we know
+    const ids = (list.data ?? []).filter((i) => i.stationIds.includes(stationId) && i.id !== insurerId).map((i) => i.id);
+    if (on) ids.push(insurerId);
+    void act(() => api("PUT", `/admin/stations/${stationId}/insurers`, { insurer_ids: ids }), setErr, list.reload);
+  };
+  return (
+    <>
+      <Card title={t("insurers")} actions={<button className="btn" onClick={() => setF({ name: "", emails: "", send: false, which: "both" })}>{t("newInsurer")}</button>}>
+        <Err msg={list.err || err} />
+        {(list.data ?? []).map((i) => (
+          <div key={i.id} style={{ borderTop: "1px solid var(--line)", padding: "10px 0" }}>
+            <div className="row">
+              <b className="grow">{i.name}</b>
+              {i.sendReports ? <span className="pill">{t("getsReports")}: {t(("rep." + i.reportsToSend) as never)}</span> : <span className="pill off">{t("noReports")}</span>}
+              <button className="btn sec" onClick={() => setF({ id: i.id, name: i.name, emails: i.reportEmails.join(", "), send: i.sendReports, which: i.reportsToSend })}>{t("edit")}</button>
+              <button className="btn danger" onClick={() => { if (window.confirm(`${t("delete")}: ${i.name}?`)) void act(() => api("DELETE", `/admin/insurers/${i.id}`), setErr, list.reload); }}>{t("delete")}</button>
+            </div>
+            <div style={{ color: "var(--sub)", fontSize: 13, marginTop: 4 }}>{i.reportEmails.join(", ") || "—"}</div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--sub)" }}>{t("worksWith")}: </span>
+              {carros.map((s) => (
+                <label key={s.id} style={{ display: "inline-flex", gap: 6, alignItems: "center", marginRight: 14, fontSize: 14, color: "var(--text)" }}>
+                  <input type="checkbox" style={{ width: 20, height: 20, minHeight: 0 }} checked={i.stationIds.includes(s.id)} onChange={(e) => toggleLink(i.id, s.id, e.target.checked)} />{s.name}
+                </label>
+              ))}
+              {!carros.length && <span className="muted">—</span>}
+            </div>
+          </div>
+        ))}
+        {!list.data?.length && <p className="muted">{t("noData")}</p>}
+      </Card>
+      {f && (
+        <Card title={f.id ? f.name : t("newInsurer")}>
+          <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <label>{t("reportEmails")}</label><input value={f.emails} onChange={(e) => setF({ ...f, emails: e.target.value })} />
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}><input type="checkbox" style={{ width: 22, height: 22, minHeight: 0 }} checked={f.send} onChange={(e) => setF({ ...f, send: e.target.checked })} />{t("getsReports")}</label>
+          {f.send && <><label>{t("whichReports")}</label>
+            <select value={f.which} onChange={(e) => setF({ ...f, which: e.target.value })}>{["kva", "reparation", "both"].map((w) => <option key={w} value={w}>{t(("rep." + w) as never)}</option>)}</select></>}
+          <Err msg={err} />
+          <p className="row">
+            <button className="btn" onClick={() => {
+              const body = { name: f.name, report_emails: emails(f.emails), send_reports: f.send, reports_to_send: f.which };
+              void act(() => (f.id ? api("PUT", `/admin/insurers/${f.id}`, body) : api("POST", "/admin/insurers", body)), setErr, () => { setF(null); void list.reload(); });
+            }}>{t("save")}</button>
+            <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- campaigns
+interface Campaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
+export function CampaignsPage() {
+  const list = useLoad<Campaign[]>("/admin/campaigns");
+  const sites = useLoad<Station[]>("/admin/stations");
+  const [f, setF] = useState<{ id?: string; name: string; country: string; start: string; end: string; stationIds: string[] } | null>(null);
+  const [err, setErr] = useState("");
+  return (
+    <>
+      <Card title={t("campaigns")} actions={<button className="btn" onClick={() => setF({ name: "", country: "ES", start: "", end: "", stationIds: [] })}>{t("newCampaign")}</button>}>
+        <Err msg={list.err || err} />
+        <table><tbody>{(list.data ?? []).map((cp) => (
+          <tr key={cp.id}>
+            <td><b>{cp.name}</b><div style={{ color: "var(--sub)", fontSize: 13 }}>{cp.country} · {cp.start ?? "…"} → {cp.end ?? "…"}</div></td>
+            <td>{cp.stationIds.map((id) => <span key={id} className="pill">{sites.data?.find((s) => s.id === id)?.name ?? "?"}</span>)}</td>
+            <td style={{ whiteSpace: "nowrap" }}>
+              <button className="btn sec" onClick={() => setF({ id: cp.id, name: cp.name, country: cp.country, start: cp.start ?? "", end: cp.end ?? "", stationIds: cp.stationIds })}>{t("edit")}</button>{" "}
+              <button className="btn danger" onClick={() => { if (window.confirm(`${t("delete")}: ${cp.name}?`)) void act(() => api("DELETE", `/admin/campaigns/${cp.id}`), setErr, list.reload); }}>{t("delete")}</button>
+            </td>
+          </tr>
+        ))}</tbody></table>
+        {!list.data?.length && <p className="muted">{t("noData")}</p>}
+      </Card>
+      {f && (
+        <Card title={f.id ? f.name : t("newCampaign")}>
+          <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Talavera Allianz Okt 2026" />
+          <div className="row">
+            <div className="grow"><label>{t("country")}</label><select value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })}><option>DE</option><option>ES</option></select></div>
+            <div className="grow"><label>{t("from")}</label><input type="date" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
+            <div className="grow"><label>{t("to")}</label><input type="date" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>
+          </div>
+          <label>{t("sites")}</label>
+          <div className="grid">{(sites.data ?? []).filter((s) => s.active).map((s) => (
+            <label key={s.id}><input type="checkbox" checked={f.stationIds.includes(s.id)} onChange={(e) => setF({ ...f, stationIds: e.target.checked ? [...f.stationIds, s.id] : f.stationIds.filter((x) => x !== s.id) })} />{s.name}</label>
+          ))}</div>
+          <Err msg={err} />
+          <p className="row">
+            <button className="btn" onClick={() => {
+              const body = { name: f.name, country: f.country, start: f.start || null, end: f.end || null, station_ids: f.stationIds };
+              void act(() => (f.id ? api("PUT", `/admin/campaigns/${f.id}`, body) : api("POST", "/admin/campaigns", body)), setErr, () => { setF(null); void list.reload(); });
+            }}>{t("save")}</button>
+            <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- letterheads
+interface Company { id: string; name: string; address: string; taxId: string; email: string; footer: string; logoKey: string | null; active: boolean }
+
+function LogoPreview({ id, version }: { id: string; version: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let u: string | null = null, live = true;
+    if (!version) { setUrl(null); return; }
+    httpFetch("GET", `/admin/companies/${id}/logo`, undefined, { blob: true }).then((r) => { if (live && r.blob) { u = URL.createObjectURL(r.blob); setUrl(u); } }).catch(() => undefined);
+    return () => { live = false; if (u) URL.revokeObjectURL(u); };
+  }, [id, version]);
+  return url ? <img src={url} alt="logo" style={{ maxHeight: 60, maxWidth: 200, display: "block", background: "#fff", border: "1px solid var(--line)", borderRadius: 6, padding: 4 }} /> : <span className="muted">{t("noLogo")}</span>;
+}
+
+export function CompaniesPage() {
+  const list = useLoad<Company[]>("/admin/companies");
+  const [f, setF] = useState<{ id?: string; name: string; address: string; taxId: string; email: string; footer: string; active: boolean } | null>(null);
+  const [err, setErr] = useState("");
+  const upload = async (id: string, file: File) => {
+    const r = await httpFetch("PUT", `/admin/companies/${id}/logo`, undefined, { raw: file, contentType: file.type });
+    if (r.status !== 200) setErr(String(r.data?.error ?? r.status)); else { setErr(""); await list.reload(); }
+  };
+  return (
+    <>
+      <Card title={t("letterheads")} actions={<button className="btn" onClick={() => setF({ name: "", address: "", taxId: "", email: "", footer: "", active: true })}>{t("newLetterhead")}</button>}>
+        <p className="muted" style={{ marginTop: 0 }}>{t("letterheadAdminHint")}</p>
+        <Err msg={list.err || err} />
+        {(list.data ?? []).map((co) => (
+          <div key={co.id} className="row" style={{ borderTop: "1px solid var(--line)", padding: "10px 0", alignItems: "flex-start" }}>
+            <div className="grow">
+              <b>{co.name}</b>{!co.active && <span className="pill off">{t("inactive")}</span>}
+              <div style={{ color: "var(--sub)", fontSize: 13, whiteSpace: "pre-line" }}>{[co.address, co.taxId, co.email].filter(Boolean).join("\n")}</div>
+            </div>
+            <div style={{ minWidth: 160 }}><LogoPreview id={co.id} version={co.logoKey} /></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label className="btn sec" style={{ display: "inline-flex", alignItems: "center", cursor: "pointer", margin: 0 }}>{t("uploadLogo")}
+                <input type="file" accept="image/png,image/jpeg" style={{ display: "none" }} onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ""; if (fl) void upload(co.id, fl); }} /></label>
+              {co.logoKey && <button className="btn danger" onClick={() => void act(() => api("DELETE", `/admin/companies/${co.id}/logo`), setErr, list.reload)}>{t("removeLogo")}</button>}
+              <button className="btn sec" onClick={() => setF({ id: co.id, name: co.name, address: co.address, taxId: co.taxId, email: co.email, footer: co.footer, active: co.active })}>{t("edit")}</button>
+            </div>
+          </div>
+        ))}
+      </Card>
+      {f && (
+        <Card title={f.id ? f.name : t("newLetterhead")}>
+          <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <label>{t("address")}</label><textarea rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
+          <div className="row">
+            <div className="grow"><label>{t("taxId")}</label><input value={f.taxId} onChange={(e) => setF({ ...f, taxId: e.target.value })} /></div>
+            <div className="grow"><label>{t("email")}</label><input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+          </div>
+          <label>{t("footerText")}</label><textarea rows={2} value={f.footer} onChange={(e) => setF({ ...f, footer: e.target.value })} />
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}><input type="checkbox" style={{ width: 22, height: 22, minHeight: 0 }} checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} />{t("active")}</label>
+          <Err msg={err} />
+          <p className="row">
+            <button className="btn" onClick={() => {
+              const body = { name: f.name, address: f.address, tax_id: f.taxId, email: f.email, footer: f.footer, active: f.active };
+              void act(() => (f.id ? api("PUT", `/admin/companies/${f.id}`, body) : api("POST", "/admin/companies", body)), setErr, () => { setF(null); void list.reload(); });
+            }}>{t("save")}</button>
+            <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- technicians
+interface Tech { id: string; name: string; userId: string | null; defaultPctPdr: string; defaultPctDemontage: string; active: boolean }
+interface UserLite { id: string; name: string; email: string }
+export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
+  const list = useLoad<Tech[]>("/admin/technicians");
+  const users = useLoad<UserLite[]>(canUsers ? "/admin/users" : "/me/none");
+  const [f, setF] = useState<{ id?: string; name: string; userId: string; pdr: number; dem: number; active: boolean } | null>(null);
+  const [err, setErr] = useState("");
+  return (
+    <>
+      <Card title={t("technicians")} actions={<button className="btn" onClick={() => setF({ name: "", userId: "", pdr: 50, dem: 100, active: true })}>{t("newTechnician")}</button>}>
+        <p className="muted" style={{ marginTop: 0 }}>{t("technicianAdminHint")}</p>
+        <Err msg={list.err || err} />
+        <table>
+          <thead><tr><th>{t("name")}</th><th>{t("pctPdr")}</th><th>{t("pctDem")}</th><th>{t("account")}</th><th /></tr></thead>
+          <tbody>{(list.data ?? []).map((x) => (
+            <tr key={x.id}>
+              <td>{x.name}{!x.active && <span className="pill off">{t("inactive")}</span>}</td><td>{Number(x.defaultPctPdr)} %</td><td>{Number(x.defaultPctDemontage)} %</td>
+              <td>{x.userId ? users.data?.find((u) => u.id === x.userId)?.email ?? "✓" : t("external")}</td>
+              <td><button className="btn sec" onClick={() => setF({ id: x.id, name: x.name, userId: x.userId ?? "", pdr: Number(x.defaultPctPdr), dem: Number(x.defaultPctDemontage), active: x.active })}>{t("edit")}</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </Card>
+      {f && (
+        <Card title={f.id ? f.name : t("newTechnician")}>
+          <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          {canUsers && <><label>{t("account")}</label>
+            <select value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}><option value="">{t("external")}</option>{(users.data ?? []).map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}</select></>}
+          <div className="row">
+            <div className="grow"><label>{t("pctPdr")}</label><input type="number" min={0} max={100} value={f.pdr} onChange={(e) => setF({ ...f, pdr: Number(e.target.value) })} /></div>
+            <div className="grow"><label>{t("pctDem")}</label><input type="number" min={0} max={100} value={f.dem} onChange={(e) => setF({ ...f, dem: Number(e.target.value) })} /></div>
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}><input type="checkbox" style={{ width: 22, height: 22, minHeight: 0 }} checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} />{t("active")}</label>
+          <Err msg={err} />
+          <p className="row">
+            <button className="btn" onClick={() => {
+              const body = { name: f.name, user_id: f.userId || null, default_pct_pdr: f.pdr, default_pct_demontage: f.dem, active: f.active };
+              void act(() => (f.id ? api("PUT", `/admin/technicians/${f.id}`, body) : api("POST", "/admin/technicians", body)), setErr, () => { setF(null); void list.reload(); });
+            }}>{t("save")}</button>
+            <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}

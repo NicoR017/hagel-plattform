@@ -58,3 +58,34 @@ export const loginVerifyInput = z.object({ token: z.string().min(20).max(200), d
 export const refreshInput = z.object({ refresh_token: z.string().min(20).max(200) });
 
 export const languageInput = z.object({ language: z.enum(LANGS) });
+
+export const insurerInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  report_emails: z.array(emailSchema).max(20).default([]),
+  send_reports: z.boolean().default(false),
+  reports_to_send: z.enum(["kva", "reparation", "both"]).default("both"),
+  azure_insurance_id: z.string().max(80).nullable().default(null),
+});
+export const stationInsurerInput = z.object({ insurer_ids: z.array(uuid).max(100) });
+export const campaignInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  country: z.enum(["DE", "ES"]).default("DE"),
+  start: z.string().max(10).nullable().default(null),
+  end: z.string().max(10).nullable().default(null),
+  station_ids: z.array(uuid).max(200).default([]),
+});
+export const companyInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  address: z.string().max(400).default(""),
+  tax_id: z.string().max(60).default(""),
+  email: z.string().max(254).default(""),
+  footer: z.string().max(600).default(""),
+  active: z.boolean().default(true),
+});
+export const technicianInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  user_id: uuid.nullable().default(null),
+  default_pct_pdr: z.number().min(0).max(100).default(50),
+  default_pct_demontage: z.number().min(0).max(100).default(100),
+  active: z.boolean().default(true),
+});

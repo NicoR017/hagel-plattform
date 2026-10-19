@@ -44,6 +44,13 @@ export const ERROR_MESSAGES = {
   file_type: { de: "Dateityp nicht erlaubt", en: "File type not allowed" },
   ocr_unavailable: { de: "Texterkennung nicht verfügbar", en: "Text recognition unavailable" },
   ocr_failed: { de: "Texterkennung fehlgeschlagen", en: "Text recognition failed" },
+  report_no_recipients: { de: "Keine Empfänger hinterlegt (Carrosserie / Versicherung)", en: "No recipients configured (body shop / insurer)" },
+  report_failed: { de: "E-Mail konnte nicht gesendet werden", en: "The e-mail could not be sent" },
+  report_exists: { de: "Bericht wurde bereits gesendet", en: "This report was already sent" },
+  insurer_not_found: { de: "Versicherung nicht gefunden", en: "Insurer not found" },
+  campaign_not_found: { de: "Kampagne nicht gefunden", en: "Campaign not found" },
+  company_not_found: { de: "Briefkopf nicht gefunden", en: "Letterhead not found" },
+  technician_not_found: { de: "Techniker nicht gefunden", en: "Technician not found" },
   invalid_input: { de: "Ungültige Eingabe", en: "Invalid input" },
   internal: { de: "Interner Fehler", en: "Internal error" },
 } as const;

@@ -7,6 +7,7 @@ import type { LocalVehicle } from "../sync/db";
 import { setShares, setStatus } from "../sync/mutations";
 import { buildRepairReport, buildSendPdf, shareOrDownload, toDoc } from "./docs";
 import { StatusDialog } from "./Dialogs";
+import { SendReportDialog } from "./SendReport";
 import { usePhotos, usePhotoUrl, useField } from "./store";
 import { toast } from "./toast";
 import { NumInput } from "./ui";
@@ -33,10 +34,13 @@ function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
       <NumInput value={cur} onChange={on} max={100} style={{ width: 84 }} /> %
     </div>
   );
-  const names = (cur: string, on: (s: string) => void, id: string) => (
+  const techs = f.refs?.technicians ?? [];
+  const choices = techs.length ? techs.map((tc) => ({ key: tc.id, name: tc.name, pdr: tc.defaultPctPdr, dem: tc.defaultPctDemontage })) : people.map((p) => ({ key: p.id, name: p.name, pdr: undefined as number | undefined, dem: undefined as number | undefined }));
+  /** Picking a technician copies his default percentage onto THIS vehicle (editable; later changes of the default do not touch it). */
+  const names = (cur: string, on: (s: string, pct?: number) => void, id: string, kind: "pdr" | "dem") => (
     <>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-        {people.map((p) => <button key={p.id} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => on(cur.toLowerCase() === p.name.toLowerCase() ? "" : p.name)}>{p.name}</button>)}
+        {choices.map((p) => <button key={p.key} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => on(cur.toLowerCase() === p.name.toLowerCase() ? "" : p.name, cur.toLowerCase() === p.name.toLowerCase() ? undefined : kind === "pdr" ? p.pdr : p.dem)}>{p.name}</button>)}
       </div>
       <input id={id} className="inp" style={{ marginTop: 6, fontWeight: 700 }} disabled={!canEdit} placeholder={t("techNameHint")} value={cur} onChange={(e) => on(e.target.value)} />
     </>
@@ -45,20 +49,27 @@ function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
     <div style={{ marginTop: 14, background: "#fff", border: "1px dashed var(--navy)", borderRadius: 14, padding: "12px 14px" }}>
       <div className="row"><b>{t("splitTitle")}</b><span className="muted" style={{ fontSize: 12 }}>{t("netWord")} {eur(a.basis)}</span></div>
       {sec(`🧑‍🔧 ${t("techPdr")} · ${t("basis")} ${eur(a.pdrBasis)}`)}
-      {names(a.techName, (s) => void setShares(f.mut, v.id, { techName: s }), "tnIn")}
+      {names(a.techName, (s, pct) => void setShares(f.mut, v.id, { techName: s, ...(pct != null ? { techPct: pct } : {}) }), "tnIn", "pdr")}
       {pcts(a.techPct, [40, 45, 50, 55, 60], (n) => void setShares(f.mut, v.id, { techPct: n }))}
       {line(`${a.techName || t("technician")} · ${num(a.techPct, 1)} %`, eur(a.techEur))}
       {a.demEur > 0 ? (
         <>
           {sec(`🔩 ${t("techDem")} · ${eur(a.demEur)}`)}
-          {names(x.demTechName ?? "", (s) => void setShares(f.mut, v.id, { demTechName: s }), "dnIn")}
+          {names(x.demTechName ?? "", (s, pct) => void setShares(f.mut, v.id, { demTechName: s, ...(pct != null ? { demTechPct: pct } : {}) }), "dnIn", "dem")}
           <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{x.demTechName ? "" : t("emptyIsSame")}</div>
           {pcts(a.demTechPct, [50, 70, 80, 100], (n) => void setShares(f.mut, v.id, { demTechPct: n }))}
           {line(`${a.demTechName || t("technician")} · ${num(a.demTechPct, 1)} % ${t("ofDem")}`, eur(a.demTechEur))}
         </>
       ) : <div className="muted" style={{ fontSize: 11, marginTop: 10 }}>{t("demHintShares")}</div>}
       {sec(`🏭 ${t("commissionTitle")}`)}
-      <div className="muted" style={{ fontSize: 11 }}>{t("commissionHint")}</div>
+      <div className="muted" style={{ fontSize: 11 }}>{f.can("commission.modifier") ? t("commissionEditHint") : t("commissionHint")}</div>
+      {f.can("commission.modifier") && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+          {[0, 10, 15, 20, 25].map((n) => <button key={n} className={"chip" + (a.werkMode === "pct" && a.werkPct === n ? " on" : "")} onClick={() => void setShares(f.mut, v.id, { werkMode: "pct", werkPct: n })}>{n}</button>)}
+          <NumInput value={a.werkMode === "pct" ? a.werkPct : null} placeholder="%" max={100} style={{ width: 84 }} onChange={(n) => void setShares(f.mut, v.id, { werkMode: "pct", werkPct: n })} /> %
+          {x.land === "ES" && <button className={"chip" + (a.werkMode === "staffel" ? " on" : "")} onClick={() => void setShares(f.mut, v.id, { werkMode: "staffel" })}>Staffel €</button>}
+        </div>
+      )}
       {line(`${f.stationName(v.clientStationId) || t("customer")} · ${num(a.werkPct, 1)} %${a.werkMode === "staffel" ? " (Staffel)" : ""}`, eur(a.werkEur))}
       <div style={{ height: 1, background: "var(--line)", margin: "10px 0 4px" }} />
       <div className="row"><b>{t("remainsPdr")}</b><b style={{ fontSize: 17, color: a.rest >= 0 ? "var(--greenDk)" : "var(--brick)" }}>{eur(a.rest)} · {num(a.basis ? (a.rest / a.basis) * 100 : 0, 1)} %</b></div>
@@ -78,6 +89,7 @@ export function Kva({ v }: { v: LocalVehicle }) {
   const prices = f.can("prix.voir"), split = f.can("repartition_interne.voir");
   const [busy, setBusy] = useState("");
   const [statusDlg, setStatusDlg] = useState(false);
+  const [sendDlg, setSendDlg] = useState<null | "kva" | "reparation">(null);
   const ready = useRef<{ key: string; p: ReturnType<typeof buildSendPdf> } | null>(null);
   const key = `${v.id}:${v.updatedAt}:${photos.length}:${photos.map((p) => p.inPdf + p.label).join()}`;
 
@@ -182,11 +194,14 @@ export function Kva({ v }: { v: LocalVehicle }) {
         </div>
       )}
 
+      {prices && f.can("kva.envoyer") && (
+        <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("kva")}>✉️ {t("sendByServer")}
+          {v.colibriFile ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>📎 {t("kvaPlusScan")}</span> : null}</button>
+      )}
       {prices && (
         <>
-          <button className="pbtn green" disabled={!!busy} onClick={() => void share(true)}>✉️ {busy || t("shareByMail")}
-            {x.kundeEmail ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>{t("toWord")} {x.kundeEmail}</span> : null}
-            {v.colibriFile ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>📎 {t("kvaPlusScan")}</span> : null}</button>
+          <button className="pbtn sec" disabled={!!busy} onClick={() => void share(true)}>✉️ {busy || t("shareByMail")}
+            {x.kundeEmail ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>{t("toWord")} {x.kundeEmail}</span> : null}</button>
           <button className="pbtn sec" disabled={!!busy} onClick={() => void share(false)}>📄 {t("savePdf")}</button>
         </>
       )}
@@ -204,6 +219,10 @@ export function Kva({ v }: { v: LocalVehicle }) {
           setBusy("");
         }}>📷 {t("repairReport")}</button>
       )}
+      {prices && photos.length > 0 && f.can("rapport_reparation.envoyer") && (
+        <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("reparation")}>✉️ {t("sendRepairByServer")}</button>
+      )}
+      {sendDlg && <SendReportDialog v={v} c={c} type={sendDlg} onClose={() => setSendDlg(null)} />}
       {statusDlg && <StatusDialog ids={[v.id]} current={v.statut} onClose={() => setStatusDlg(false)} />}
     </div>
   );

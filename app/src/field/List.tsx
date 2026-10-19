@@ -31,6 +31,8 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const [day, setDay] = useState("");
   const [site, setSite] = useState("");
   const [customer, setCustomer] = useState("");
+  const [insurer, setInsurer] = useState("");
+  const [campaign, setCampaign] = useState("");
   const [sel, setSel] = useState<Set<string> | null>(null);
   const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "settings" | "backup">(null);
   const [busy, setBusy] = useState("");
@@ -42,7 +44,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const q = query.toLowerCase();
   const filtered = sorted.filter(({ v }) =>
-    (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) &&
+    (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) && (!insurer || v.insurerId === insurer) && (!campaign || v.campaignId === campaign) &&
     `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.demTechName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(STATUSES.map((s) => [s, all.filter((v) => v.statut === s).length]));
   const days = [...new Set(all.map((v) => v.leistungsdatum as string).filter(Boolean))].sort().reverse();
@@ -127,6 +129,20 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
             <option value="">{t("allCustomers")}</option>
             {customers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+        )}
+        {((f.refs?.insurers.length ?? 0) > 0 || (f.refs?.campaigns.length ?? 0) > 0) && (
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            {(f.refs?.insurers.length ?? 0) > 0 && (
+              <select className="sel" value={insurer} onChange={(e) => setInsurer(e.target.value)} aria-label={t("insurer")}>
+                <option value="">{t("allInsurers")}</option>{f.refs!.insurers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            )}
+            {(f.refs?.campaigns.length ?? 0) > 0 && (
+              <select className="sel" value={campaign} onChange={(e) => setCampaign(e.target.value)} aria-label={t("campaign")}>
+                <option value="">{t("allCampaigns")}</option>{f.refs!.campaigns.map((cp) => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
+              </select>
+            )}
+          </div>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className={"seg" + (sel ? " on" : "")} onClick={() => setSel(sel ? null : new Set())}>☑ {t("select")}</button>

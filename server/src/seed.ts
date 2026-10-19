@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
 import { seedRoles } from "./app";
+import { seedCompanies } from "./companies_seed";
+import type { Storage } from "./storage";
 import type { Db } from "./db";
 import { memberships, organizations, stations, users } from "./schema";
 
-export interface SeedOptions { superadminEmail: string; superadminName?: string; testSites?: boolean }
+export interface SeedOptions { superadminEmail: string; superadminName?: string; testSites?: boolean; storage?: Storage }
 
 /** Idempotent: organisations, super-admin, default roles, optional test sites. */
 export async function seed(db: Db, o: SeedOptions) {
@@ -14,6 +16,7 @@ export async function seed(db: Db, o: SeedOptions) {
     if (!org) [org] = await db.insert(organizations).values(w).returning();
     orgs.push(org);
     await seedRoles(db, org.id);
+    if (o.storage) await seedCompanies(db, o.storage, org.id);
   }
   const email = o.superadminEmail.trim().toLowerCase();
   let [su] = await db.select().from(users).where(eq(users.email, email));

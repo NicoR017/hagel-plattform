@@ -3,7 +3,7 @@ import { cursorKey, epochKey, refsKey, type LocalDb, type LocalPhoto, type Local
 import { applyOpLocal, rebuild, vehicleIdOfOp } from "./ops";
 
 export interface HttpResult<T = any> { status: number; data: T; blob?: Blob }
-export interface HttpInit { org?: string; raw?: Blob | Uint8Array; contentType?: string; blob?: boolean }
+export interface HttpInit { org?: string; raw?: Blob | Uint8Array; contentType?: string; blob?: boolean; headers?: Record<string, string> }
 /** Never throws for HTTP error statuses (returns them); throws only when the network is unreachable. */
 export type Http = (method: string, path: string, body?: unknown, init?: HttpInit) => Promise<HttpResult>;
 
@@ -159,6 +159,7 @@ export class SyncEngine {
       const id = row.op.photo.id;
       await this.db.photos.delete(id); await this.db.blobs.delete(`photo:${id}`); await this.db.uploads.delete(`photo:${id}`);
     }
+    if (row.op.type === "report.send") { const k = `report:${row.op.report.id}`; await this.db.blobs.delete(k); await this.db.uploads.delete(k); }
     if (row.op.type === "vehicle.create" || r.code === "vehicle_not_found") await this.dropOpAndDependents(row, false);
   }
 
@@ -283,19 +284,23 @@ export class SyncEngine {
       const pendingFor = await this.db.outbox.where("vehicleId").equals(u.vehicleId).toArray();
       const waiting = u.kind === "photo"
         ? pendingFor.some((r) => r.op.type === "photo.add" && r.op.photo.id === u.refId)
-        : pendingFor.some((r) => r.op.type === "vehicle.create" || r.op.type === "vehicle.colibri");
+        : u.kind === "report"
+          ? pendingFor.some((r) => r.op.type === "vehicle.create" || (r.op.type === "report.send" && r.op.report.id === u.refId))
+          : pendingFor.some((r) => r.op.type === "vehicle.create" || r.op.type === "vehicle.colibri");
       if (waiting) continue;
       const b = await this.db.blobs.get(u.key);
       if (!b) { await this.db.uploads.delete(u.key); continue; }
       let res: Awaited<ReturnType<Http>>;
       try {
-        res = await this.http("PUT", u.kind === "photo" ? `/files/photo/${u.refId}` : `/files/colibri/${u.refId}`, undefined, { raw: b.blob, contentType: b.type });
+        const path = u.kind === "photo" ? `/files/photo/${u.refId}` : u.kind === "report" ? `/files/report/${u.refId}` : `/files/colibri/${u.refId}`;
+        res = await this.http("PUT", path, undefined, { raw: b.blob, contentType: b.type, headers: u.kind === "report" ? { "x-filename": b.name ?? "" } : undefined });
       } catch (e) { this.set({ online: false, lastError: (e as Error).message }); return; }
       if (res.status === 200) {
         await this.db.uploads.delete(u.key);
+        if (u.kind === "report") await this.db.blobs.delete(u.key); // sent: the PDF is not needed on the phone any more
         if (u.kind === "photo") await this.db.photos.update(u.refId, { hasFile: true });
       } else if (res.status === 401) { this.set({ signedOut: true }); return; }
-      else if (res.status === 400 || res.status === 403) {
+      else if (res.status === 400 || res.status === 403 || (res.status === 404 && u.kind === "report")) {
         await this.addIssue(u.orgId, `upload.${u.kind}`, res.status === 403 ? "forbidden" : "file_type", String(res.data?.error ?? ""), u.vehicleId);
         await this.db.uploads.delete(u.key);
       } else {
@@ -314,6 +319,18 @@ export class SyncEngine {
       const r = await this.http("GET", `/files/photo/${id}`, undefined, { blob: true });
       if (r.status !== 200 || !r.blob) return null;
       await this.db.blobs.put({ key: `photo:${id}`, blob: r.blob, type: r.blob.type, size: r.blob.size });
+      return r.blob;
+    } catch { return null; }
+  }
+  /** Letterhead logo (cached on the phone so PDFs can be built offline). */
+  async ensureLogoBlob(companyId: string, orgId: string): Promise<Blob | null> {
+    const key = `logo:${companyId}`;
+    const have = await this.db.blobs.get(key);
+    if (have) return have.blob;
+    try {
+      const r = await this.http("GET", `/admin/companies/${companyId}/logo`, undefined, { blob: true, org: orgId });
+      if (r.status !== 200 || !r.blob) return null;
+      await this.db.blobs.put({ key, blob: r.blob, type: r.blob.type, size: r.blob.size });
       return r.blob;
     } catch { return null; }
   }

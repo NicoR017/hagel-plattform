@@ -10,12 +10,16 @@ import type { Env } from "./env";
 import type { Hub } from "./hub";
 import { recognise, type FetchLike } from "./ocr";
 import { can, type Principal } from "./permissions";
-import { photos, vehicleAssignments, vehicles } from "./schema";
+import { photos, reportSends, users, vehicleAssignments, vehicles } from "./schema";
+import type { Mailer } from "./email";
+import { reportMail } from "./mails";
+import { recipientsOfVehicle } from "./reports";
+import { audit } from "./audit";
 import type { Storage } from "./storage";
 import { colibriKey, nextSeq, photoKey, photoToClient, processPull, processPush, refOf } from "./sync";
 
 interface Deps {
-  db: Db; hub: Hub; storage: Storage;
+  db: Db; hub: Hub; storage: Storage; mailer: Mailer;
   needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env>;
   ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
   validationHook: (r: { success: boolean }, c: Context) => Response | undefined;
@@ -24,7 +28,7 @@ interface Deps {
 const MAX_PHOTO = 4 * 1024 * 1024;
 const MAX_PDF = 15 * 1024 * 1024;
 
-export function syncRoutes({ db, hub, storage, needAuth, needOrg, ocr, validationHook }: Deps) {
+export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }: Deps) {
   const r = new Hono<Env>();
 
   r.post("/sync/push", needAuth, zValidator("json", pushInput, validationHook), async (c) => {
@@ -122,6 +126,69 @@ export function syncRoutes({ db, hub, storage, needAuth, needOrg, ocr, validatio
     const f = await storage.get(colibriKey(v.orgId, v.id));
     if (!f) throw new HttpError(404, "vehicle_not_found");
     return new Response(f.bytes as BodyInit, { headers: { "content-type": "application/pdf", "cache-control": "private, max-age=3600" } });
+  });
+
+  // ---- reports by e-mail ----
+  const reportPerm = (t: string) => (t === "kva" ? "kva.envoyer" : "rapport_reparation.envoyer") as "kva.envoyer" | "rapport_reparation.envoyer";
+  const REPORT_TYPES = ["kva", "reparation"];
+  const reportHits = new Map<string, number[]>();
+
+  /** Who would receive this report (preview in the app; the server recomputes it when the report is sent). */
+  r.get("/reports/recipients", needAuth, async (c) => {
+    const type = c.req.query("type") ?? "kva";
+    if (!REPORT_TYPES.includes(type)) throw new HttpError(400, "invalid_input");
+    const v = await vehicleFor(c.get("principal"), c.req.query("vehicleId") ?? "", "vehicules.voir");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    if (!can(c.get("principal"), reportPerm(type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(403, "forbidden");
+    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation") });
+  });
+
+  /** History of what was sent for a vehicle. */
+  r.get("/reports", needAuth, async (c) => {
+    const v = await vehicleFor(c.get("principal"), c.req.query("vehicleId") ?? "", "vehicules.voir");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    const ref = refOf(v, as.map((a) => a.userId));
+    if (!can(c.get("principal"), "kva.envoyer", ref) && !can(c.get("principal"), "rapport_reparation.envoyer", ref)) throw new HttpError(403, "forbidden");
+    const rows = await db.select({ r: reportSends, name: users.name, email: users.email }).from(reportSends).leftJoin(users, eq(users.id, reportSends.sentBy)).where(eq(reportSends.vehicleId, v.id));
+    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+  });
+
+  /** The PDF of a queued report: stored, then e-mailed to the recipients computed when the op was accepted. */
+  r.put("/files/report/:id", needAuth, async (c) => {
+    const u = c.get("principal");
+    const [rep] = await db.select().from(reportSends).where(eq(reportSends.id, c.req.param("id")));
+    if (!rep || rep.sentBy !== u.id) throw new HttpError(404, "vehicle_not_found");
+    const v = await vehicleFor(u, rep.vehicleId, "vehicules.voir");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    if (!can(u, reportPerm(rep.type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(403, "forbidden");
+    if (rep.status === "sent") return c.json({ ok: true, status: "sent" }); // retried upload: already done
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.length > MAX_PDF) throw new HttpError(400, "file_too_large");
+    if (String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-") throw new HttpError(400, "file_type");
+    const now = Date.now();
+    const recent = (reportHits.get(u.id) ?? []).filter((t) => now - t < 3600_000);
+    if (recent.length >= 40) throw new HttpError(429, "too_many_requests");
+    reportHits.set(u.id, [...recent, now]);
+
+    const key = `reports/${v.orgId}/${v.id}/${rep.id}.pdf`;
+    await storage.put(key, bytes, "application/pdf");
+    const h = v.header as Record<string, string>;
+    const [me] = await db.select().from(users).where(eq(users.id, u.id));
+    const lang = rep.lang === "es" ? "es" : "de";
+    const mail = reportMail(lang, rep.type as "kva" | "reparation", {
+      plate: h.kennzeichen ?? "", model: h.modell ?? "", vin: h.fin ?? "", hasScan: rep.type === "kva" && !!v.colibriFile, senderName: me?.name ?? "",
+    });
+    const safe = (c.req.header("x-filename") ?? "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80);
+    const filename = safe.toLowerCase().endsWith(".pdf") ? safe : `${rep.type === "kva" ? (lang === "es" ? "Presupuesto" : "Kostenvoranschlag") : (lang === "es" ? "Informe_reparacion" : "Fotobericht_Reparatur")}_${(h.kennzeichen ?? "Fahrzeug").replace(/[^A-Za-z0-9]+/g, "-")}.pdf`;
+    try {
+      await mailer.send({ to: rep.recipients, subject: mail.subject, text: mail.text, replyTo: me?.email, attachments: [{ filename, content: bytes, contentType: "application/pdf" }] });
+    } catch (e) {
+      await db.update(reportSends).set({ status: "failed", error: String((e as Error).message).slice(0, 300), fileKey: key }).where(eq(reportSends.id, rep.id));
+      throw new HttpError(502, "report_failed");
+    }
+    await db.update(reportSends).set({ status: "sent", sentAt: new Date(), error: null, fileKey: key }).where(eq(reportSends.id, rep.id));
+    await audit(db, { orgId: v.orgId, userId: u.id, action: "report.sent", entity: "report", entityId: rep.id, after: { type: rep.type, recipients: rep.recipients, bytes: bytes.length } });
+    return c.json({ ok: true, status: "sent", recipients: rep.recipients });
   });
 
   // ---- OCR proxy (login required, rate limited per user) ----

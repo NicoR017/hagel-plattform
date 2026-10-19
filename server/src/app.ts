@@ -17,6 +17,8 @@ import type { Env } from "./env";
 import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
 import { syncRoutes } from "./routes_sync";
+import { masterRoutes } from "./routes_master";
+import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
@@ -160,7 +162,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   app.route("/me", me);
 
   // ---------- sync, files, OCR ----------
-  app.route("/", syncRoutes({ db, hub, storage, needAuth, needOrg, ocr, validationHook }));
+  app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
 
   // ---------- admin ----------
   const admin = new Hono<Env>();
@@ -172,6 +174,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const b = c.req.valid("json");
     const [o] = await db.insert(organizations).values(b).returning();
     await seedRoles(db, o.id);
+    await seedCompanies(db, storage, o.id);
     await audit(db, { orgId: o.id, userId: c.get("principal").id, action: "create", entity: "organization", entityId: o.id, after: o });
     return c.json(o, 201);
   });
@@ -406,6 +409,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   org.get("/permissions", (c) => c.json({ permissions: PERMISSIONS }));
 
+  org.route("/", masterRoutes({ db, hub, storage, require, validationHook }));
   admin.route("/", org);
   app.route("/admin", admin);
 

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { api } from "../api";
 import { eur } from "@hagel/documents";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { t } from "../i18n";
@@ -27,6 +28,21 @@ export function BackupImport({ onClose }: { onClose: () => void }) {
     setBackup(b);
     const existing = new Set((await f.db.vehicles.toArray()).map((v) => v.id));
     setPlan(await planImport(b, f.refs, existing, f.calc));
+  };
+
+  /** Old customers that match no carrosserie site: create them (needs stations.gerer) so that their cars keep their customer. */
+  const createMissing = async () => {
+    if (!plan || !backup) return;
+    setErr("");
+    const land = (f.refs?.stations.find((x) => x.id === stationId)?.country ?? "ES");
+    for (const name of plan.unmatched) {
+      try { await api("POST", "/admin/stations", { type: "carrosserie", name, country: land === "DE" ? "DE" : "ES", capacite: 0 }); }
+      catch (e) { setErr(`${name}: ${(e as Error).message}`); return; }
+    }
+    await f.engine.syncNow(f.orgId);
+    const refs = await f.db.getMeta<NonNullable<typeof f.refs>>(`refs:${f.orgId}`);
+    const existing = new Set((await f.db.vehicles.toArray()).map((v) => v.id));
+    setPlan(await planImport(backup, refs, existing, f.calc));
   };
 
   const run = async () => {
@@ -62,6 +78,7 @@ export function BackupImport({ onClose }: { onClose: () => void }) {
           </Field>
           {!!plan.unmatched.length && (
             <Field label={`${t("unmatchedCustomers")}: ${plan.unmatched.join(", ")}`}>
+              {f.can("stations.gerer") && <button className="pbtn sec" style={{ marginTop: 0, marginBottom: 8 }} onClick={() => void createMissing()}>＋ {t("createMissingCarrosseries")} ({plan.unmatched.length})</button>}
               <select className="sel" value={fallback} onChange={(e) => setFallback(e.target.value)}>
                 <option value="">— {t("noCustomer")} —</option>
                 {sites.filter((s) => s.type === "carrosserie").map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

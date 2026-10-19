@@ -258,3 +258,55 @@ export const auditLog = pgTable("audit_log", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ byOrg: index("audit_org_idx").on(t.orgId, t.at) }));
 
+
+/** Letterheads (issuing companies). The logo file lives in storage under `logoKey`. */
+export const companies = pgTable("companies", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  address: text("address").notNull().default(""),
+  taxId: text("tax_id").notNull().default(""),
+  email: text("email").notNull().default(""),
+  footer: text("footer").notNull().default(""),
+  logoKey: text("logo_key"),
+  logoMeta: jsonb("logo_meta"),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const technicians = pgTable("technicians", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  /** NULL = external technician without an account */
+  userId: uuid("user_id").references(() => users.id),
+  name: text("name").notNull(),
+  defaultPctPdr: numeric("default_pct_pdr", { precision: 5, scale: 2 }).notNull().default("50"),
+  defaultPctDemontage: numeric("default_pct_demontage", { precision: 5, scale: 2 }).notNull().default("100"),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const campaignStations = pgTable("campaign_stations", {
+  campaignId: uuid("campaign_id").notNull().references(() => campaigns.id),
+  stationId: uuid("station_id").notNull().references(() => stations.id),
+}, (t) => ({ pk: primaryKey({ columns: [t.campaignId, t.stationId] }) }));
+
+/** One row per report sent (or queued) by e-mail from the server. The id is chosen by the client (idempotent retries). */
+export const reportSends = pgTable("report_sends", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  /** kva | reparation */
+  type: text("type").notNull(),
+  lang: text("lang").notNull().default("de"),
+  recipients: text("recipients").array().notNull().default(sql`'{}'::text[]`),
+  /** awaiting_file | sent | failed | no_recipients */
+  status: text("status").notNull().default("awaiting_file"),
+  error: text("error"),
+  fileKey: text("file_key"),
+  sentBy: uuid("sent_by").references(() => users.id),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => ({ byVehicle: index("report_sends_vehicle_idx").on(t.vehicleId) }));

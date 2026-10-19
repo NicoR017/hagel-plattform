@@ -114,6 +114,8 @@ export const opSchema = z.discriminatedUnion("type", [
     fields: z.object({ label: z.string().max(80), phase: z.enum(PHOTO_PHASES), inPdf: z.boolean(), sort: z.number().int() }).partial().strict(),
   }),
   z.object({ ...base, type: z.literal("photo.delete"), photoId: uuidStr }),
+  /** Ask the server to e-mail a report (the PDF is uploaded separately to /files/report/:id). */
+  z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]) }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
 
@@ -175,6 +177,11 @@ export interface OrgSettings {
 }
 export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defaultTeiler: 10 };
 
+export interface ClientInsurer { id: string; name: string }
+export interface ClientCampaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
+export interface ClientCompany { id: string; name: string; address: string; taxId: string; email: string; footer: string; hasLogo: boolean; logo: { kind: "jpg" | "png"; width: number; height: number } | null }
+export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number }
+
 export interface PullResponse {
   /** identifies the user's grants; when it changed since the last pull the client must replace its local set */
   epoch: string;
@@ -191,6 +198,13 @@ export interface PullResponse {
     me: { id: string; name: string; language: string; permissions: string[] };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
     people: { id: string; name: string }[];
+    insurers: ClientInsurer[];
+    /** which insurers work with which carrosserie (pickers on a vehicle only offer the linked ones) */
+    stationInsurers: { stationId: string; insurerId: string }[];
+    campaigns: ClientCampaign[];
+    companies: ClientCompany[];
+    /** only for users who may see the internal split */
+    technicians: ClientTechnician[];
   };
 }
 
