@@ -10,7 +10,7 @@ import { audit } from "./audit";
 import { invitations, loginTokens, memberships, organizations, roleAssignments, roles, sessions, users } from "./schema";
 
 export class HttpError extends Error {
-  constructor(public status: 400 | 401 | 403 | 404 | 409 | 429, public code: ErrorCode, public params: Record<string, string> = {}) { super(code); }
+  constructor(public status: 400 | 401 | 403 | 404 | 409 | 429 | 502, public code: ErrorCode, public params: Record<string, string> = {}) { super(code); }
 }
 
 const now = () => new Date();

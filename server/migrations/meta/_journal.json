@@ -15,6 +15,27 @@
       "when": 1792439227681,
       "tag": "0001_conscious_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792439876543,
+      "tag": "0002_drop_vehicle_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792439880292,
+      "tag": "0003_vehicles_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792439888978,
+      "tag": "0004_change_seq",
+      "breakpoints": true
     }
   ]
 }

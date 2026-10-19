@@ -4,7 +4,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
   acceptInviteInput, assignmentInput, inviteInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
-  PERMISSIONS, SYSTEM_ROLES, type Permission, errorMessage, pickLang, languageInput,
+  PERMISSIONS, SYSTEM_ROLES, type Permission, errorMessage, pickLang, languageInput, settingsInput,
 } from "@hagel/shared";
 import { audit } from "./audit";
 import {
@@ -13,16 +13,24 @@ import {
 import type { Config } from "./config";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
+import type { Env } from "./env";
+import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
+import { syncRoutes } from "./routes_sync";
+import { MemoryStorage, type Storage } from "./storage";
+import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
+import { loadOrgSettings } from "./sync";
 import {
-  auditLog, insurers, invitations, memberships, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
+  auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
 } from "./schema";
 
 export interface Limits { requestLink: number; verify: number; accept: number; refresh: number }
 export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60 };
-export interface AppDeps { db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits> }
-type Env = { Variables: { principal: Principal; sessionId: string; orgId: string } };
+export interface AppDeps {
+  db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits>;
+  storage?: Storage; hub?: Hub; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
+}
 
 /** Tiny in-memory fixed-window limiter (single instance). Replace with Redis if the API is scaled out. */
 function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string): MiddlewareHandler {
@@ -39,7 +47,7 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
 
 const ip = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0].trim() || "local";
 
-export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
+export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), ocr }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
   const app = new Hono<Env>();
 
@@ -150,6 +158,9 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   me.post("/logout", async (c) => { await revokeSession(db, c.get("sessionId")); return c.json({ ok: true }); });
   me.post("/logout-all", async (c) => { await revokeAllSessions(db, c.get("principal").id); return c.json({ ok: true }); });
   app.route("/me", me);
+
+  // ---------- sync, files, OCR ----------
+  app.route("/", syncRoutes({ db, hub, storage, needAuth, needOrg, ocr, validationHook }));
 
   // ---------- admin ----------
   const admin = new Hono<Env>();
@@ -376,6 +387,19 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const q = c.req.valid("query"), orgId = c.get("orgId");
     const rows = await db.select().from(auditLog).where(q.entity ? and(eq(auditLog.orgId, orgId), eq(auditLog.entity, q.entity)) : eq(auditLog.orgId, orgId)).orderBy(desc(auditLog.at)).limit(q.limit);
     return c.json(rows);
+  });
+
+  // organisation settings (rates, default Teiler, editable Spain matrix)
+  org.get("/settings", async (c) => c.json(await loadOrgSettings(db, c.get("orgId"))));
+  org.put("/settings", require("parametres.gerer"), zValidator("json", settingsInput, validationHook), async (c) => {
+    const orgId = c.get("orgId"), b = c.req.valid("json");
+    const before = await loadOrgSettings(db, orgId);
+    const next: Record<string, unknown> = { ...before, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) };
+    if (b.esMatrix === null) delete next.esMatrix;
+    await db.insert(orgSettings).values({ orgId, settings: next as never }).onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: next as never, updatedAt: new Date() } });
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "settings", before, after: next });
+    hub.publish(orgId, 0);
+    return c.json(next);
   });
 
   org.get("/permissions", (c) => c.json({ permissions: PERMISSIONS }));

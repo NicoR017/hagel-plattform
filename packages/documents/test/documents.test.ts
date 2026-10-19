@@ -1,0 +1,354 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+import { PDFArray, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from "pdf-lib";
+import { unzipSync, strFromU8 } from "fflate";
+import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
+import golden from "../../../fixtures/golden_cases_v20.json";
+import {
+  appendScanPdf, buildXlsx, dentBreak, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
+  h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
+  type DocPhoto, type DocVehicle, type Letterhead,
+} from "../src";
+
+type Case = { case: string; input: CalcVehicle & { id: string; land: "DE" | "ES" }; expected: Record<string, any> };
+const cases = (golden as unknown as { cases: Case[] }).cases;
+const byName = (n: string) => cases.find((c) => c.case === n)!;
+const NOW = new Date("2026-10-19T10:00:00Z");
+
+const ROOT = resolve(__dirname, "../../..");
+const jpg = new Uint8Array(readFileSync(resolve(ROOT, "assets/pdr-team-logo.jpg")));
+const png = new Uint8Array(readFileSync(resolve(ROOT, "assets/icon-192.png")));
+
+async function logoOf(bytes: Uint8Array, kind: "jpg" | "png") {
+  const d = await PDFDocument.create();
+  const im = kind === "jpg" ? await d.embedJpg(bytes) : await d.embedPng(bytes);
+  return { bytes, kind, width: im.width, height: im.height };
+}
+
+function mkVehicle(name: string, extra: Partial<DocVehicle> = {}): DocVehicle {
+  const c = byName(name);
+  return {
+    ...(c.input as any), land: c.input.land, kennzeichen: "1234-ABC", fin: "VF1ABCDEF12345678", modell: "Renault Clio",
+    kunde: "Carrosserie Garcia", leistungsdatum: "2026-10-19", zustand: ["Trocken", "Sauber"], ...extra,
+  };
+}
+
+/** Extract drawn text (all pages) from the content streams of a pdf-lib generated file. */
+async function pdfTexts(bytes: Uint8Array): Promise<string[]> {
+  const doc = await PDFDocument.load(bytes);
+  return doc.getPages().map((pg) => {
+    const contents = pg.node.Contents();
+    const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+    let out = "";
+    for (const r of refs) {
+      const st = doc.context.lookup(r as any);
+      if (!(st instanceof PDFRawStream)) continue;
+      const txt = Buffer.from(decodePDFRawStream(st).decode()).toString("latin1");
+      for (const m of txt.matchAll(/<([0-9A-Fa-f]*)>\s*Tj/g)) {
+        const hex = m[1];
+        let s = "";
+        for (let i = 0; i < hex.length; i += 2) {
+          const b = parseInt(hex.slice(i, i + 2), 16);
+          s += b === 0x80 ? "€" : String.fromCharCode(b);
+        }
+        out += s + "\n";
+      }
+    }
+    return out;
+  });
+}
+const allText = async (b: Uint8Array) => (await pdfTexts(b)).join("\n");
+
+describe("formatters", () => {
+  it("eur / num / h1 / hA like v20 (de-DE)", () => {
+    expect(eur(1794)).toBe("€ 1.794,00");
+    expect(eur(0)).toBe("€ 0,00");
+    expect(eur(undefined)).toBe("€ 0,00");
+    expect(eur(1234567.891)).toBe("€ 1.234.567,89");
+    expect(num(12.345)).toBe("12,35");
+    expect(num(3, 0)).toBe("3");
+    expect(h1(26)).toBe("26,0 h");
+    expect(h1(21.78)).toBe("21,8 h");
+    expect(hA(0.73)).toBe("0,73 h");
+    expect(hA(3.5)).toBe("3,5 h");
+  });
+  it("dates", () => {
+    expect(fmtDateL("DE", "2026-10-19")).toBe("19.10.2026");
+    expect(fmtDateL("ES", "2026-10-19")).toBe("19/10/2026");
+    expect(fmtDateL("DE", "")).toBe("—");
+  });
+  it("winAnsi maps v20 chars and never leaves unencodable ones", () => {
+    expect(winAnsi("a – b × c → d ≥ e • f − g")).toBe("a - b x c » d > e - f - g");
+    expect(winAnsi("€ Ø ü")).toBe("€ Ø ü");
+    expect(winAnsi("日本")).toBe("??");
+  });
+  it("dentBreak", () => {
+    expect(dentBreak({ key: "x", dents: { "20": 3, "30": 2 } })).toBe("3×20  ·  2×30 mm");
+    expect(dentBreak({ key: "x", dents: { "20": 3 } })).toBe("");
+  });
+  it("file name + mail texts", () => {
+    const v = mkVehicle("case1_ES");
+    expect(kvaFileName(v, NOW)).toBe("Presupuesto_1234-ABC_2026-10-19.pdf");
+    expect(kvaFileName({ ...v, kennzeichen: "", leistungsdatum: undefined }, NOW)).toBe("Presupuesto_Vehiculo_2026-10-19.pdf");
+    expect(mailTexts(v).subject).toBe("Presupuesto daños por granizo – Renault Clio · 1234-ABC");
+    expect(mailTexts({ ...v, land: "DE", colibriFile: "x" }).body).toContain("Colibri-Scanbericht");
+    expect(docText("ES").kva).toBe("Presupuesto");
+  });
+});
+
+describe("text output (golden cases)", () => {
+  const picks = ["case1_ES", "case3_ES", "case7_ES", "case2_DE", "case5_DE", "case9_DE", "case11_DE"];
+  for (const n of picks) {
+    it(n, () => {
+      const g = byName(n), v = mkVehicle(n), c = computeVehicle(v);
+      const t = kvaPlainText(v, c);
+      expect(t).toContain(eur(g.expected.netto));
+      expect(t).toContain(eur(g.expected.brutto));
+      expect(t).toContain("1234-ABC");
+      expect(t).toContain("Carrosserie Garcia");
+      if (v.land === "ES") {
+        expect(t.startsWith("PRESUPUESTO")).toBe(true);
+        expect(t).toContain("categoría " + g.expected.category);
+        expect(t).toContain(eur(g.expected.matrixEur));
+        expect(esFormula(c.es!)).toContain(eur(g.expected.matrixEur));
+        expect(esLines(v, c)[0].v).toBe(c.es!.matrixEur);
+      } else {
+        expect(t.startsWith("KOSTENVORANSCHLAG")).toBe(true);
+        expect(t).toContain(num(g.expected.repairAW) + " AW");
+      }
+    });
+  }
+  it("insurer + claim number appear when present", () => {
+    const v = mkVehicle("case1_ES", { insurerName: "Mapfre", claimNumber: "SIN-998877" });
+    const t = kvaPlainText(v, computeVehicle(v));
+    expect(t).toContain("Aseguradora: Mapfre");
+    expect(t).toContain("N.º de siniestro: SIN-998877");
+    const d = mkVehicle("case1_DE", { insurerName: "Allianz", claimNumber: "S-1" });
+    expect(kvaPlainText(d, computeVehicle(d))).toContain("Versicherung: Allianz   Schadennummer: S-1");
+  });
+  it("no internal split in the text copy", () => {
+    const v = mkVehicle("case1_ES", { techName: "Hans Geheim", techPct: 37, werkPct: 13, werkMode: "pct", demTechName: "Dem Techniker" });
+    const c = computeVehicle(v);
+    const a = computeShares(v, c);
+    const t = kvaPlainText(v, c, a);
+    expect(t).not.toContain("Hans Geheim");
+    for (const s of [eur(a.techEur), eur(a.werkEur), eur(a.rest)]) expect(t).not.toContain(s);
+    expect(t).not.toMatch(/Provision|comisi|Techniker|Bleibt/i);
+  });
+});
+
+const photos = (n: number, inPdf = true): DocPhoto[] =>
+  Array.from({ length: n }, (_, i) => ({ label: i % 2 ? "Vorderansicht" : "Foto", bytes: jpg, inPdf }));
+
+describe("KVA PDF", () => {
+  const variants: { name: string; lh: "none" | "logo" | "neutral" | "png"; ph: number }[] = [
+    { name: "case2_ES", lh: "none", ph: 0 },
+    { name: "case8_ES", lh: "logo", ph: 3 },
+    { name: "case2_DE", lh: "neutral", ph: 0 },
+    { name: "case8_DE", lh: "png", ph: 4 },
+  ];
+  for (const t of variants) {
+    it(`${t.name} letterhead=${t.lh} photos=${t.ph}`, async () => {
+      const v = mkVehicle(t.name, { insurerName: "Mapfre", claimNumber: "SIN-998877", notiz: "Kotflügel nicht beschädigt " + "x".repeat(10) });
+      const c = computeVehicle(v);
+      let letterhead: Letterhead | null = null;
+      if (t.lh === "logo") letterhead = { name: "Carrosserie X", logo: await logoOf(jpg, "jpg"), footer: "Carrosserie X - NIF B123 - Calle 1" , taxId: "NIF B123"};
+      if (t.lh === "png") letterhead = { name: "Taller Y", logo: await logoOf(png, "png") };
+      if (t.lh === "neutral") letterhead = { name: "" };
+      const bytes = await generateKvaPdf(v, c, { letterhead, photos: photos(t.ph), now: NOW });
+      const doc = await PDFDocument.load(bytes);
+      expect(doc.getPageCount()).toBe(t.ph ? 2 : 1);
+      const pages = await pdfTexts(bytes), txt = pages.join("\n");
+      expect(txt).toContain("1234-ABC");
+      expect(txt).toContain(eur(c.netto));
+      expect(txt).toContain(eur(c.brutto));
+      expect(txt).toContain("Carrosserie Garcia");
+      expect(txt).toContain(v.land === "ES" ? "Presupuesto" : "Kostenvoranschlag");
+      expect(txt).not.toContain(v.land === "ES" ? "Kostenvoranschlag" : "Presupuesto");
+      expect(txt).toContain(v.land === "ES" ? "Aseguradora: Mapfre" : "Versicherung: Mapfre");
+      expect(txt).toContain("SIN-998877");
+      expect(txt).not.toContain("PDR Team");
+      if (v.land === "ES") expect(txt).toContain("Matriz: ");
+      if (t.ph) {
+        expect(pages[1]).toContain("Fotos");
+        if (v.land === "ES") expect(pages[1]).toContain("Vista frontal");
+      }
+      if (t.lh === "logo") {
+        expect(txt).toContain("Carrosserie X - NIF B123");
+        expect(txt).toContain("NIF B123");
+      }
+      if (t.lh === "none" || t.lh === "neutral") expect(txt).not.toContain("Carrosserie X");
+      expect(doc.getTitle()).toContain(v.land === "ES" ? "Presupuesto" : "Kostenvoranschlag");
+    });
+  }
+  it("deterministic with injected now", async () => {
+    const v = mkVehicle("case1_DE"), c = computeVehicle(v);
+    const a = await generateKvaPdf(v, c, { now: NOW });
+    const b = await generateKvaPdf(v, c, { now: NOW });
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+  });
+  it("only inPdf photos are placed", async () => {
+    const v = mkVehicle("case1_DE"), c = computeVehicle(v);
+    const bytes = await generateKvaPdf(v, c, { photos: photos(2, false), now: NOW });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  });
+  it("many photos paginate; broken photo is skipped", async () => {
+    const v = mkVehicle("case1_DE"), c = computeVehicle(v);
+    const ph = photos(14).concat([{ label: "bad", bytes: new Uint8Array([1, 2, 3]), inPdf: true }]);
+    const bytes = await generateKvaPdf(v, c, { photos: ph, now: NOW });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(2);
+  });
+  it("every golden case renders without throwing; PPT sub-line present", async () => {
+    for (const g of cases) {
+      const v = mkVehicle(g.case, { notiz: "Ü € – “quote” → ≥ 日" });
+      const c = computeVehicle(v);
+      const bytes = await generateKvaPdf(v, c, { now: NOW });
+      const txt = await allText(bytes);
+      expect(txt).toContain(eur(c.brutto));
+      if (c.panels.some((p) => p.method === "ptp")) expect(txt).toContain(docText(v.land).ptp + " - 40 %");
+    }
+  });
+  it("KVA never contains internal split data", async () => {
+    for (const n of ["case1_ES", "case1_DE"]) {
+      const v = mkVehicle(n, { techName: "Hans Geheim", techPct: 37, werkPct: 13, werkMode: "pct", demTechName: "Dem Techniker", demTechPct: 90, demontage: true, demontageEur: 150 });
+      const c = computeVehicle(v), a = computeShares(v, c);
+      const bytes = await generateKvaPdf(v, c, { now: NOW, photos: photos(1) });
+      const txt = await allText(bytes);
+      expect(txt).not.toContain("Hans Geheim");
+      expect(txt).not.toContain("Dem Techniker");
+      for (const s of [eur(a.techEur), eur(a.werkEur), eur(a.rest), eur(a.demTechEur)]) expect(txt).not.toContain(s);
+      expect(txt).not.toMatch(/Provision|comisi|Techniker|Bleibt|Werkstatt/i);
+      const plain = kvaPlainText(v, c, a);
+      expect(plain).not.toContain("Hans Geheim");
+      for (const s of [eur(a.techEur), eur(a.werkEur), eur(a.rest)]) expect(plain).not.toContain(s);
+    }
+  });
+});
+
+describe("merge", () => {
+  it("appendScanPdf adds page counts", async () => {
+    const v = mkVehicle("case1_DE"), c = computeVehicle(v);
+    const kva = await generateKvaPdf(v, c, { photos: photos(1), now: NOW });
+    const scanDoc = await PDFDocument.create();
+    scanDoc.addPage([300, 300]); scanDoc.addPage([300, 300]); scanDoc.addPage([300, 300]);
+    const scan = await scanDoc.save();
+    const merged = await appendScanPdf(kva, scan, "Kostenvoranschlag + Colibri-Scan 1234-ABC");
+    const d = await PDFDocument.load(merged);
+    expect(d.getPageCount()).toBe(2 + 3);
+    expect(d.getTitle()).toBe("Kostenvoranschlag + Colibri-Scan 1234-ABC");
+    expect((await pdfTexts(merged))[0]).toContain("1234-ABC");
+  });
+});
+
+describe("repair photo report", () => {
+  const mk = (phase: any, label: string, takenAt?: string): DocPhoto => ({ label, bytes: jpg, inPdf: false, phase, takenAt });
+  const list = [
+    mk("besichtigung", "Vorderansicht", "2026-10-19T08:15:00Z"),
+    mk("reparatur", "Detail / Delle", "2026-10-19T12:30:00Z"),
+    mk("reparatur", "Dach", "2026-10-19T12:45:00Z"),
+    mk("fertig", "Heckansicht", "2026-10-20T15:05:00Z"),
+  ];
+  it("ES: phases, captions, date+time, header", async () => {
+    const v = mkVehicle("case1_ES", { insurerName: "Mapfre", claimNumber: "SIN-1" });
+    const bytes = await generateRepairPhotoReport(v, { letterhead: null, photos: list, now: NOW });
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
+    const t = await allText(bytes);
+    expect(t).toContain("Informe fotográfico de reparación");
+    for (const s of ["Inspección", "Durante la reparación", "Después de la reparación", "Vista frontal", "Detalle / abolladura", "Lateral", "1234-ABC", "VF1ABCDEF12345678", "Renault Clio", "Carrosserie Garcia", "Mapfre", "SIN-1", "19/10/2026, 10:15", "20/10/2026, 17:05"].filter((s) => s !== "Lateral"))
+      expect(t).toContain(s);
+    expect(t).not.toContain("PDR Team");
+  });
+  it("DE with letterhead footer; pagination for many photos", async () => {
+    const v = mkVehicle("case1_DE");
+    const many = Array.from({ length: 13 }, (_, i) => mk(i % 2 ? "reparatur" : "fertig", "Foto", "2026-10-19T08:15:00Z"));
+    const bytes = await generateRepairPhotoReport(v, { letterhead: { name: "Garage Z", footer: "Garage Z Fußzeile" }, photos: list.concat(many), now: NOW });
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThan(1);
+    const pages = await pdfTexts(bytes);
+    const t = pages.join("\n");
+    expect(t).toContain("Fotobericht Reparatur");
+    expect(t).toContain("Während der Reparatur");
+    expect(t).toContain("Nach der Reparatur");
+    expect(t).toContain("19.10.2026, 10:15");
+    expect(t).toContain("Garage Z");
+    pages.forEach((p) => expect(p).toContain("Garage Z Fußzeile"));
+  });
+});
+
+describe("xlsx", () => {
+  const vs: DocVehicle[] = [
+    mkVehicle("case1_ES", { id: "a", techName: "Anna", techPct: 50, werkPct: 20, werkMode: "pct", status: "reparatur", stationName: "Madrid", insurerName: "Mapfre", claimNumber: "S1" }),
+    mkVehicle("case2_DE", { id: "b", techName: "Anna", techPct: 40, werkPct: 10, werkMode: "pct", status: "fertig", demontage: true, demTechName: "Ben", notiz: "a & <b>\n c" }),
+    mkVehicle("case3_ES", { id: "c", techName: "Ben", werkMode: "staffel", status: "attente", glass: { ws: { on: true, eur: 100 } } }),
+  ];
+  const files = (b: Uint8Array) => unzipSync(b);
+  const sheet1 = (b: Uint8Array) => strFromU8(files(b)["xl/worksheets/sheet1.xml"]);
+
+  it("full columns: valid zip, headers, sums, status, sheet 2", () => {
+    const b = buildXlsx(vs, "Tagesliste Heute", { prices: true, internalSplit: true });
+    const f = files(b);
+    expect(Object.keys(f).sort()).toEqual(["[Content_Types].xml", "_rels/.rels", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/workbook.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"]);
+    const s1 = sheet1(b);
+    const headers = [...s1.matchAll(/<c r="([A-Z]+)1" s="1" t="inlineStr"><is><t xml:space="preserve">([^<]*)<\/t>/g)].map((m) => m[2]);
+    expect(headers).toEqual(xlsxColumnHeaders({ prices: true, internalSplit: true }));
+    for (const h of ["Plattform", "Status", "Versicherung", "Schadennummer", "Provision %", "Provision €", "Preis netto", "Scheiben €", "Bleibt PDR €"]) expect(headers).toContain(h);
+    expect(headers).not.toContain("Ordner");
+    expect(headers).not.toContain("Werkstatt €");
+    expect(s1).toContain("Reparatur"); expect(s1).toContain("Fertig"); expect(s1).toContain("Wartet");
+    expect(s1).toContain("a &amp; &lt;b&gt; c");
+    const nettoCol = String.fromCharCode(65 + headers.indexOf("Preis netto"));
+    expect(s1).toContain(`<f>SUM(${nettoCol}2:${nettoCol}4)</f>`);
+    expect(s1).toContain("Summe (3)");
+    expect(s1).toContain('<pane ySplit="1" xSplit="2"');
+    expect(s1).toContain(`<autoFilter ref="A1:${"AE"}4"/>`);
+    const netto0 = r2(computeVehicle(vs[0]).netto);
+    expect(s1).toContain(`<v>${netto0}</v>`);
+    const wb = strFromU8(f["xl/workbook.xml"]);
+    expect(wb).toContain("Abrechnung je Techniker");
+    const s2 = strFromU8(f["xl/worksheets/sheet2.xml"]);
+    expect(s2).toContain("Anna"); expect(s2).toContain("Ben");
+    expect(s2).toContain("<f>SUM(C2:C3)</f>");
+  });
+  it("prices=false removes price columns only", () => {
+    const h = xlsxColumnHeaders({ prices: false, internalSplit: true });
+    for (const x of ["Preis netto", "MwSt/IVA", "Brutto", "Scheiben €"]) expect(h).not.toContain(x);
+    expect(h).toContain("Provision €");
+    const s1 = sheet1(buildXlsx(vs, "T", { prices: false, internalSplit: true }));
+    expect(s1).not.toContain("Preis netto"); expect(s1).not.toContain("Brutto");
+  });
+  it("internalSplit=false removes split columns and the technician sheet", () => {
+    const b = buildXlsx(vs, "T", { prices: true, internalSplit: false });
+    const f = files(b);
+    expect(f["xl/worksheets/sheet2.xml"]).toBeUndefined();
+    expect(strFromU8(f["xl/workbook.xml"])).not.toContain("Techniker");
+    expect(strFromU8(f["[Content_Types].xml"])).not.toContain("sheet2");
+    const s1 = sheet1(b);
+    for (const x of ["Provision", "Techniker", "De-/Re", "Bleibt PDR", "Anna", "Werkstatt"]) expect(s1).not.toContain(x);
+    expect(s1).toContain("Preis netto");
+  });
+  it("both false: only base columns", () => {
+    const h = xlsxColumnHeaders({ prices: false, internalSplit: false });
+    expect(h).toEqual(["Datum", "Kennzeichen", "Modell", "FIN", "Kunde", "Versicherung", "Schadennummer", "Plattform", "Land", "Dellen", "Bollos", "Kat.", "Stunden", "€/h", "Status", "Scan", "Notiz"]);
+    const b = buildXlsx(vs, "T", { prices: false, internalSplit: false });
+    expect(sheet1(b)).toContain("Madrid");
+  });
+  it("empty list still valid", () => {
+    const b = buildXlsx([], "Leer", { prices: true, internalSplit: true });
+    expect(strFromU8(files(b)["xl/worksheets/sheet1.xml"])).not.toContain("autoFilter");
+  });
+  it("file name", () => {
+    expect(xlsxFileName("Alle Fahrzeuge", "2026-10-19")).toBe("Tagesliste_Alle_Fahrzeuge_2026-10-19.xlsx");
+    expect(xlsxFileName("Müller/Test")).toBe("Tagesliste_Müller_Test.xlsx");
+  });
+});
+
+describe("pagination", () => {
+  it("long vehicle paginates", async () => {
+    const v = mkVehicle("case1_ES", { notiz: "n" }), c = computeVehicle(v);
+    const pages = await pdfTexts(await generateKvaPdf(v, c, { now: NOW }));
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    expect(pages.join(" ")).toContain(eur(c.brutto));
+  });
+});

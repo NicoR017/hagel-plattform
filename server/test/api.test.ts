@@ -338,7 +338,7 @@ describe("vehicle visibility from real DB grants (move changes visibility)", () 
     const tech = await mk("tech@example.test", { role_id: roleId.technicien, station_id: tal });
     const chef = await mk("chef2@example.test", { role_id: roleId.chef_site, station_id: tal });
     const carro = await mk("carro2@example.test", { role_id: roleId.carrosserie, scope_client_station_id: tal });
-    const [v] = await h.db.insert(vehicles).values({ orgId: orgES, stationId: tal, clientStationId: tal }).returning();
+    const [v] = await h.db.insert(vehicles).values({ id: crypto.randomUUID(), orgId: orgES, stationId: tal, clientStationId: tal }).returning();
     await h.db.insert(vehicleAssignments).values({ vehicleId: v.id, userId: tech.id, type: "pdr" });
     const ref = (stationId: string) => ({ id: v.id, orgId: orgES, stationId, clientStationId: tal, assigneeIds: [tech.id] });
     const data = { kennzeichen: "1234ABC", netto: 1500, stundensatz: 69, techPct: 50, shares: { techEur: 600, demTechEur: 0, werkEur: 300, rest: 600 } };

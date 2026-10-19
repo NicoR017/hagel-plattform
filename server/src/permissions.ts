@@ -4,7 +4,7 @@
  * Resolution: vehicle's current site (or its customer site for scope `client`)
  *   -> user's role assignment on that site -> permission -> scope check -> field filtering.
  */
-import { FIELD_RULES, type Permission, type Scope } from "@hagel/shared";
+import { FIELD_RULES, PERMISSIONS, type Permission, type Scope } from "@hagel/shared";
 
 export interface Grant {
   orgId: string;
@@ -90,6 +90,15 @@ export function isMemberOfOrg(u: Principal, orgId: string): boolean {
   return u.isSuperadmin || u.grants.some((g) => g.orgId === orgId);
 }
 
+/** Union of the permissions of every grant that covers this vehicle (superadmin: everything). */
+export function effectivePermissions(u: Principal, v: VehicleRef, now = new Date()): Set<string> {
+  const perms = new Set<string>();
+  if (u.status !== "active") return perms;
+  if (u.isSuperadmin) { PERMISSIONS.forEach((p) => perms.add(p)); return perms; }
+  grantsFor(u, v, now).forEach((g) => g.permissions.forEach((p) => perms.add(p)));
+  return perms;
+}
+
 /**
  * Field filtering: effective permissions on THIS vehicle are the union over covering grants.
  * Restricted fields are removed (not blanked) so they never reach the phone.
@@ -109,6 +118,15 @@ export function filterFields<T extends Record<string, unknown>>(u: Principal, v:
   if (!perms.has("prix.voir")) {
     delete out.netto;
     delete out.brutto;
+    // nested price fields: the manual amount of dents > 85 mm lives inside each panel
+    if (out.panels && typeof out.panels === "object") {
+      out.panels = Object.fromEntries(
+        Object.entries(out.panels as Record<string, Record<string, unknown>>).map(([k, p]) => {
+          const { bigEur: _drop, ...rest } = p;
+          return [k, rest];
+        }),
+      );
+    }
   }
   const shares = data.shares && typeof data.shares === "object" ? (data.shares as Record<string, unknown>) : null;
   if (!perms.has("repartition_interne.voir")) {
