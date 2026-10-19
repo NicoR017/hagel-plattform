@@ -1,7 +1,7 @@
 # Single image for both Railway services (api+web, worker). The start command differs per service.
 FROM node:22-slim AS build
 WORKDIR /repo
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages ./packages
 COPY server ./server
 COPY app ./app
