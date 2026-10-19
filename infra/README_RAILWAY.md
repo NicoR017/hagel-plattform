@@ -33,9 +33,10 @@ Le même `Dockerfile` sert les deux services ; seul le *Start Command* du `worke
 | `EMAIL_API_KEY`, `EMAIL_FROM` | api | Resend. Sans clé, les e-mails sont seulement écrits dans les logs (utile pour un premier test, **à ne pas laisser en production**). Le domaine d'envoi doit être vérifié chez Resend (SPF/DKIM). |
 | `SEED_SUPERADMIN_EMAIL` | api | `nicolas.rasteiro@pdr-team.de` (peut être retiré après le premier démarrage) |
 | `SEED_TEST_SITES` | api | `1` seulement pour tester ; crée 2 sites d'exemple en ES |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | worker | Sauvegardes. Plus tard aussi `api` (photos). |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | api **et** worker | Photos et PDF Colibri (api) ; sauvegardes (worker). Même bucket. Sans ces variables l'api garde les fichiers en mémoire (perdus au redémarrage). |
 | `BACKUP_ON_START` | worker | `1` pour lancer une sauvegarde immédiate (test) |
-| `ANTHROPIC_API_KEY`, `AZURE_STORAGE_*` | api / worker | Phases 3 et 5 — pas encore utilisées |
+| `ANTHROPIC_API_KEY`, `OCR_MODEL` | api | Reconnaissance photo plaque / FIN (proxy `/api/ocr`). Sans clé : l'app utilise la reconnaissance hors ligne (Tesseract), moins fiable. `OCR_MODEL` optionnel (défaut `claude-sonnet-5-5`). |
+| `AZURE_STORAGE_*` | api / worker | Phase 5 — pas encore utilisées |
 
 Health check : `GET /api/health`, réglé sur le service `api` uniquement (Settings → Deploy → Healthcheck Path) — pas dans `railway.json`, car le worker n’a pas de serveur HTTP.
 

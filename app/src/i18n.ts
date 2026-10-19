@@ -5,8 +5,9 @@
  */
 import { useSyncExternalStore } from "react";
 import { DEFAULT_LANG, LANGS, isLang, type Lang } from "@hagel/shared";
+import { deField, enField } from "./i18n_field";
 
-const de = {
+const deBase = {
   appName: "PDR Hagel",
   language: "Sprache",
   email: "E-Mail", name: "Name", login: "Anmelden", logout: "Abmelden", save: "Speichern", edit: "Bearbeiten", cancel: "Abbrechen", delete: "Löschen",
@@ -50,9 +51,10 @@ const de = {
   "p.utilisateurs.gerer": "Benutzer verwalten", "p.roles.gerer": "Rollen verwalten", "p.audit.voir": "Protokoll ansehen", "p.dashboard.voir": "Dashboard ansehen",
 } as const;
 
+const de = { ...deBase, ...deField };
 export type Key = keyof typeof de;
 
-const en: Record<Key, string> = {
+const enBase: Record<keyof typeof deBase, string> = {
   appName: "PDR Hagel",
   language: "Language",
   email: "E-mail", name: "Name", login: "Sign in", logout: "Sign out", save: "Save", edit: "Edit", cancel: "Cancel", delete: "Delete",
@@ -92,6 +94,8 @@ const en: Record<Key, string> = {
   "p.assurances.gerer": "Manage insurers", "p.campagnes.gerer": "Manage campaigns", "p.stations.gerer": "Manage sites", "p.parametres.gerer": "Manage settings",
   "p.utilisateurs.gerer": "Manage users", "p.roles.gerer": "Manage roles", "p.audit.voir": "View audit log", "p.dashboard.voir": "View dashboard",
 };
+
+const en: Record<Key, string> = { ...enBase, ...enField };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en };
 

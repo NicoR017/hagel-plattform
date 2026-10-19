@@ -241,6 +241,22 @@ describe("pull: what each role receives (restricted fields never reach the phone
     const s = await pull(c, c.superToken, c.orgES);
     expect(JSON.stringify(s.refs.stations)).toContain("commissionPct");
   });
+  it("without prix.voir the organisation's hourly rates and matrix euro figures are not sent", async () => {
+    const t = (await pull(c, tech, c.orgES)).refs.settings;
+    expect(t).toMatchObject({ rateDE: 0, rateES: 0 });
+    expect(JSON.stringify(t)).not.toMatch(/"rate(DE|ES)":(69|83)/);
+    const a = (await pull(c, assessor, c.orgES)).refs.settings;
+    expect(a.rateES).toBe(69);
+    expect(carro && (await pull(c, carro, c.orgES)).refs.settings.rateES).toBe(69); // customers see prices
+  });
+  it("the sites API does not leak commission, e-mails or other sites to restricted roles", async () => {
+    const t = await call(c, "GET", "/admin/stations", { token: tech, org: c.orgES });
+    expect(JSON.stringify(t.body)).not.toMatch(/commission|reportEmails|azure/i);
+    const k = await call(c, "GET", "/admin/stations", { token: carro, org: c.orgES });
+    expect(k.body.map((s: any) => s.id)).toEqual([A]); // the customer only knows its own site
+    const full = await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES });
+    expect(JSON.stringify(full.body)).toContain("commissionPct");
+  });
   it("a user from another organisation cannot pull this one", async () => {
     const r = await call(c, "GET", "/sync/pull?since=0", { token: chefA, org: c.orgDE });
     expect(r.status).toBe(403);
@@ -535,7 +551,8 @@ describe("OCR proxy", () => {
 
 describe("organisation settings", () => {
   it("members read, only parametres.gerer writes; changes are audited and reach pull; server-side shares use them", async () => {
-    expect((await call(c, "GET", "/admin/settings", { token: tech, org: c.orgES })).body.rateES).toBe(69);
+    expect((await call(c, "GET", "/admin/settings", { token: tech, org: c.orgES })).body.rateES).toBe(0); // no prices for technicians
+    expect((await call(c, "GET", "/admin/settings", { token: assessor, org: c.orgES })).body.rateES).toBe(69);
     expect((await call(c, "PUT", "/admin/settings", { token: assessor, org: c.orgES, body: { rateES: 80 } })).status).toBe(403);
     const ok = await call(c, "PUT", "/admin/settings", { token: c.superToken, org: c.orgES, body: { rateES: 72, defaultTeiler: 12 } });
     expect(ok.status).toBe(200);

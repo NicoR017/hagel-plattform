@@ -476,16 +476,32 @@ export const photoToClient = (p: PhotoRow): ClientPhoto => ({
   colibriIndex: p.colibriIndex, deleted: !!p.deletedAt, seq: p.seq,
 });
 
-async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSettings, vs: ClientVehicle[]): Promise<PullResponse["refs"]> {
+/**
+ * Without the right to see prices (in at least one grant of this organisation) the hourly rates and the matrix' euro figures
+ * are not sent: hours and categories are enough to count bollos / AW on the phone.
+ */
+export function visibleSettings(u: Principal, orgId: string, settings: OrgSettings): OrgSettings {
+  const mayPrice = u.isSuperadmin || u.grants.some((g) => g.orgId === orgId && g.permissions.includes("prix.voir"));
+  if (mayPrice) return settings;
+  return {
+    ...settings, rateDE: 0, rateES: 0,
+    ...(settings.esMatrix ? { esMatrix: { ...(settings.esMatrix as Record<string, unknown>), rate_eur_per_h: 0, kickback_eur: [{ else: true, eur: 0 }] } } : {}),
+  };
+}
+
+/** Sites a user may know about: all of the organisation for internal roles, otherwise only their own sites / customers / vehicles' sites. */
+export async function visibleStations(db: Db, u: Principal, orgId: string, vs: Pick<ClientVehicle, "stationId" | "clientStationId">[] = []) {
   const all = await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(asc(stations.name));
   const orgWide = u.isSuperadmin || u.grants.some((g) => g.orgId === orgId && g.stationId === null && ["station", "assigne", "campagne"].includes(g.scope));
-  let list = all;
-  if (!orgWide) {
-    const ids = new Set<string>();
-    u.grants.filter((g) => g.orgId === orgId).forEach((g) => { if (g.stationId) ids.add(g.stationId); if (g.scopeClientStationId) ids.add(g.scopeClientStationId); });
-    vs.forEach((v) => { if (v.stationId) ids.add(v.stationId); if (v.clientStationId) ids.add(v.clientStationId); });
-    list = all.filter((s) => ids.has(s.id));
-  }
+  if (orgWide) return all;
+  const ids = new Set<string>();
+  u.grants.filter((g) => g.orgId === orgId).forEach((g) => { if (g.stationId) ids.add(g.stationId); if (g.scopeClientStationId) ids.add(g.scopeClientStationId); });
+  vs.forEach((v) => { if (v.stationId) ids.add(v.stationId); if (v.clientStationId) ids.add(v.clientStationId); });
+  return all.filter((x) => ids.has(x.id));
+}
+
+async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSettings, vs: ClientVehicle[]): Promise<PullResponse["refs"]> {
+  const list = await visibleStations(db, u, orgId, vs);
   const showCommission = canOrg(u, "commission.modifier", orgId) || canOrg(u, "stations.gerer", orgId);
   const st: ClientStation[] = list.map((s) => ({
     id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active,
@@ -500,5 +516,6 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, orgId));
     people = rows.map((r) => ({ id: r.id, name: r.name || r.email }));
   }
-  return { stations: st, settings, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people };
+  const priceSafe = visibleSettings(u, orgId, settings);
+  return { stations: st, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people };
 }

@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
+import { FieldProvider, useField } from "./field/store";
+import { List } from "./field/List";
+import { VehicleScreen } from "./field/VehicleScreen";
+import { Toasts } from "./field/toast";
+import { useRoute } from "./field/route";
+import "./field/field.css";
 
 interface Me {
   user: { id: string; email: string; name: string; language: string; isSuperadmin: boolean };
@@ -85,11 +91,11 @@ function AcceptInvite({ token }: { token: string }) {
   );
 }
 
-type Tab = "users" | "roles" | "sites" | "audit" | "orgs";
+
+type AdminTab = "users" | "roles" | "sites" | "audit" | "orgs";
 
 function Shell() {
   const [me, setMe] = useState<Me | null>(null);
-  const [tab, setTab] = useState<Tab>("users");
   const [org, setOrgState] = useState<string | null>(getOrg());
   const [err, setErr] = useState("");
 
@@ -111,10 +117,33 @@ function Shell() {
 
   if (err) return <Center><div className="err">{err}</div></Center>;
   if (!me || !org) return <Center><p>{t("loading")}</p></Center>;
+  return (
+    <FieldProvider userId={me.user.id} orgId={org} key={org}>
+      <Routes me={me} org={org} onOrg={(id) => { setOrg(id); setOrgState(id); }} />
+      <Toasts />
+    </FieldProvider>
+  );
+}
 
+function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
+  const route = useRoute();
+  const f = useField();
+  if (route.page === "vehicle") return <VehicleScreen id={route.id} tab={route.tab} />;
+  if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
+  const orgSwitch = me.organizations.length > 1 ? (
+    <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")} style={{ minHeight: 44, borderRadius: 10, border: "none", padding: "0 8px", fontWeight: 700 }}>
+      {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+    </select>
+  ) : null;
+  void f;
+  return <List userName={me.user.name || me.user.email} orgSwitch={orgSwitch} />;
+}
+
+function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
+  const [tab, setTab] = useState<AdminTab>("users");
   const perms = new Set(me.grants.filter((g) => g.orgId === org && g.stationId === null).flatMap((g) => g.permissions));
   const has = (p: string) => me.user.isSuperadmin || perms.has(p);
-  const tabs: { k: Tab; label: string; show: boolean }[] = [
+  const tabs: { k: AdminTab; label: string; show: boolean }[] = [
     { k: "users", label: t("users"), show: has("utilisateurs.gerer") },
     { k: "roles", label: t("roles"), show: has("roles.gerer") },
     { k: "sites", label: t("sites"), show: true },
@@ -123,12 +152,12 @@ function Shell() {
   ];
   const visible = tabs.filter((x) => x.show);
   const current = visible.some((x) => x.k === tab) ? tab : visible[0]?.k;
-
   return (
     <>
       <header>
+        <a href="#/" style={{ color: "#fff", textDecoration: "none", fontWeight: 700 }}>‹ {t("vehicles")}</a>
         <b>{t("appName")}</b>
-        <select value={org} onChange={(e) => { setOrg(e.target.value); setOrgState(e.target.value); }} aria-label={t("org")}>
+        <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")}>
           {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
         <LangSwitch signedIn />

@@ -1,1 +1,1 @@
-{ "extends": "../tsconfig.base.json", "compilerOptions": { "jsx": "react-jsx", "composite": false, "noEmit": true, "types": ["vite/client"] }, "include": ["src"] }
+{ "extends": "../tsconfig.base.json", "compilerOptions": { "jsx": "react-jsx", "composite": false, "noEmit": true, "types": ["vite/client", "vite-plugin-pwa/client"] }, "include": ["src"] }

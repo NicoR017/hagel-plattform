@@ -20,7 +20,7 @@ import { syncRoutes } from "./routes_sync";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
-import { loadOrgSettings } from "./sync";
+import { loadOrgSettings, visibleSettings, visibleStations } from "./sync";
 import {
   auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
 } from "./schema";
@@ -330,8 +330,10 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   // stations (sites)
   org.get("/stations", async (c) => {
-    // any member may list the sites of the org (needed for pickers); management is separate
-    return c.json(await db.select().from(stations).where(eq(stations.orgId, c.get("orgId"))).orderBy(stations.name));
+    // managers get everything; other members only the sites they may know, without commission / report e-mails / Azure ids
+    const orgId = c.get("orgId"), u = c.get("principal");
+    if (canOrg(u, "stations.gerer", orgId)) return c.json(await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(stations.name));
+    return c.json((await visibleStations(db, u, orgId)).map((x) => ({ id: x.id, type: x.type, name: x.name, country: x.country, capacite: x.capacite, active: x.active })));
   });
   const checkTenant = async (orgId: string, tenant: string | null, creating: boolean) => {
     const allowed = (await db.select().from(orgTenants).where(eq(orgTenants.orgId, orgId))).map((t) => t.azureTenant);
@@ -390,7 +392,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   });
 
   // organisation settings (rates, default Teiler, editable Spain matrix)
-  org.get("/settings", async (c) => c.json(await loadOrgSettings(db, c.get("orgId"))));
+  org.get("/settings", async (c) => c.json(visibleSettings(c.get("principal"), c.get("orgId"), await loadOrgSettings(db, c.get("orgId")))));
   org.put("/settings", require("parametres.gerer"), zValidator("json", settingsInput, validationHook), async (c) => {
     const orgId = c.get("orgId"), b = c.req.valid("json");
     const before = await loadOrgSettings(db, orgId);
