@@ -10,6 +10,7 @@ import { createDb } from "./db";
 import { ConsoleMailer, ResendMailer } from "./email";
 import { seed } from "./seed";
 import { storageFromEnv } from "./storage";
+import { azureFromEnv } from "./azure";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
@@ -18,7 +19,7 @@ const mailer = cfg.emailApiKey ? new ResendMailer(cfg.emailApiKey, cfg.emailFrom
 if (process.env.SEED_SUPERADMIN_EMAIL) await seed(h.db, { superadminEmail: process.env.SEED_SUPERADMIN_EMAIL, testSites: process.env.SEED_TEST_SITES === "1", storage });
 
 const api = createApp({
-  db: h.db, cfg, mailer, storage,
+  db: h.db, cfg, mailer, storage, az: azureFromEnv(),
   ocr: { apiKey: process.env.ANTHROPIC_API_KEY ?? null, model: process.env.OCR_MODEL ?? "claude-sonnet-5-5", fetch: (url, init) => fetch(url, init) },
 });
 const root = new Hono();

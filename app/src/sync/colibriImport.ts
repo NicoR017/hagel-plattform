@@ -55,8 +55,10 @@ export async function applyColibriToVehicle(c: MutCtx, v: LocalVehicle, res: Col
 
 /** v20 "Scan ✓ / Scan prüfen ⚠" badge. */
 export function colibriBadge(v: Pick<LocalVehicle, "colibri">): "ok" | "check" | null {
-  const k = v.colibri as { imported?: number; reportTotal?: number | null; rowSum?: number; unknown?: string[] } | null;
+  const k = v.colibri as { imported?: number; reportTotal?: number | null; rowSum?: number; unknown?: string[]; azureTotal?: number | null } | null;
   if (!k || k.imported == null) return null;
   const total = k.reportTotal != null ? k.reportTotal : k.rowSum;
-  return k.imported === total && !(k.unknown ?? []).length ? "ok" : "check";
+  // imported count vs the report's total, vs DentsTotalNumber of the Azure row (when the scan came from Azure), and no unknown rows
+  const azureOk = k.azureTotal == null || k.azureTotal === k.imported;
+  return k.imported === total && azureOk && !(k.unknown ?? []).length ? "ok" : "check";
 }

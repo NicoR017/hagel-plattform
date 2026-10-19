@@ -7,12 +7,13 @@ import { MemoryMailer } from "../src/email";
 import { Hub } from "../src/hub";
 import { MemoryStorage } from "../src/storage";
 import { seed } from "../src/seed";
+import { FakeAzure } from "../src/azure_fake";
 import type { FetchLike } from "../src/ocr";
 
 export interface Ctx {
   h: DbHandle; app: ReturnType<typeof createApp>; mailer: MemoryMailer; storage: MemoryStorage; hub: Hub;
   orgDE: string; orgES: string; roleId: Record<string, string>; superToken: string;
-  ocrCalls: { body: string }[]; ocrAnswer: { current: unknown; status: number };
+  ocrCalls: { body: string }[]; ocrAnswer: { current: unknown; status: number }; az: FakeAzure;
 }
 
 interface Opts { token?: string; org?: string; body?: unknown; lang?: string; raw?: Uint8Array; contentType?: string }
@@ -28,13 +29,14 @@ export async function setup(): Promise<Ctx> {
     ocrCalls.push({ body: init.body });
     return { ok: ocrAnswer.status === 200, status: ocrAnswer.status, json: async () => ocrAnswer.current };
   };
+  const az = new FakeAzure();
   const app = createApp({
-    db: h.db, cfg: loadConfig({}), mailer, storage, hub,
+    db: h.db, cfg: loadConfig({}), mailer, storage, hub, az,
     limits: { requestLink: 10000, verify: 10000, accept: 10000, refresh: 10000 },
     ocr: { apiKey: "test-key", model: "test-model", fetch: fetchMock },
   });
   const s = await seed(h.db, { superadminEmail: "nicolas@example.test", testSites: true, storage });
-  const ctx = { h, app, mailer, storage, hub, orgDE: s.orgs[0].id, orgES: s.orgs[1].id, roleId: {}, superToken: "", ocrCalls, ocrAnswer } as Ctx;
+  const ctx = { h, app, mailer, storage, hub, orgDE: s.orgs[0].id, orgES: s.orgs[1].id, roleId: {}, superToken: "", ocrCalls, ocrAnswer, az } as Ctx;
   ctx.superToken = (await login(ctx, "nicolas@example.test")).access_token;
   ctx.roleId = Object.fromEntries(((await call(ctx, "GET", "/admin/roles", { token: ctx.superToken, org: ctx.orgES })).body as { key: string; id: string }[]).map((r) => [r.key, r.id]));
   return ctx;

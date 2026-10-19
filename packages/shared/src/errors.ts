@@ -51,6 +51,9 @@ export const ERROR_MESSAGES = {
   campaign_not_found: { de: "Kampagne nicht gefunden", en: "Campaign not found" },
   company_not_found: { de: "Briefkopf nicht gefunden", en: "Letterhead not found" },
   technician_not_found: { de: "Techniker nicht gefunden", en: "Technician not found" },
+  azure_unavailable: { de: "Azure-Anbindung nicht konfiguriert", en: "Azure connection is not configured" },
+  azure_failed: { de: "Azure-Abgleich fehlgeschlagen", en: "Azure sync failed" },
+  azure_link_unknown: { de: "Unbekannter Colibri-Kunde", en: "Unknown Colibri customer" },
   invalid_input: { de: "Ungültige Eingabe", en: "Invalid input" },
   internal: { de: "Interner Fehler", en: "Internal error" },
 } as const;

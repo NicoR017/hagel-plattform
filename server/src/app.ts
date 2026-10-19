@@ -18,6 +18,8 @@ import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
 import { syncRoutes } from "./routes_sync";
 import { masterRoutes } from "./routes_master";
+import { azureRoutes } from "./routes_azure";
+import type { AzureSource } from "./azure";
 import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
@@ -31,7 +33,7 @@ export interface Limits { requestLink: number; verify: number; accept: number; r
 export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60 };
 export interface AppDeps {
   db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits>;
-  storage?: Storage; hub?: Hub; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
+  storage?: Storage; hub?: Hub; az?: AzureSource | null; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
 }
 
 /** Tiny in-memory fixed-window limiter (single instance). Replace with Redis if the API is scaled out. */
@@ -49,7 +51,7 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
 
 const ip = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0].trim() || "local";
 
-export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), ocr }: AppDeps) {
+export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, ocr }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
   const app = new Hono<Env>();
 
@@ -163,6 +165,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
+
+  app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
 
   // ---------- admin ----------
   const admin = new Hono<Env>();

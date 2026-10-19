@@ -1,6 +1,8 @@
-// Background worker (separate Railway service, same codebase).
-// Phase 2: nightly database backup. Azure sync, photo processing and report e-mails arrive in later phases.
+// Background worker (separate Railway service, same codebase): nightly database backup and the Azure -> database mirror.
+import { azureFromEnv } from "./azure";
+import { syncAzure } from "./azure_sync";
 import { runBackup, type BackupEnv } from "./backup";
+import { createDb } from "./db";
 
 const env = process.env;
 const backupEnv = (): BackupEnv | null =>
@@ -24,3 +26,21 @@ function daily(hh: number, mm: number, fn: () => Promise<void>) {
 console.log("worker started");
 daily(2, 30, backup);
 if (env.BACKUP_ON_START === "1") void backup();
+
+// Azure mirror: every few minutes, never overlapping, never fatal (the next run simply retries).
+const az = azureFromEnv();
+if (!az) console.warn("[azure] AZURE_STORAGE_SAS not set: Colibri import from Azure is disabled");
+else if (env.DATABASE_URL) {
+  const minutes = Math.max(1, Number(env.AZURE_SYNC_MINUTES ?? 3));
+  const h = await createDb(env.DATABASE_URL, { migrate: false }); // the API owns the migrations
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try { const s = await syncAzure(h.db, az, { initialDays: Number(env.AZURE_INITIAL_DAYS ?? 30) }); console.log("[azure] sync ok", JSON.stringify(s)); }
+    catch (e) { console.error("[azure] sync FAILED", (e as Error).message); }
+    finally { running = false; }
+  };
+  void tick();
+  setInterval(() => void tick(), minutes * 60_000);
+}

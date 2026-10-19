@@ -177,6 +177,8 @@ export const vehicles = pgTable("vehicles", {
   groupAt: jsonb("group_at").notNull().default(sql`'{}'::jsonb`),
   colibri: jsonb("colibri"),
   colibriFile: jsonb("colibri_file"),
+  /** PartitionKey|RowKey of the Azure scan this vehicle was imported from (unique: a scan is imported once) */
+  colibriScanKey: text("colibri_scan_key").unique(),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdBy: uuid("created_by").references(() => users.id),
@@ -310,3 +312,75 @@ export const reportSends = pgTable("report_sends", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => ({ byVehicle: index("report_sends_vehicle_idx").on(t.vehicleId) }));
+
+// ---------------------------------------------------------------- Azure mirrors (read-only copies of the Colibri tables)
+export const azureTenants = pgTable("azure_tenants", {
+  name: text("name").primaryKey(),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const azureBusinessCustomers = pgTable("azure_business_customers", {
+  id: text("id").primaryKey(), // RowKey (GUID)
+  name: text("name").notNull(),
+  partitionKey: text("partition_key").notNull().default(""),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const azureInsurances = pgTable("azure_insurances", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  partitionKey: text("partition_key").notNull().default(""),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+});
+/** BusinessCustomersInsurance: the link a scan names in its `BusinessCustomer` column. */
+export const azureBcInsuranceLinks = pgTable("azure_bc_insurance_links", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  businessCustomerId: text("business_customer_id").notNull(),
+  insuranceId: text("insurance_id").notNull(),
+  partitionKey: text("partition_key").notNull().default(""),
+  seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const colibriScans = pgTable("colibri_scans", {
+  partitionKey: text("partition_key").notNull(),
+  rowKey: text("row_key").notNull(),
+  tenant: text("tenant").notNull().default(""),
+  location: text("location").notNull().default(""),
+  colibriNumber: text("colibri_number").notNull().default(""),
+  businessCustomer: text("business_customer").notNull().default(""),
+  claimNumber: text("claim_number").notNull().default(""),
+  scanDateTime: timestamp("scan_date_time", { withTimezone: true }),
+  plate: text("plate").notNull().default(""),
+  vin: text("vin").notNull().default(""),
+  brand: text("brand").notNull().default(""),
+  model: text("model").notNull().default(""),
+  buildYear: text("build_year").notNull().default(""),
+  country: text("country").notNull().default(""),
+  language: text("language").notNull().default(""),
+  calculationMethod: text("calculation_method").notNull().default(""),
+  dentsTotal: integer("dents_total"),
+  scanFailed: boolean("scan_failed").notNull().default(false),
+  errorMessage: text("error_message").notNull().default(""),
+  urlPdf: text("url_pdf").notNull().default(""),
+  raw: jsonb("raw").notNull().default(sql`'{}'::jsonb`),
+  /** new | imported | ignored */
+  importStatus: text("import_status").notNull().default("new"),
+  vehicleId: uuid("vehicle_id"),
+  importedBy: uuid("imported_by"),
+  importedAt: timestamp("imported_at", { withTimezone: true }),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.partitionKey, t.rowKey] }),
+  byTenant: index("colibri_scans_tenant_idx").on(t.tenant, t.importStatus),
+}));
+export const azureSyncRuns = pgTable("azure_sync_runs", {
+  id: id(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  ok: boolean("ok"),
+  error: text("error"),
+  stats: jsonb("stats"),
+});
+export const azureSyncState = pgTable("azure_sync_state", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+});

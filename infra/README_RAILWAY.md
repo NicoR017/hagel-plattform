@@ -40,6 +40,30 @@ Le même `Dockerfile` sert les deux services ; seul le *Start Command* du `worke
 
 Health check : `GET /api/health`, réglé sur le service `api` uniquement (Settings → Deploy → Healthcheck Path) — pas dans `railway.json`, car le worker n’a pas de serveur HTTP.
 
+## 2b. Import automatique des scans Colibri depuis Azure (phase 5)
+
+Accès **en lecture seule**, uniquement depuis le serveur (jamais depuis les téléphones). Rien n'est modifié côté Colibri.
+
+**Créer le jeton SAS** (portail Azure → compte de stockage `storagecolibri` → *Sécurité + réseau* → *Signature d'accès partagé*) :
+* Services autorisés : **Blob** et **Table** (rien d'autre)
+* Types de ressources : Service, Conteneur, Objet
+* Autorisations : **Lecture** et **Liste** seulement (pas d'écriture, suppression, ajout, création…)
+* Protocole : HTTPS uniquement ; date d'expiration (ex. 1 an — noter la date de renouvellement : après expiration, la synchro échoue et l'écran Azure de l'app affiche l'erreur)
+* *Générer*, puis copier le **jeton SAS** (commence par `sv=…`, avec ou sans `?`).
+
+Variables sur les services **api** et **worker** :
+
+| Variable | Valeur |
+|---|---|
+| `AZURE_STORAGE_SAS` | le jeton SAS (secret : uniquement dans Railway) |
+| `AZURE_STORAGE_ACCOUNT` | `storagecolibri` (défaut) |
+| `AZURE_SYNC_MINUTES` | fréquence de la synchro, défaut `3` |
+| `AZURE_INITIAL_DAYS` | historique repris au premier lancement, défaut `30` |
+
+Ensuite, dans l'app : **Verwaltung → Organisationen** (super-admin) : indiquer les *tenants* Colibri de chaque organisation ; **Sites** : tenant + « Colibri-Kunde » (BusinessCustomer) pour chaque carrosserie, noms de lieux (alias) pour chaque halle/parc ; **Azure** : voir l'état de la synchro, créer/lier les clients et lieux encore inconnus ; **Versicherungen** : lier chaque assureur à son entrée Azure.
+
+Règle absolue : un scan n'est visible/importable que par un site du **même tenant** (`scan.Tenant = site.azure_tenant`), même si les noms sont identiques ; les scans non rattachés ne sont visibles que des administrateurs d'une organisation qui possède ce tenant.
+
 ## 3. Sauvegardes
 
 * **Railway Postgres** : backups du volume (à activer dans l'onglet du service Postgres).

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
-import { CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
+import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
 import { FieldProvider, useField } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
@@ -93,7 +93,7 @@ function AcceptInvite({ token }: { token: string }) {
 }
 
 
-type AdminTab = "users" | "roles" | "sites" | "insurers" | "campaigns" | "letterheads" | "technicians" | "audit" | "orgs";
+type AdminTab = "users" | "roles" | "sites" | "azure" | "insurers" | "campaigns" | "letterheads" | "technicians" | "audit" | "orgs";
 
 function Shell() {
   const [me, setMe] = useState<Me | null>(null);
@@ -148,6 +148,7 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
     { k: "users", label: t("users"), show: has("utilisateurs.gerer") },
     { k: "roles", label: t("roles"), show: has("roles.gerer") },
     { k: "sites", label: t("sites"), show: true },
+    { k: "azure", label: "Azure", show: has("stations.gerer") },
     { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
     { k: "campaigns", label: t("campaigns"), show: has("campagnes.gerer") },
     { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
@@ -174,6 +175,7 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
         {current === "users" && <UsersPage canManage={has("utilisateurs.gerer")} />}
         {current === "roles" && <RolesPage />}
         {current === "sites" && <SitesPage canManage={has("stations.gerer")} />}
+        {current === "azure" && <AzurePage />}
         {current === "insurers" && <InsurersPage />}
         {current === "campaigns" && <CampaignsPage />}
         {current === "letterheads" && <CompaniesPage />}

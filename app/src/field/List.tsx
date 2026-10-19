@@ -9,6 +9,7 @@ import { go } from "./route";
 import { shareOrDownload, toDoc } from "./docs";
 import { AssignDialog, MoveDialog, SettingsDialog, SharesDialog, StatusDialog, statusLabel } from "./Dialogs";
 import { BackupImport } from "./BackupImport";
+import { ScansDialog } from "./Scans";
 import { useField, useVehicles } from "./store";
 import { toast } from "./toast";
 import { confirmDialog } from "./ui";
@@ -34,7 +35,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const [insurer, setInsurer] = useState("");
   const [campaign, setCampaign] = useState("");
   const [sel, setSel] = useState<Set<string> | null>(null);
-  const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "settings" | "backup">(null);
+  const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "settings" | "backup" | "scans">(null);
   const [busy, setBusy] = useState("");
   const bulkRef = useRef<HTMLInputElement>(null);
 
@@ -154,6 +155,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
               📄 {busy || t("colibriBulk")}
               <span style={{ display: "block", fontSize: 12, fontWeight: 500, marginTop: 2 }}>{t("colibriBulkHint")}</span>
             </button>
+            <button className="pbtn sec" style={{ marginTop: 10 }} onClick={() => setDlg("scans")}>☁ {t("scansAvailable")}</button>
             <input ref={bulkRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => { const fl = [...(e.target.files ?? [])]; e.target.value = ""; if (fl.length) void bulkColibri(fl); }} />
           </>
         )}
@@ -222,6 +224,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
       {dlg === "assign" && <AssignDialog ids={ids} vehicles={all} onClose={() => setDlg(null)} onDone={() => setSel(null)} />}
       {dlg === "settings" && <SettingsDialog onClose={() => setDlg(null)} onBackup={() => setDlg("backup")} />}
       {dlg === "backup" && <BackupImport onClose={() => setDlg(null)} />}
+      {dlg === "scans" && <ScansDialog onClose={() => setDlg(null)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, httpFetch } from "./api";
 import { act, Card, Err, useLoad } from "./admin";
-import { t } from "./i18n";
+import { fmtDateTime, t } from "./i18n";
 
 interface Station { id: string; type: string; name: string; active: boolean }
 interface Insurer { id: string; name: string; reportEmails: string[]; sendReports: boolean; reportsToSend: string; stationIds: string[] }
@@ -12,7 +12,8 @@ const emails = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boo
 export function InsurersPage() {
   const list = useLoad<Insurer[]>("/admin/insurers");
   const sites = useLoad<Station[]>("/admin/stations");
-  const [f, setF] = useState<{ id?: string; name: string; emails: string; send: boolean; which: string } | null>(null);
+  const [f, setF] = useState<{ id?: string; name: string; emails: string; send: boolean; which: string; azure: string } | null>(null);
+  const azIns = useLoad<{ id: string; name: string }[]>("/admin/azure/insurances");
   const [err, setErr] = useState("");
   const carros = (sites.data ?? []).filter((s) => s.type === "carrosserie" && s.active);
   const toggleLink = (insurerId: string, stationId: string, on: boolean) => {
@@ -23,14 +24,14 @@ export function InsurersPage() {
   };
   return (
     <>
-      <Card title={t("insurers")} actions={<button className="btn" onClick={() => setF({ name: "", emails: "", send: false, which: "both" })}>{t("newInsurer")}</button>}>
+      <Card title={t("insurers")} actions={<button className="btn" onClick={() => setF({ name: "", emails: "", send: false, which: "both", azure: "" })}>{t("newInsurer")}</button>}>
         <Err msg={list.err || err} />
         {(list.data ?? []).map((i) => (
           <div key={i.id} style={{ borderTop: "1px solid var(--line)", padding: "10px 0" }}>
             <div className="row">
               <b className="grow">{i.name}</b>
               {i.sendReports ? <span className="pill">{t("getsReports")}: {t(("rep." + i.reportsToSend) as never)}</span> : <span className="pill off">{t("noReports")}</span>}
-              <button className="btn sec" onClick={() => setF({ id: i.id, name: i.name, emails: i.reportEmails.join(", "), send: i.sendReports, which: i.reportsToSend })}>{t("edit")}</button>
+              <button className="btn sec" onClick={() => setF({ id: i.id, name: i.name, emails: i.reportEmails.join(", "), send: i.sendReports, which: i.reportsToSend, azure: (i as unknown as { azureInsuranceId?: string | null }).azureInsuranceId ?? "" })}>{t("edit")}</button>
               <button className="btn danger" onClick={() => { if (window.confirm(`${t("delete")}: ${i.name}?`)) void act(() => api("DELETE", `/admin/insurers/${i.id}`), setErr, list.reload); }}>{t("delete")}</button>
             </div>
             <div style={{ color: "var(--sub)", fontSize: 13, marginTop: 4 }}>{i.reportEmails.join(", ") || "—"}</div>
@@ -49,6 +50,11 @@ export function InsurersPage() {
       </Card>
       {f && (
         <Card title={f.id ? f.name : t("newInsurer")}>
+          <label>{t("azureInsurance")}</label>
+          <select value={f.azure} onChange={(e) => { const a = azIns.data?.find((x) => x.id === e.target.value); setF({ ...f, azure: e.target.value, name: a && !f.name ? a.name : f.name }); }}>
+            <option value="">— {t("notLinked")} —</option>{(azIns.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          {f.azure && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
           <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           <label>{t("reportEmails")}</label><input value={f.emails} onChange={(e) => setF({ ...f, emails: e.target.value })} />
           <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}><input type="checkbox" style={{ width: 22, height: 22, minHeight: 0 }} checked={f.send} onChange={(e) => setF({ ...f, send: e.target.checked })} />{t("getsReports")}</label>
@@ -57,7 +63,7 @@ export function InsurersPage() {
           <Err msg={err} />
           <p className="row">
             <button className="btn" onClick={() => {
-              const body = { name: f.name, report_emails: emails(f.emails), send_reports: f.send, reports_to_send: f.which };
+              const body = { name: f.name, report_emails: emails(f.emails), send_reports: f.send, reports_to_send: f.which, azure_insurance_id: f.azure || null };
               void act(() => (f.id ? api("PUT", `/admin/insurers/${f.id}`, body) : api("POST", "/admin/insurers", body)), setErr, () => { setF(null); void list.reload(); });
             }}>{t("save")}</button>
             <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
@@ -226,6 +232,78 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
             }}>{t("save")}</button>
             <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
           </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Azure / Colibri
+interface AzStatus {
+  configured: boolean; tenants: string[]; scansMirrored: number; waiting: { importable: number; blocked: number };
+  lastRuns: { at: string; finishedAt: string | null; ok: boolean | null; error: string | null; stats: Record<string, number> | null }[];
+  unmappedCustomers: { name: string; tenant: string; scans: number }[]; unmappedLocations: { location: string; tenant: string; scans: number }[];
+}
+export function AzurePage() {
+  const st = useLoad<AzStatus>("/admin/azure/status");
+  const sites = useLoad<(Station & { azureTenant: string | null; type: string })[]>("/admin/stations");
+  const [err, setErr] = useState("");
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const carros = (sites.data ?? []).filter((x) => x.type === "carrosserie" && x.active);
+  const halls = (sites.data ?? []).filter((x) => x.type !== "carrosserie" && x.active);
+  const d = st.data;
+  return (
+    <>
+      <Card title={t("azureTitle")} actions={<button className="btn" disabled={!d?.configured} onClick={() => void act(() => api("POST", "/admin/azure/sync"), setErr, () => { void st.reload(); })}>{t("syncNow")}</button>}>
+        <Err msg={st.err || err} />
+        {d && (
+          <>
+            <p>{d.configured ? <span className="ok">✓ {t("azureConfigured")}</span> : <span className="err">{t("azureNotConfigured")}</span>}</p>
+            <p style={{ margin: "4px 0" }}>{t("tenant")}: {d.tenants.length ? d.tenants.map((x) => <span key={x} className="pill">{x}</span>) : <span className="muted">{t("noTenants")}</span>}</p>
+            <p style={{ margin: "4px 0" }}>{d.scansMirrored} {t("scansMirrored")} · {d.waiting.importable} {t("scansImportable")} · {d.waiting.blocked} {t("scansBlocked")}</p>
+            <table>
+              <thead><tr><th>{t("time")}</th><th>{t("status")}</th><th>{t("azureStats")}</th></tr></thead>
+              <tbody>{d.lastRuns.map((r, i) => (
+                <tr key={i}><td>{fmtDateTime(r.at)}</td><td>{r.ok === null ? "…" : r.ok ? <span className="ok">OK</span> : <span className="err">{r.error}</span>}</td>
+                  <td style={{ fontSize: 12 }}>{r.stats ? `${r.stats.scansSeen} / +${r.stats.scansNew}` : ""}</td></tr>
+              ))}</tbody>
+            </table>
+          </>
+        )}
+      </Card>
+      {!!d?.unmappedCustomers.length && (
+        <Card title={t("unmappedCustomers")}>
+          <p className="muted" style={{ marginTop: 0 }}>{t("unmappedCustomersHint")}</p>
+          {d.unmappedCustomers.map((u) => {
+            const k = `${u.tenant}|${u.name}`;
+            return (
+              <div key={k} className="row" style={{ borderTop: "1px solid var(--line)", padding: "8px 0" }}>
+                <div className="grow"><b>{u.name}</b><div style={{ fontSize: 12, color: "var(--sub)" }}>{u.tenant} · {u.scans} {t("scansWord")}</div></div>
+                <select style={{ maxWidth: 220 }} value={pick[k] ?? ""} onChange={(e) => setPick({ ...pick, [k]: e.target.value })}>
+                  <option value="">{t("createNewSite")}</option>{carros.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+                <button className="btn" onClick={() => void act(() => api("POST", "/admin/azure/map-customer", { link_name: u.name, tenant: u.tenant, station_id: pick[k] || null }), setErr, () => { void st.reload(); void sites.reload(); })}>{pick[k] ? t("linkSite") : t("createSite")}</button>
+              </div>
+            );
+          })}
+        </Card>
+      )}
+      {!!d?.unmappedLocations.length && (
+        <Card title={t("unmappedLocations")}>
+          <p className="muted" style={{ marginTop: 0 }}>{t("unmappedLocationsHint")}</p>
+          {d.unmappedLocations.map((u) => {
+            const k = `L|${u.tenant}|${u.location}`;
+            const ok = halls.filter((h) => h.azureTenant === u.tenant);
+            return (
+              <div key={k} className="row" style={{ borderTop: "1px solid var(--line)", padding: "8px 0" }}>
+                <div className="grow"><b>{u.location}</b><div style={{ fontSize: 12, color: "var(--sub)" }}>{u.tenant} · {u.scans} {t("scansWord")}</div></div>
+                <select style={{ maxWidth: 220 }} value={pick[k] ?? ""} onChange={(e) => setPick({ ...pick, [k]: e.target.value })}>
+                  <option value="">—</option>{ok.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+                <button className="btn" disabled={!pick[k]} onClick={() => void act(() => api("POST", "/admin/azure/map-location", { location: u.location, tenant: u.tenant, station_id: pick[k] }), setErr, () => void st.reload())}>{t("mapLocation")}</button>
+              </div>
+            );
+          })}
         </Card>
       )}
     </>
