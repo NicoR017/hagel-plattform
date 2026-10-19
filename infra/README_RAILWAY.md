@@ -37,7 +37,7 @@ Le même `Dockerfile` sert les deux services ; seul le *Start Command* du `worke
 | `BACKUP_ON_START` | worker | `1` pour lancer une sauvegarde immédiate (test) |
 | `ANTHROPIC_API_KEY`, `AZURE_STORAGE_*` | api / worker | Phases 3 et 5 — pas encore utilisées |
 
-Health check : `GET /api/health` (déjà configuré dans `railway.json`).
+Health check : `GET /api/health`, réglé sur le service `api` uniquement (Settings → Deploy → Healthcheck Path) — pas dans `railway.json`, car le worker n’a pas de serveur HTTP.
 
 ## 3. Sauvegardes
 
