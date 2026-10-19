@@ -1,6 +1,8 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { sign, verify } from "hono/jwt";
+import { type ErrorCode, type Lang, isLang } from "@hagel/shared";
 import type { Config } from "./config";
+import { accessMail, inviteMail, loginMail } from "./mails";
 import { hashToken, newToken } from "./crypto";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
@@ -8,7 +10,7 @@ import { audit } from "./audit";
 import { invitations, loginTokens, memberships, organizations, roleAssignments, roles, sessions, users } from "./schema";
 
 export class HttpError extends Error {
-  constructor(public status: 400 | 401 | 403 | 404 | 409 | 429, message: string) { super(message); }
+  constructor(public status: 400 | 401 | 403 | 404 | 409 | 429, public code: ErrorCode, public params: Record<string, string> = {}) { super(code); }
 }
 
 const now = () => new Date();
@@ -46,15 +48,15 @@ export async function authenticate(db: Db, cfg: Config, token: string): Promise<
 export async function refreshSession(db: Db, cfg: Config, refreshToken: string): Promise<Tokens> {
   const h = hashToken(refreshToken);
   const [s] = await db.select().from(sessions).where(eq(sessions.refreshHash, h));
-  if (!s || s.revokedAt || s.expiresAt <= now()) throw new HttpError(401, "Sitzung abgelaufen");
+  if (!s || s.revokedAt || s.expiresAt <= now()) throw new HttpError(401, "session_expired");
   const [u] = await db.select().from(users).where(eq(users.id, s.userId));
-  if (!u || u.status !== "active") throw new HttpError(401, "Konto deaktiviert");
+  if (!u || u.status !== "active") throw new HttpError(401, "account_disabled");
   const next = newToken();
   const upd = await db.update(sessions)
     .set({ refreshHash: hashToken(next), lastUsedAt: now() })
     .where(and(eq(sessions.id, s.id), eq(sessions.refreshHash, h)))
     .returning();
-  if (!upd.length) throw new HttpError(401, "Sitzung abgelaufen"); // lost a race: the old token was already rotated
+  if (!upd.length) throw new HttpError(401, "session_expired"); // lost a race: the old token was already rotated
   return { access_token: await signAccess(cfg, s.userId, s.id), refresh_token: next, expires_in: cfg.accessTtlSec, session_id: s.id };
 }
 
@@ -71,11 +73,7 @@ export async function requestLogin(db: Db, cfg: Config, mailer: Mailer, email: s
   if (!u || u.status !== "active") return; // same response either way: no account enumeration
   const token = newToken();
   await db.insert(loginTokens).values({ userId: u.id, tokenHash: hashToken(token), expiresAt: addMs(cfg.loginTtlMinutes * 60_000) });
-  await mailer.send({
-    to: email,
-    subject: "Anmeldung PDR Hagel",
-    text: `Hallo ${u.name || ""},\n\nHier ist Ihr Anmelde-Link (${cfg.loginTtlMinutes} Minuten gültig, nur einmal verwendbar):\n${cfg.appUrl}/login?token=${token}\n\nWenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.`,
-  });
+  await mailer.send({ to: email, ...loginMail(isLang(u.language) ? u.language : "de", u.name, `${cfg.appUrl}/login?token=${token}`, cfg.loginTtlMinutes) });
 }
 
 export async function verifyLogin(db: Db, cfg: Config, token: string, device: string): Promise<Tokens> {
@@ -84,9 +82,9 @@ export async function verifyLogin(db: Db, cfg: Config, token: string, device: st
     .set({ usedAt: now() })
     .where(and(eq(loginTokens.tokenHash, hashToken(token)), isNull(loginTokens.usedAt), gt(loginTokens.expiresAt, now())))
     .returning();
-  if (!used.length) throw new HttpError(401, "Link ungültig oder abgelaufen");
+  if (!used.length) throw new HttpError(401, "link_invalid");
   const [u] = await db.select().from(users).where(eq(users.id, used[0].userId));
-  if (!u || u.status !== "active") throw new HttpError(401, "Konto deaktiviert");
+  if (!u || u.status !== "active") throw new HttpError(401, "account_disabled");
   return createSession(db, cfg, u.id, device);
 }
 
@@ -94,52 +92,46 @@ export async function verifyLogin(db: Db, cfg: Config, token: string, device: st
 export interface InviteParams {
   orgId: string; email: string; roleId: string; stationId: string | null;
   scopeClientStationId: string | null; scopeInsurerId: string | null; scopeCampaignId: string | null;
-  assignmentExpiresAt: Date | null; invitedBy: string;
+  assignmentExpiresAt: Date | null; invitedBy: string; language: Lang;
 }
 
 export async function inviteUser(db: Db, cfg: Config, mailer: Mailer, p: InviteParams): Promise<{ id: string; existingUser: boolean }> {
   const [role] = await db.select().from(roles).where(and(eq(roles.id, p.roleId), eq(roles.orgId, p.orgId)));
-  if (!role) throw new HttpError(404, "Rolle nicht gefunden");
+  if (!role) throw new HttpError(404, "role_not_found");
   const [org] = await db.select().from(organizations).where(eq(organizations.id, p.orgId));
   const [existing] = await db.select().from(users).where(eq(users.email, p.email));
   if (existing && existing.status === "active") {
     // already has an account: grant access directly and tell them
     await addAccess(db, existing.id, p);
-    await mailer.send({
-      to: p.email, subject: `Neuer Zugriff: ${org.name}`,
-      text: `Sie haben Zugriff auf ${org.name} erhalten.\nAnmelden: ${cfg.appUrl}/login`,
-    });
+    await mailer.send({ to: p.email, ...accessMail(isLang(existing.language) ? existing.language : "de", org.name, `${cfg.appUrl}/login`) });
     await audit(db, { orgId: p.orgId, userId: p.invitedBy, action: "grant_access", entity: "user", entityId: existing.id, after: { roleId: p.roleId, stationId: p.stationId } });
     return { id: existing.id, existingUser: true };
   }
-  if (existing && existing.status === "disabled") throw new HttpError(409, "Konto ist deaktiviert – bitte reaktivieren");
+  if (existing && existing.status === "disabled") throw new HttpError(409, "account_disabled_reactivate");
   const token = newToken();
   const [inv] = await db.insert(invitations).values({
     orgId: p.orgId, email: p.email, roleId: p.roleId, stationId: p.stationId,
     scopeClientStationId: p.scopeClientStationId, scopeInsurerId: p.scopeInsurerId, scopeCampaignId: p.scopeCampaignId,
-    assignmentExpiresAt: p.assignmentExpiresAt, tokenHash: hashToken(token),
+    assignmentExpiresAt: p.assignmentExpiresAt, language: p.language, tokenHash: hashToken(token),
     expiresAt: addMs(cfg.inviteTtlHours * 3600_000), invitedBy: p.invitedBy,
   }).returning();
-  await sendInviteMail(cfg, mailer, p.email, org.name, token);
+  await sendInviteMail(cfg, mailer, p.email, org.name, token, p.language);
   await audit(db, { orgId: p.orgId, userId: p.invitedBy, action: "invite", entity: "invitation", entityId: inv.id, after: { email: p.email, roleId: p.roleId, stationId: p.stationId } });
   return { id: inv.id, existingUser: false };
 }
 
-async function sendInviteMail(cfg: Config, mailer: Mailer, to: string, orgName: string, token: string) {
-  await mailer.send({
-    to, subject: `Einladung zu PDR Hagel (${orgName})`,
-    text: `Sie wurden zu ${orgName} eingeladen.\nKonto erstellen (${cfg.inviteTtlHours} Stunden gültig, nur einmal verwendbar):\n${cfg.appUrl}/invite?token=${token}`,
-  });
+async function sendInviteMail(cfg: Config, mailer: Mailer, to: string, orgName: string, token: string, lang: Lang) {
+  await mailer.send({ to, ...inviteMail(lang, orgName, `${cfg.appUrl}/invite?token=${token}`, cfg.inviteTtlHours) });
 }
 
 /** A new token replaces the old one (the old link stops working). */
 export async function resendInvitation(db: Db, cfg: Config, mailer: Mailer, invitationId: string, orgId: string) {
   const [inv] = await db.select().from(invitations).where(and(eq(invitations.id, invitationId), eq(invitations.orgId, orgId)));
-  if (!inv || inv.usedAt) throw new HttpError(404, "Einladung nicht gefunden");
+  if (!inv || inv.usedAt) throw new HttpError(404, "invitation_not_found");
   const token = newToken();
   await db.update(invitations).set({ tokenHash: hashToken(token), expiresAt: addMs(cfg.inviteTtlHours * 3600_000) }).where(eq(invitations.id, inv.id));
   const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-  await sendInviteMail(cfg, mailer, inv.email, org.name, token);
+  await sendInviteMail(cfg, mailer, inv.email, org.name, token, isLang(inv.language) ? inv.language : "de");
 }
 
 async function addAccess(db: Db, userId: string, p: Pick<InviteParams, "orgId" | "roleId" | "stationId" | "scopeClientStationId" | "scopeInsurerId" | "scopeCampaignId" | "assignmentExpiresAt">) {
@@ -156,15 +148,15 @@ export async function acceptInvitation(db: Db, cfg: Config, token: string, name:
     .set({ usedAt: now() })
     .where(and(eq(invitations.tokenHash, hashToken(token)), isNull(invitations.usedAt), gt(invitations.expiresAt, now())))
     .returning();
-  if (!claimed.length) throw new HttpError(401, "Einladung ungültig oder abgelaufen");
+  if (!claimed.length) throw new HttpError(401, "invitation_invalid");
   const inv = claimed[0];
   const [existing] = await db.select().from(users).where(eq(users.email, inv.email));
   let userId: string;
   if (existing) {
-    if (existing.status === "disabled") throw new HttpError(409, "Konto ist deaktiviert");
+    if (existing.status === "disabled") throw new HttpError(409, "account_disabled");
     userId = existing.id;
   } else {
-    const [u] = await db.insert(users).values({ email: inv.email, name, language, status: "active" }).returning();
+    const [u] = await db.insert(users).values({ email: inv.email, name, language: isLang(language) ? language : isLang(inv.language) ? inv.language : "de", status: "active" }).returning();
     userId = u.id;
   }
   await addAccess(db, userId, {

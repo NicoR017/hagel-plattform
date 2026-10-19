@@ -20,11 +20,12 @@ const roleIdsOf = async (orgId: string) => {
   return Object.fromEntries((r.body as { key: string; id: string }[]).map((x) => [x.key, x.id]));
 };
 
-interface Opts { token?: string; org?: string; body?: unknown }
+interface Opts { token?: string; org?: string; body?: unknown; lang?: string }
 async function call(method: string, path: string, o: Opts = {}) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (o.token) headers.authorization = `Bearer ${o.token}`;
   if (o.org) headers["x-org-id"] = o.org;
+  if (o.lang) headers["x-lang"] = o.lang;
   const res = await app.request(path, { method, headers, body: o.body === undefined ? undefined : JSON.stringify(o.body) });
   const text = await res.text();
   let body: unknown = text;
@@ -381,5 +382,76 @@ describe("misc", () => {
   it("audit table exists and has entries", async () => {
     expect((await h.db.select().from(auditLog)).length).toBeGreaterThan(5);
     expect((await h.db.select().from(stations)).length).toBeGreaterThan(1);
+  });
+});
+
+describe("languages (DE / EN)", () => {
+  it("error messages follow X-Lang, with a stable code", async () => {
+    const en = await call("GET", "/me", { lang: "en" });
+    expect(en.status).toBe(401);
+    expect(en.body).toEqual({ error: "Not signed in", code: "not_authenticated" });
+    const de = await call("GET", "/me", { lang: "de" });
+    expect(de.body).toEqual({ error: "Nicht angemeldet", code: "not_authenticated" });
+    const dflt = await call("GET", "/me");
+    expect(dflt.body.error).toBe("Nicht angemeldet");
+  });
+  it("Accept-Language is used when X-Lang is absent", async () => {
+    const res = await app.request("/me", { headers: { "accept-language": "en-GB,en;q=0.8" } });
+    expect((await res.json()).error).toBe("Not signed in");
+  });
+  it("validation errors are localized too", async () => {
+    const en = await call("POST", "/auth/request-link", { body: { email: "not-an-email" }, lang: "en" });
+    expect(en.status).toBe(400);
+    expect(en.body).toEqual({ error: "Invalid input", code: "invalid_input" });
+    expect((await call("POST", "/auth/request-link", { body: { email: "x" }, lang: "de" })).body.error).toBe("Ungültige Eingabe");
+  });
+  it("parameterised messages", async () => {
+    const r = await call("POST", "/admin/roles", { token: superToken, org: orgES, body: { name: "LangRM", scope: "station", permissions: ["roles.gerer"] } });
+    const tok = (await inviteAndAccept(superToken, orgES, "langrm@example.test", { role_id: r.body.id })).access_token;
+    const bad = await call("POST", "/admin/roles", { token: tok, org: orgES, lang: "en", body: { name: "X", scope: "station", permissions: ["prix.voir"] } });
+    expect(bad.status).toBe(403);
+    expect(bad.body.error).toBe("You are not allowed to grant these permissions: prix.voir");
+    const badDe = await call("POST", "/admin/roles", { token: tok, org: orgES, lang: "de", body: { name: "X", scope: "station", permissions: ["prix.voir"] } });
+    expect(badDe.body.error).toBe("Sie dürfen diese Rechte nicht vergeben: prix.voir");
+  });
+  it("invitation e-mail and account language follow the chosen language", async () => {
+    mailer.sent.length = 0;
+    await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "english@example.test", role_id: roleId.aufnehmer, language: "en" } });
+    expect(mailer.last().subject).toContain("Invitation to PDR Hagel");
+    expect(mailer.last().text).toContain("You have been invited");
+    expect(mailer.last().text).not.toMatch(/Sie wurden|Konto erstellen/);
+    const token = tokenFromLink(mailer.linkFor("english@example.test")!);
+    const acc = await call("POST", "/auth/accept-invite", { body: { token, name: "Eve" } });
+    expect(acc.status).toBe(200);
+    const me = await call("GET", "/me", { token: acc.body.access_token });
+    expect(me.body.user.language).toBe("en");
+
+    mailer.sent.length = 0;
+    await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "deutsch@example.test", role_id: roleId.aufnehmer } });
+    expect(mailer.last().subject).toContain("Einladung zu PDR Hagel");
+  });
+  it("login e-mail follows the account language, switchable via PUT /me/language", async () => {
+    const t = await login("english@example.test");
+    expect(mailer.last().subject).toBe("Sign in to PDR Hagel");
+    expect(mailer.last().text).toContain("single use");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "de" } })).status).toBe(200);
+    await login("english@example.test");
+    expect(mailer.last().subject).toBe("Anmeldung PDR Hagel");
+    expect(mailer.last().text).toContain("nur einmal verwendbar");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "fr" } })).status).toBe(400);
+    expect((await call("PUT", "/me/language", { body: { language: "en" } })).status).toBe(401);
+  });
+  it("existing user granted access gets the notification in their language", async () => {
+    await call("PUT", "/me/language", { token: (await login("english@example.test")).access_token, body: { language: "en" } });
+    mailer.sent.length = 0;
+    await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "english@example.test", role_id: roleId.technicien, language: "de" } });
+    expect(mailer.last().subject).toBe("New access: PDR Team Spain");
+  });
+  it("accept-invite may override the invitation language", async () => {
+    mailer.sent.length = 0;
+    await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "override@example.test", role_id: roleId.aufnehmer, language: "de" } });
+    const token = tokenFromLink(mailer.linkFor("override@example.test")!);
+    const acc = await call("POST", "/auth/accept-invite", { body: { token, name: "Ov", language: "en" } });
+    expect((await call("GET", "/me", { token: acc.body.access_token })).body.user.language).toBe("en");
   });
 });

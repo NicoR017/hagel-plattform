@@ -4,7 +4,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
   acceptInviteInput, assignmentInput, inviteInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
-  PERMISSIONS, SYSTEM_ROLES, type Permission,
+  PERMISSIONS, SYSTEM_ROLES, type Permission, errorMessage, pickLang, languageInput,
 } from "@hagel/shared";
 import { audit } from "./audit";
 import {
@@ -31,7 +31,7 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
     const k = keyOf(c), t = Date.now();
     const h = hits.get(k);
     if (!h || h.reset < t) hits.set(k, { n: 1, reset: t + windowMs });
-    else if (++h.n > max) throw new HttpError(429, "Zu viele Anfragen – bitte später erneut versuchen");
+    else if (++h.n > max) throw new HttpError(429, "too_many_requests");
     if (hits.size > 5000) for (const [kk, v] of hits) if (v.reset < t) hits.delete(kk);
     await next();
   };
@@ -43,11 +43,16 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
   const app = new Hono<Env>();
 
+  const langOf = (c: Context) => pickLang(c.req.header("x-lang"), c.req.header("accept-language"));
   app.onError((err, c) => {
-    if (err instanceof HttpError) return c.json({ error: err.message }, err.status);
+    const lang = langOf(c);
+    if (err instanceof HttpError) return c.json({ error: errorMessage(err.code, lang, err.params), code: err.code }, err.status);
     console.error(err);
-    return c.json({ error: "Interner Fehler" }, 500);
+    return c.json({ error: errorMessage("internal", lang), code: "internal" }, 500);
   });
+  // schema validation failures: same shape, localized
+  const validationHook = (r: { success: boolean }, c: Context) =>
+    r.success ? undefined : c.json({ error: errorMessage("invalid_input", langOf(c)), code: "invalid_input" }, 400);
 
   app.get("/health", async (c) => {
     await db.execute(sql`select 1`);
@@ -56,19 +61,19 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
 
   // ---------- auth (public) ----------
   const auth = new Hono<Env>();
-  auth.post("/request-link", rateLimit(L.requestLink, 15 * 60_000, ip), zValidator("json", loginRequestInput), async (c) => {
+  auth.post("/request-link", rateLimit(L.requestLink, 15 * 60_000, ip), zValidator("json", loginRequestInput, validationHook), async (c) => {
     await requestLogin(db, cfg, mailer, c.req.valid("json").email);
     return c.json({ ok: true }); // always the same answer
   });
-  auth.post("/verify", rateLimit(L.verify, 15 * 60_000, ip), zValidator("json", loginVerifyInput), async (c) => {
+  auth.post("/verify", rateLimit(L.verify, 15 * 60_000, ip), zValidator("json", loginVerifyInput, validationHook), async (c) => {
     const b = c.req.valid("json");
     return c.json(await verifyLogin(db, cfg, b.token, b.device));
   });
-  auth.post("/accept-invite", rateLimit(L.accept, 15 * 60_000, ip), zValidator("json", acceptInviteInput), async (c) => {
+  auth.post("/accept-invite", rateLimit(L.accept, 15 * 60_000, ip), zValidator("json", acceptInviteInput, validationHook), async (c) => {
     const b = c.req.valid("json");
-    return c.json(await acceptInvitation(db, cfg, b.token, b.name, b.language, c.req.header("user-agent") ?? ""));
+    return c.json(await acceptInvitation(db, cfg, b.token, b.name, b.language ?? "", c.req.header("user-agent") ?? ""));
   });
-  auth.post("/refresh", rateLimit(L.refresh, 15 * 60_000, ip), zValidator("json", refreshInput), async (c) => {
+  auth.post("/refresh", rateLimit(L.refresh, 15 * 60_000, ip), zValidator("json", refreshInput, validationHook), async (c) => {
     return c.json(await refreshSession(db, cfg, c.req.valid("json").refresh_token));
   });
   app.route("/auth", auth);
@@ -78,9 +83,9 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const h = c.req.header("authorization") ?? "";
     const token = h.startsWith("Bearer ") ? h.slice(7) : "";
     const a = token ? await authenticate(db, cfg, token) : null;
-    if (!a) throw new HttpError(401, "Nicht angemeldet");
+    if (!a) throw new HttpError(401, "not_authenticated");
     const principal = await loadPrincipal(db, a.userId);
-    if (!principal || principal.status !== "active") throw new HttpError(401, "Nicht angemeldet");
+    if (!principal || principal.status !== "active") throw new HttpError(401, "not_authenticated");
     c.set("principal", principal);
     c.set("sessionId", a.sessionId);
     await next();
@@ -89,19 +94,19 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   /** Organisation context: X-Org-Id header, must be one the user belongs to. */
   const needOrg: MiddlewareHandler<Env> = async (c, next) => {
     const orgId = c.req.header("x-org-id") ?? "";
-    if (!z.string().uuid().safeParse(orgId).success) throw new HttpError(400, "X-Org-Id fehlt");
-    if (!isMemberOfOrg(c.get("principal"), orgId)) throw new HttpError(403, "Kein Zugriff");
+    if (!z.string().uuid().safeParse(orgId).success) throw new HttpError(400, "org_header_missing");
+    if (!isMemberOfOrg(c.get("principal"), orgId)) throw new HttpError(403, "no_access");
     c.set("orgId", orgId);
     await next();
   };
 
   const require = (perm: Permission): MiddlewareHandler<Env> => async (c, next) => {
-    if (!canOrg(c.get("principal"), perm, c.get("orgId"))) throw new HttpError(403, "Keine Berechtigung");
+    if (!canOrg(c.get("principal"), perm, c.get("orgId"))) throw new HttpError(403, "forbidden");
     await next();
   };
 
   const requireSuper: MiddlewareHandler<Env> = async (c, next) => {
-    if (!c.get("principal").isSuperadmin) throw new HttpError(403, "Nur Super-Admin");
+    if (!c.get("principal").isSuperadmin) throw new HttpError(403, "superadmin_only");
     await next();
   };
 
@@ -117,7 +122,7 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     if (p.isSuperadmin) return;
     const held = heldPermissions(p, orgId);
     const missing = perms.filter((x) => !held.has(x));
-    if (missing.length) throw new HttpError(403, `Sie dürfen diese Rechte nicht vergeben: ${missing.join(", ")}`);
+    if (missing.length) throw new HttpError(403, "cannot_grant", { missing: missing.join(", ") });
   };
 
   const me = new Hono<Env>();
@@ -138,6 +143,10 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const rows = await db.select().from(sessions).where(eq(sessions.userId, c.get("principal").id)).orderBy(desc(sessions.createdAt));
     return c.json(rows.map((s) => ({ id: s.id, device: s.device, createdAt: s.createdAt, lastUsedAt: s.lastUsedAt, revoked: !!s.revokedAt, current: s.id === c.get("sessionId") })));
   });
+  me.put("/language", zValidator("json", languageInput, validationHook), async (c) => {
+    await db.update(users).set({ language: c.req.valid("json").language, updatedAt: new Date() }).where(eq(users.id, c.get("principal").id));
+    return c.json({ ok: true });
+  });
   me.post("/logout", async (c) => { await revokeSession(db, c.get("sessionId")); return c.json({ ok: true }); });
   me.post("/logout-all", async (c) => { await revokeAllSessions(db, c.get("principal").id); return c.json({ ok: true }); });
   app.route("/me", me);
@@ -148,7 +157,7 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
 
   // organisations (super-admin)
   admin.get("/orgs", requireSuper, async (c) => c.json(await db.select().from(organizations)));
-  admin.post("/orgs", requireSuper, zValidator("json", z.object({ name: z.string().trim().min(1).max(120), country: z.enum(["DE", "ES"]).default("DE") })), async (c) => {
+  admin.post("/orgs", requireSuper, zValidator("json", z.object({ name: z.string().trim().min(1).max(120), country: z.enum(["DE", "ES"]).default("DE") }), validationHook), async (c) => {
     const b = c.req.valid("json");
     const [o] = await db.insert(organizations).values(b).returning();
     await seedRoles(db, o.id);
@@ -156,8 +165,8 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     return c.json(o, 201);
   });
   admin.get("/orgs/:id/tenants", requireSuper, async (c) => c.json((await db.select().from(orgTenants).where(eq(orgTenants.orgId, c.req.param("id")))).map((t) => t.azureTenant)));
-  admin.put("/orgs/:id/tenants", requireSuper, zValidator("json", z.object({ tenants: z.array(z.string().trim().min(1).max(120)).max(200) })), async (c) => {
-    const orgId = c.req.param("id");
+  admin.put("/orgs/:id/tenants", requireSuper, zValidator("json", z.object({ tenants: z.array(z.string().trim().min(1).max(120)).max(200) }), validationHook), async (c) => {
+    const orgId = c.req.param("id") ?? "";
     const before = (await db.select().from(orgTenants).where(eq(orgTenants.orgId, orgId))).map((t) => t.azureTenant);
     const tenants = [...new Set(c.req.valid("json").tenants)];
     await db.transaction(async (tx) => {
@@ -184,7 +193,7 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const byUser = new Map<string, { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: unknown[] }>();
     for (const { u, a, r } of rows) {
       const e = byUser.get(u.id) ?? { id: u.id, email: u.email, name: u.name, status: u.status, isSuperadmin: u.isSuperadmin, assignments: [] };
-      if (a && r) e.assignments.push({ id: a.id, stationId: a.stationId, roleId: r.id, roleName: r.name, scope: r.scope, expiresAt: a.expiresAt, scopeClientStationId: a.scopeClientStationId, scopeInsurerId: a.scopeInsurerId, scopeCampaignId: a.scopeCampaignId });
+      if (a && r) e.assignments.push({ id: a.id, stationId: a.stationId, roleId: r.id, roleName: r.name, roleKey: r.key, scope: r.scope, expiresAt: a.expiresAt, scopeClientStationId: a.scopeClientStationId, scopeInsurerId: a.scopeInsurerId, scopeCampaignId: a.scopeCampaignId });
       byUser.set(u.id, e);
     }
     return c.json([...byUser.values()]);
@@ -194,17 +203,17 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const rows = await db.select().from(invitations).where(and(eq(invitations.orgId, c.get("orgId")), sql`${invitations.usedAt} is null`)).orderBy(desc(invitations.createdAt));
     return c.json(rows.map(({ tokenHash: _t, ...r }) => r));
   });
-  org.post("/invitations", require("utilisateurs.gerer"), zValidator("json", inviteInput), async (c) => {
+  org.post("/invitations", require("utilisateurs.gerer"), zValidator("json", inviteInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId"), p = c.get("principal");
     const [role] = await db.select().from(roles).where(and(eq(roles.id, b.role_id), eq(roles.orgId, orgId)));
-    if (!role) throw new HttpError(404, "Rolle nicht gefunden");
+    if (!role) throw new HttpError(404, "role_not_found");
     assertCanGrant(p, orgId, role.permissions);
     if (b.station_id) await assertStationInOrg(b.station_id, orgId);
     await assertScopeFields(role.scope, b, orgId);
     const r = await inviteUser(db, cfg, mailer, {
       orgId, email: b.email, roleId: b.role_id, stationId: b.station_id, scopeClientStationId: b.scope_client_station_id,
       scopeInsurerId: b.scope_insurer_id, scopeCampaignId: b.scope_campaign_id,
-      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id,
+      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id, language: b.language,
     });
     return c.json(r, 201);
   });
@@ -215,21 +224,21 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   org.delete("/invitations/:id", require("utilisateurs.gerer"), async (c) => {
     const orgId = c.get("orgId");
     const del = await db.delete(invitations).where(and(eq(invitations.id, c.req.param("id")), eq(invitations.orgId, orgId), sql`${invitations.usedAt} is null`)).returning();
-    if (!del.length) throw new HttpError(404, "Einladung nicht gefunden");
+    if (!del.length) throw new HttpError(404, "invitation_not_found");
     await audit(db, { orgId, userId: c.get("principal").id, action: "revoke", entity: "invitation", entityId: del[0].id, before: { email: del[0].email } });
     return c.json({ ok: true });
   });
 
   const memberOrFail = async (userId: string, orgId: string) => {
     const [row] = await db.select({ u: users }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(and(eq(memberships.userId, userId), eq(memberships.orgId, orgId)));
-    if (!row) throw new HttpError(404, "Benutzer nicht gefunden");
+    if (!row) throw new HttpError(404, "user_not_found");
     return row.u;
   };
   const setStatus = (status: "disabled" | "active") => async (c: Context<Env>) => {
     const orgId = c.get("orgId"), uid = c.req.param("id") ?? "";
     const u = await memberOrFail(uid, orgId);
-    if (u.isSuperadmin) throw new HttpError(403, "Super-Admin kann nicht deaktiviert werden");
-    if (u.id === c.get("principal").id) throw new HttpError(403, "Sie können sich nicht selbst deaktivieren");
+    if (u.isSuperadmin) throw new HttpError(403, "superadmin_undeactivatable");
+    if (u.id === c.get("principal").id) throw new HttpError(403, "self_deactivate");
     await db.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, u.id));
     if (status === "disabled") await revokeAllSessions(db, u.id);
     await audit(db, { orgId, userId: c.get("principal").id, action: status === "disabled" ? "deactivate" : "reactivate", entity: "user", entityId: u.id, before: { status: u.status }, after: { status } });
@@ -245,11 +254,11 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   });
 
   // role assignments
-  org.post("/assignments", require("utilisateurs.gerer"), zValidator("json", assignmentInput), async (c) => {
+  org.post("/assignments", require("utilisateurs.gerer"), zValidator("json", assignmentInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId"), p = c.get("principal");
     await memberOrFail(b.user_id, orgId);
     const [role] = await db.select().from(roles).where(and(eq(roles.id, b.role_id), eq(roles.orgId, orgId)));
-    if (!role) throw new HttpError(404, "Rolle nicht gefunden");
+    if (!role) throw new HttpError(404, "role_not_found");
     assertCanGrant(p, orgId, role.permissions);
     if (b.station_id) await assertStationInOrg(b.station_id, orgId);
     await assertScopeFields(role.scope, b, orgId);
@@ -264,7 +273,7 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const orgId = c.get("orgId");
     const [a] = await db.select({ a: roleAssignments, r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId))
       .where(and(eq(roleAssignments.id, c.req.param("id")), eq(roleAssignments.orgId, orgId)));
-    if (!a) throw new HttpError(404, "Zuweisung nicht gefunden");
+    if (!a) throw new HttpError(404, "assignment_not_found");
     assertCanGrant(c.get("principal"), orgId, a.r.permissions); // you cannot strip rights you could not grant
     await db.delete(roleAssignments).where(eq(roleAssignments.id, a.a.id));
     await audit(db, { orgId, userId: c.get("principal").id, action: "unassign_role", entity: "role_assignment", entityId: a.a.id, before: a.a });
@@ -276,19 +285,19 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   // role list needed by the invite dialog: readable with utilisateurs.gerer too (names only)
   org.get("/roles-lite", require("utilisateurs.gerer"), async (c) => {
     const rows = await db.select().from(roles).where(eq(roles.orgId, c.get("orgId"))).orderBy(roles.name);
-    return c.json(rows.map((r) => ({ id: r.id, name: r.name, scope: r.scope })));
+    return c.json(rows.map((r) => ({ id: r.id, name: r.name, key: r.key, scope: r.scope })));
   });
-  org.post("/roles", require("roles.gerer"), zValidator("json", roleInput), async (c) => {
+  org.post("/roles", require("roles.gerer"), zValidator("json", roleInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     assertCanGrant(c.get("principal"), orgId, b.permissions);
     const [r] = await db.insert(roles).values({ orgId, name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)] }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "role", entityId: r.id, after: r });
     return c.json(r, 201);
   });
-  org.put("/roles/:id", require("roles.gerer"), zValidator("json", roleInput), async (c) => {
+  org.put("/roles/:id", require("roles.gerer"), zValidator("json", roleInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
-    const [before] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id")), eq(roles.orgId, orgId)));
-    if (!before) throw new HttpError(404, "Rolle nicht gefunden");
+    const [before] = await db.select().from(roles).where(and(eq(roles.id, (c.req.param("id") ?? "")), eq(roles.orgId, orgId)));
+    if (!before) throw new HttpError(404, "role_not_found");
     // changing a role changes everyone who has it: may add only what you hold; may remove only what you could grant
     assertCanGrant(c.get("principal"), orgId, [...new Set([...b.permissions, ...before.permissions])]);
     const [r] = await db.update(roles).set({ name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], updatedAt: new Date() }).where(eq(roles.id, before.id)).returning();
@@ -298,11 +307,11 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   org.delete("/roles/:id", require("roles.gerer"), async (c) => {
     const orgId = c.get("orgId");
     const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id")), eq(roles.orgId, orgId)));
-    if (!r) throw new HttpError(404, "Rolle nicht gefunden");
-    if (r.isSystem) throw new HttpError(409, "Standardrollen können nicht gelöscht werden");
+    if (!r) throw new HttpError(404, "role_not_found");
+    if (r.isSystem) throw new HttpError(409, "system_role_undeletable");
     const used = await db.select({ n: sql<number>`count(*)::int` }).from(roleAssignments).where(eq(roleAssignments.roleId, r.id));
     const inv = await db.select({ n: sql<number>`count(*)::int` }).from(invitations).where(and(eq(invitations.roleId, r.id), sql`${invitations.usedAt} is null`));
-    if (used[0].n || inv[0].n) throw new HttpError(409, "Rolle ist noch zugewiesen");
+    if (used[0].n || inv[0].n) throw new HttpError(409, "role_in_use");
     await db.delete(roles).where(eq(roles.id, r.id));
     await audit(db, { orgId, userId: c.get("principal").id, action: "delete", entity: "role", entityId: r.id, before: r });
     return c.json({ ok: true });
@@ -317,10 +326,10 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     const allowed = (await db.select().from(orgTenants).where(eq(orgTenants.orgId, orgId))).map((t) => t.azureTenant);
     // Azure tenants are only known from phase 5; until the super-admin assigns tenants to the org, a site may have none.
     if (!allowed.length) return;
-    if (!tenant) { if (creating) throw new HttpError(400, "Tenant ist erforderlich"); return; }
-    if (!allowed.includes(tenant)) throw new HttpError(400, "Tenant ist für diese Organisation nicht freigegeben");
+    if (!tenant) { if (creating) throw new HttpError(400, "tenant_required"); return; }
+    if (!allowed.includes(tenant)) throw new HttpError(400, "tenant_not_allowed");
   };
-  org.post("/stations", require("stations.gerer"), zValidator("json", stationInput), async (c) => {
+  org.post("/stations", require("stations.gerer"), zValidator("json", stationInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     await checkTenant(orgId, b.azure_tenant, true);
     const [s] = await db.insert(stations).values({
@@ -331,10 +340,10 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "station", entityId: s.id, after: s });
     return c.json(s, 201);
   });
-  org.put("/stations/:id", require("stations.gerer"), zValidator("json", stationInput.partial()), async (c) => {
+  org.put("/stations/:id", require("stations.gerer"), zValidator("json", stationInput.partial(), validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
-    const [before] = await db.select().from(stations).where(and(eq(stations.id, c.req.param("id")), eq(stations.orgId, orgId)));
-    if (!before) throw new HttpError(404, "Werkstatt nicht gefunden");
+    const [before] = await db.select().from(stations).where(and(eq(stations.id, (c.req.param("id") ?? "")), eq(stations.orgId, orgId)));
+    if (!before) throw new HttpError(404, "station_not_found");
     if (b.azure_tenant !== undefined && b.azure_tenant !== before.azureTenant) await checkTenant(orgId, b.azure_tenant, true);
     const set: Partial<typeof stations.$inferInsert> = { updatedAt: new Date() };
     if (b.type !== undefined) set.type = b.type;
@@ -352,10 +361,10 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "station", entityId: s.id, before, after: s });
     return c.json(s);
   });
-  org.post("/stations/:id/active", require("stations.gerer"), zValidator("json", z.object({ active: z.boolean() })), async (c) => {
+  org.post("/stations/:id/active", require("stations.gerer"), zValidator("json", z.object({ active: z.boolean() }), validationHook), async (c) => {
     const orgId = c.get("orgId");
-    const [s] = await db.update(stations).set({ active: c.req.valid("json").active, updatedAt: new Date() }).where(and(eq(stations.id, c.req.param("id")), eq(stations.orgId, orgId))).returning();
-    if (!s) throw new HttpError(404, "Werkstatt nicht gefunden");
+    const [s] = await db.update(stations).set({ active: c.req.valid("json").active, updatedAt: new Date() }).where(and(eq(stations.id, (c.req.param("id") ?? "")), eq(stations.orgId, orgId))).returning();
+    if (!s) throw new HttpError(404, "station_not_found");
     await audit(db, { orgId, userId: c.get("principal").id, action: s.active ? "reactivate" : "deactivate", entity: "station", entityId: s.id });
     return c.json(s);
   });
@@ -363,7 +372,7 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
   org.get("/tenants", async (c) => c.json((await db.select().from(orgTenants).where(eq(orgTenants.orgId, c.get("orgId")))).map((t) => t.azureTenant)));
 
   // audit log
-  org.get("/audit", require("audit.voir"), zValidator("query", z.object({ entity: z.string().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) })), async (c) => {
+  org.get("/audit", require("audit.voir"), zValidator("query", z.object({ entity: z.string().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }), validationHook), async (c) => {
     const q = c.req.valid("query"), orgId = c.get("orgId");
     const rows = await db.select().from(auditLog).where(q.entity ? and(eq(auditLog.orgId, orgId), eq(auditLog.entity, q.entity)) : eq(auditLog.orgId, orgId)).orderBy(desc(auditLog.at)).limit(q.limit);
     return c.json(rows);
@@ -376,20 +385,20 @@ export function createApp({ db, cfg, mailer, limits: lim }: AppDeps) {
 
   async function assertStationInOrg(stationId: string, orgId: string) {
     const [s] = await db.select({ id: stations.id }).from(stations).where(and(eq(stations.id, stationId), eq(stations.orgId, orgId)));
-    if (!s) throw new HttpError(400, "Werkstatt gehört nicht zu dieser Organisation");
+    if (!s) throw new HttpError(400, "station_wrong_org");
   }
   /** Scope ids must exist in this org and be present when the role's scope needs them. */
   async function assertScopeFields(scope: string, b: { scope_client_station_id: string | null; scope_insurer_id: string | null; scope_campaign_id: string | null }, orgId: string) {
     if (scope === "client") {
-      if (!b.scope_client_station_id) throw new HttpError(400, "Carrosserie (Kunde) ist für diese Rolle erforderlich");
+      if (!b.scope_client_station_id) throw new HttpError(400, "client_required");
       await assertStationInOrg(b.scope_client_station_id, orgId);
     }
     if (scope === "assurance") {
-      if (!b.scope_insurer_id) throw new HttpError(400, "Versicherung ist für diese Rolle erforderlich");
+      if (!b.scope_insurer_id) throw new HttpError(400, "insurer_required");
       const [i] = await db.select({ id: insurers.id }).from(insurers).where(and(eq(insurers.id, b.scope_insurer_id), eq(insurers.orgId, orgId)));
-      if (!i) throw new HttpError(400, "Versicherung gehört nicht zu dieser Organisation");
+      if (!i) throw new HttpError(400, "insurer_wrong_org");
     }
-    if (scope === "campagne" && !b.scope_campaign_id) throw new HttpError(400, "Kampagne ist für diese Rolle erforderlich");
+    if (scope === "campagne" && !b.scope_campaign_id) throw new HttpError(400, "campaign_required");
   }
 
   return app;

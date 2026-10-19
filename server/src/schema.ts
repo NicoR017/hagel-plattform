@@ -124,6 +124,7 @@ export const invitations = pgTable("invitations", {
   scopeInsurerId: uuid("scope_insurer_id"),
   scopeCampaignId: uuid("scope_campaign_id"),
   assignmentExpiresAt: timestamp("assignment_expires_at", { withTimezone: true }),
+  language: text("language").notNull().default("de"),
   tokenHash: text("token_hash").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),

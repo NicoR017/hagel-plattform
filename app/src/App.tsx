@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
-import { t } from "./i18n";
+import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
 
 interface Me {
-  user: { id: string; email: string; name: string; isSuperadmin: boolean };
+  user: { id: string; email: string; name: string; language: string; isSuperadmin: boolean };
   organizations: { id: string; name: string }[];
   grants: { orgId: string; stationId: string | null; permissions: string[] }[];
 }
@@ -12,14 +12,32 @@ interface Me {
 const params = new URLSearchParams(location.search);
 
 export function App() {
+  const lang = useLang(); // the whole tree is re-created when the language changes: one language everywhere
   const path = location.pathname;
-  if (path === "/login" && params.get("token")) return <VerifyLogin token={params.get("token")!} />;
-  if (path === "/invite" && params.get("token")) return <AcceptInvite token={params.get("token")!} />;
-  return getAuth() ? <Shell /> : <LoginPage />;
+  let page: ReactNode;
+  if (path === "/login" && params.get("token")) page = <VerifyLogin token={params.get("token")!} />;
+  else if (path === "/invite" && params.get("token")) page = <AcceptInvite token={params.get("token")!} />;
+  else page = getAuth() ? <Shell /> : <LoginPage />;
+  return <div key={lang}>{page}</div>;
+}
+
+/** DE | EN switch. When signed in, the choice is also saved on the account (used for e-mails). */
+function LangSwitch({ signedIn }: { signedIn?: boolean }) {
+  const lang = useLang();
+  return (
+    <span className="langsw" role="group" aria-label={t("language")}>
+      {LANG_LIST.map((l) => (
+        <button key={l} className={l === lang ? "on" : ""} aria-pressed={l === lang} onClick={() => {
+          setLang(l);
+          if (signedIn) void api("PUT", "/me/language", { language: l }).catch(() => undefined);
+        }}>{l.toUpperCase()}</button>
+      ))}
+    </span>
+  );
 }
 
 function Center({ children }: { children: ReactNode }) {
-  return <div className="center"><div className="card"><h2>{t("appName")}</h2>{children}</div></div>;
+  return <div className="center"><div className="card"><div className="row"><h2 className="grow" style={{ margin: 0 }}>{t("appName")}</h2><LangSwitch /></div>{children}</div></div>;
 }
 
 function LoginPage() {
@@ -61,7 +79,7 @@ function AcceptInvite({ token }: { token: string }) {
       <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       {err && <div className="err">{err}</div>}
       <p><button className="btn" disabled={!name.trim()} onClick={async () => {
-        try { setAuth(await api("POST", "/auth/accept-invite", { token, name })); location.replace("/"); } catch (e) { setErr((e as Error).message); }
+        try { setAuth(await api("POST", "/auth/accept-invite", { token, name, language: getLang() })); location.replace("/"); } catch (e) { setErr((e as Error).message); }
       }}>{t("createAccount")}</button></p>
     </Center>
   );
@@ -78,6 +96,9 @@ function Shell() {
   const load = useCallback(async () => {
     try {
       const m = await api<Me>("GET", "/me");
+      // language: a choice made on this device wins (and is saved on the account); otherwise adopt the account's language
+      if (hasStoredLang()) { if (m.user.language !== getLang()) void api("PUT", "/me/language", { language: getLang() }).catch(() => undefined); }
+      else if (isLangValue(m.user.language)) setLang(m.user.language);
       setMe(m);
       const cur = m.organizations.find((o) => o.id === getOrg()) ?? m.organizations[0];
       if (cur) { setOrg(cur.id); setOrgState(cur.id); }
@@ -110,6 +131,7 @@ function Shell() {
         <select value={org} onChange={(e) => { setOrg(e.target.value); setOrgState(e.target.value); }} aria-label={t("org")}>
           {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
+        <LangSwitch signedIn />
         <span>{me.user.name || me.user.email}</span>
         <button onClick={async () => { try { await api("POST", "/me/logout"); } catch { /* already gone */ } setAuth(null); location.replace("/"); }}>{t("logout")}</button>
       </header>

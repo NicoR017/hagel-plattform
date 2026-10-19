@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LANGS } from "./errors";
 import { PERMISSIONS, SCOPES, STATION_TYPES } from "./permissions";
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
@@ -33,12 +34,13 @@ export const inviteInput = z.object({
   scope_insurer_id: uuid.nullable().default(null),
   scope_campaign_id: uuid.nullable().default(null),
   expires_at: z.string().datetime().nullable().default(null),
+  language: z.enum(LANGS).default("de"),
 });
 
 export const acceptInviteInput = z.object({
   token: z.string().min(20).max(200),
   name: z.string().trim().min(1).max(120),
-  language: z.enum(["de", "es"]).default("de"),
+  language: z.enum(LANGS).optional(),
 });
 
 export const assignmentInput = z.object({
@@ -54,3 +56,5 @@ export const assignmentInput = z.object({
 export const loginRequestInput = z.object({ email: emailSchema });
 export const loginVerifyInput = z.object({ token: z.string().min(20).max(200), device: z.string().max(200).default("") });
 export const refreshInput = z.object({ refresh_token: z.string().min(20).max(200) });
+
+export const languageInput = z.object({ language: z.enum(LANGS) });

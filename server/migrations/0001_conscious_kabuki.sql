@@ -1,0 +1,1 @@
+ALTER TABLE "invitations" ADD COLUMN "language" text DEFAULT 'de' NOT NULL;

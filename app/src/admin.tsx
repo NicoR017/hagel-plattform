@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { PERMISSIONS, SCOPES } from "@hagel/shared";
+import { LANG_LIST, getLang } from "./i18n";
+import { PERMISSIONS, SCOPES, SYSTEM_ROLES, type Lang } from "@hagel/shared";
 import { api, getOrg } from "./api";
-import { t, type Key } from "./i18n";
+import { fmtDateTime, t, tOr, type Key } from "./i18n";
 
 const scopeLabel = (s: string) => t(("scope" + s.charAt(0).toUpperCase() + s.slice(1)) as Key);
+/** Default roles are shown translated; a role an admin renamed or created keeps its own name. */
+const isDefaultName = (key: string | null | undefined, name: string) => !!key && SYSTEM_ROLES.find((r) => r.key === key)?.name === name;
+const roleLabel = (key: string | null | undefined, name: string) => (isDefaultName(key, name) ? tOr("r." + key, name) : name);
+const roleDesc = (key: string | null | undefined, name: string, desc: string) => (isDefaultName(key, name) ? tOr("rd." + key, desc) : desc);
 
 function useLoad<T>(path: string, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -26,9 +31,9 @@ async function act(fn: () => Promise<unknown>, setErr: (m: string) => void, done
 }
 
 // ---------------- Users ----------------
-interface UserRow { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: { id: string; stationId: string | null; roleId: string; roleName: string; scope: string; expiresAt: string | null }[] }
+interface UserRow { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: { id: string; stationId: string | null; roleId: string; roleName: string; roleKey: string | null; scope: string; expiresAt: string | null }[] }
 interface Station { id: string; type: string; name: string; capacite: number; country: string; azureTenant: string | null; active: boolean; commissionPct: string; reportEmails: string[]; address: string }
-interface RoleLite { id: string; name: string; scope: string }
+interface RoleLite { id: string; name: string; key: string | null; scope: string }
 
 export function UsersPage({ canManage }: { canManage: boolean }) {
   const users = useLoad<UserRow[]>("/admin/users");
@@ -36,7 +41,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
   const roles = useLoad<RoleLite[]>("/admin/roles-lite");
   const sites = useLoad<Station[]>("/admin/stations");
   const [err, setErr] = useState("");
-  const [form, setForm] = useState({ email: "", role_id: "", station_id: "", client: "", expires: "" });
+  const [form, setForm] = useState({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() as Lang });
   const role = roles.data?.find((r) => r.id === form.role_id);
   const reload = () => { void users.reload(); void invs.reload(); };
   const siteName = (id: string | null) => (id ? sites.data?.find((s) => s.id === id)?.name ?? "?" : t("allSites"));
@@ -48,7 +53,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
           <div className="grow"><label>{t("email")}</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           <div className="grow"><label>{t("role")}</label>
             <select value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
-              <option value="">—</option>{roles.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              <option value="">—</option>{roles.data?.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.key, r.name)}</option>)}
             </select></div>
           <div className="grow"><label>{t("site")}</label>
             <select value={form.station_id} onChange={(e) => setForm({ ...form, station_id: e.target.value })}>
@@ -61,19 +66,21 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
               </select></div>
           )}
           <div><label>{t("expires")}</label><input type="date" value={form.expires} onChange={(e) => setForm({ ...form, expires: e.target.value })} /></div>
+          <div><label>{t("invitationLanguage")}</label>
+            <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value as Lang })}>{LANG_LIST.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}</select></div>
         </div>
         <Err msg={err} />
         <p><button className="btn" disabled={!form.email || !form.role_id} onClick={() => act(
           () => api("POST", "/admin/invitations", {
             email: form.email, role_id: form.role_id, station_id: form.station_id || null,
-            scope_client_station_id: form.client || null, expires_at: form.expires ? new Date(form.expires + "T23:59:59Z").toISOString() : null,
-          }), setErr, () => { setForm({ email: "", role_id: "", station_id: "", client: "", expires: "" }); reload(); })}>{t("invite")}</button></p>
+            scope_client_station_id: form.client || null, language: form.language, expires_at: form.expires ? new Date(form.expires + "T23:59:59Z").toISOString() : null,
+          }), setErr, () => { setForm({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() }); reload(); })}>{t("invite")}</button></p>
       </Card>
 
       {!!invs.data?.length && (
         <Card title={t("invitations")}>
           <table><tbody>{invs.data.map((i) => (
-            <tr key={i.id}><td>{i.email}</td><td>{siteName(i.stationId)}</td><td>{new Date(i.expiresAt).toLocaleString("de-DE")}</td>
+            <tr key={i.id}><td>{i.email}</td><td>{siteName(i.stationId)}</td><td>{fmtDateTime(i.expiresAt)}</td>
               <td><button className="btn sec" onClick={() => act(() => api("POST", `/admin/invitations/${i.id}/resend`), setErr)}>{t("resend")}</button>{" "}
                 <button className="btn danger" onClick={() => act(() => api("DELETE", `/admin/invitations/${i.id}`), setErr, reload)}>{t("revoke")}</button></td></tr>
           ))}</tbody></table>
@@ -86,10 +93,10 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
           <thead><tr><th>{t("name")}</th><th>{t("email")}</th><th>{t("role")}</th><th>{t("status")}</th><th /></tr></thead>
           <tbody>{users.data?.map((u) => (
             <tr key={u.id}>
-              <td>{u.name}{u.isSuperadmin && <span className="pill">Super-Admin</span>}</td>
+              <td>{u.name}{u.isSuperadmin && <span className="pill">{t("superAdmin")}</span>}</td>
               <td>{u.email}</td>
               <td>{u.assignments.map((a) => (
-                <span key={a.id} className="pill">{a.roleName} · {siteName(a.stationId)}
+                <span key={a.id} className="pill">{roleLabel(a.roleKey, a.roleName)} · {siteName(a.stationId)}
                   <button aria-label={t("delete")} style={{ border: 0, background: "none", cursor: "pointer", marginLeft: 6 }}
                     onClick={() => act(() => api("DELETE", `/admin/assignments/${a.id}`), setErr, reload)}>✕</button></span>
               ))}</td>
@@ -109,7 +116,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
 }
 
 // ---------------- Roles ----------------
-interface RoleRow { id: string; name: string; description: string; scope: string; permissions: string[]; isSystem: boolean }
+interface RoleRow { id: string; key: string | null; name: string; description: string; scope: string; permissions: string[]; isSystem: boolean }
 
 export function RolesPage() {
   const roles = useLoad<RoleRow[]>("/admin/roles");
@@ -121,7 +128,7 @@ export function RolesPage() {
         <Err msg={roles.err || err} />
         <table><tbody>{roles.data?.map((r) => (
           <tr key={r.id}>
-            <td><b>{r.name}</b>{r.isSystem && <span className="pill">{t("system")}</span>}<div style={{ color: "var(--sub)", fontSize: 13 }}>{r.description}</div></td>
+            <td><b>{roleLabel(r.key, r.name)}</b>{r.isSystem && <span className="pill">{t("system")}</span>}<div style={{ color: "var(--sub)", fontSize: 13 }}>{roleDesc(r.key, r.name, r.description)}</div></td>
             <td>{scopeLabel(r.scope)}</td><td>{r.permissions.length} / {PERMISSIONS.length}</td>
             <td style={{ whiteSpace: "nowrap" }}><button className="btn sec" onClick={() => setEdit({ ...r })}>{t("permissions")}</button>{" "}
               {!r.isSystem && <button className="btn danger" onClick={() => act(() => api("DELETE", `/admin/roles/${r.id}`), setErr, roles.reload)}>{t("delete")}</button>}</td>
@@ -129,15 +136,15 @@ export function RolesPage() {
         ))}</tbody></table>
       </Card>
       {edit && (
-        <Card title={edit.id ? edit.name : t("newRole")}>
-          <label>{t("name")}</label><input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-          <label>{t("description")}</label><input value={edit.description ?? ""} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
+        <Card title={edit.id ? roleLabel(edit.key, edit.name) : t("newRole")}>
+          <label>{t("name")}</label><input value={isDefaultName(edit.key, edit.name) ? roleLabel(edit.key, edit.name) : edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value, key: edit.key })} />
+          <label>{t("description")}</label><input value={isDefaultName(edit.key, edit.name) ? roleDesc(edit.key, edit.name, edit.description ?? "") : edit.description ?? ""} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
           <label>{t("scope")}</label>
           <select value={edit.scope} onChange={(e) => setEdit({ ...edit, scope: e.target.value })}>{SCOPES.map((s) => <option key={s} value={s}>{scopeLabel(s)}</option>)}</select>
           <label>{t("permissions")}</label>
           <div className="grid">{PERMISSIONS.map((p) => (
             <label key={p}><input type="checkbox" checked={edit.permissions.includes(p)}
-              onChange={(e) => setEdit({ ...edit, permissions: e.target.checked ? [...edit.permissions, p] : edit.permissions.filter((x) => x !== p) })} />{p}</label>
+              onChange={(e) => setEdit({ ...edit, permissions: e.target.checked ? [...edit.permissions, p] : edit.permissions.filter((x) => x !== p) })} />{tOr("p." + p, p)}</label>
           ))}</div>
           <Err msg={err} />
           <p className="row">
@@ -191,7 +198,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
           <label>{t("tenant")}</label>
           {tenants.data?.length
             ? <select value={f.azure_tenant} onChange={(e) => setF({ ...f, azure_tenant: e.target.value })}><option value="">—</option>{tenants.data.map((x) => <option key={x}>{x}</option>)}</select>
-            : <input value={f.azure_tenant} onChange={(e) => setF({ ...f, azure_tenant: e.target.value })} placeholder="(Super-Admin weist Tenants zu)" />}
+            : <input value={f.azure_tenant} onChange={(e) => setF({ ...f, azure_tenant: e.target.value })} placeholder={t("tenantHint")} />}
           {f.type === "carrosserie" && <>
             <label>{t("commission")}</label><input type="number" min={0} max={100} value={f.commission_pct} onChange={(e) => setF({ ...f, commission_pct: Number(e.target.value) })} />
             <label>{t("reportEmails")}</label><input value={f.report_emails} onChange={(e) => setF({ ...f, report_emails: e.target.value })} />
@@ -215,9 +222,9 @@ export function AuditPage() {
     <Card title={t("audit")}>
       <Err msg={log.err} />
       <table>
-        <thead><tr><th>Zeit</th><th>Aktion</th><th>Objekt</th><th>Vorher → Nachher</th></tr></thead>
+        <thead><tr><th>{t("time")}</th><th>{t("action")}</th><th>{t("object")}</th><th>{t("beforeAfter")}</th></tr></thead>
         <tbody>{log.data?.map((e) => (
-          <tr key={e.id}><td>{new Date(e.at).toLocaleString("de-DE")}</td><td>{e.action}</td><td>{e.entity}</td>
+          <tr key={e.id}><td>{fmtDateTime(e.at)}</td><td>{tOr("a." + e.action, e.action)}</td><td>{tOr("e." + e.entity, e.entity)}</td>
             <td style={{ fontSize: 12, wordBreak: "break-all" }}>{e.before ? JSON.stringify(e.before).slice(0, 160) : ""}{e.before && e.after ? " → " : ""}{e.after ? JSON.stringify(e.after).slice(0, 160) : ""}</td></tr>
         ))}</tbody>
       </table>
@@ -240,8 +247,8 @@ export function OrgsPage() {
       <Card title={t("orgs")}>
         <Err msg={orgs.err || err} />
         <table><tbody>{orgs.data?.map((o) => (
-          <tr key={o.id}><td><b>{o.name}</b> ({o.country}){getOrg() === o.id && <span className="pill">aktiv</span>}</td>
-            <td style={{ minWidth: 260 }}><label>Azure-Tenants (Komma)</label>
+          <tr key={o.id}><td><b>{o.name}</b> ({o.country}){getOrg() === o.id && <span className="pill">{t("current")}</span>}</td>
+            <td style={{ minWidth: 260 }}><label>{t("tenantsComma")}</label>
               <input value={tenants[o.id] ?? ""} onChange={(e) => setTenants({ ...tenants, [o.id]: e.target.value })} /></td>
             <td><button className="btn sec" onClick={() => act(() => api("PUT", `/admin/orgs/${o.id}/tenants`, { tenants: (tenants[o.id] ?? "").split(",").map((x) => x.trim()).filter(Boolean) }), setErr)}>{t("save")}</button></td></tr>
         ))}</tbody></table>

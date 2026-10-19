@@ -28,3 +28,8 @@ button.danger { background:#fff; color:var(--red); border:1px solid var(--red); 
 .grid input { width:auto; min-height:auto; }
 .center { max-width:420px; margin:12vh auto; padding:0 16px; }
 @media (max-width:640px){ th:nth-child(n+4), td:nth-child(n+4){ display:none; } }
+
+.langsw { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
+.langsw button { min-height:44px; min-width:48px; border:none; background:#fff; color:var(--navy); font-weight:700; }
+.langsw button.on { background:var(--navy); color:#fff; }
+header .langsw { border-color:#fff; }
