@@ -61,7 +61,11 @@ psql "<DATABASE_URL>" -c "select count(*) from users; select count(*) from audit
 
 Puis pointer `DATABASE_URL` de l'`api` sur la base restaurée et redéployer.
 
-> **Pas encore testé** : ni le déploiement Railway, ni le dump/restore sur un vrai Postgres, ni l'envoi réel via Resend (aucun de ces comptes n'est accessible depuis ce poste, et Docker Desktop n'était pas démarré). Les tests automatiques tournent sur PGlite (vrai Postgres en WebAssembly) ; le pilote `pg` de production n'est exercé qu'au premier démarrage sur Railway.
+> **État des vérifications (phase 3)**
+> * Déployé et testé sur Railway : API + worker + Postgres (région EU West/Amsterdam), e-mail de connexion via Resend (domaine `user.pdrteamcitas.com`), sauvegarde nocturne `pg_dump` écrite dans le bucket (test à la demande réussi).
+> * Suite de tests (312) exécutée sur PGlite **et** sur un vrai PostgreSQL 18 avec le pilote `pg` de production (`TEST_DATABASE_URL=postgres://… npx vitest run <fichier>` : une base vide par fichier de test).
+> * Dump + restauration (`pg_dump -Fc` → `pg_restore --clean --if-exists`) rejoués en local sur Postgres 18 : mêmes nombres de lignes avant/après. La restauration depuis le bucket Railway vers une base Railway n'a pas encore été répétée.
+> * **Pas testé** : fonctionnement hors ligne du service worker sur un vrai téléphone (le navigateur intégré de l'outil ne l'enregistre pas), reconnaissance photo avec une vraie clé Anthropic, ouverture du fichier Excel dans Excel.
 
 ## 4. Développement local
 

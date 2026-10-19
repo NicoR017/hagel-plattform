@@ -18,7 +18,7 @@ export interface Ctx {
 interface Opts { token?: string; org?: string; body?: unknown; lang?: string; raw?: Uint8Array; contentType?: string }
 
 export async function setup(): Promise<Ctx> {
-  const h = await createDb(null);
+  const h = await createDb(process.env.TEST_DATABASE_URL ?? null);
   const mailer = new MemoryMailer();
   const storage = new MemoryStorage();
   const hub = new Hub();
