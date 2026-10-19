@@ -1,0 +1,10 @@
+So startest du den Neuaufbau mit Claude Code:
+
+1. ZIP entpacken in einen neuen, leeren Ordner, z. B. C:\Projekte\hagel-plattform
+2. In diesem Ordner Claude Code starten.
+3. Als erste Nachricht schreiben:
+   "Lies PROMPT.md und alle Dateien im Ordner. Starte mit Phase 1."
+4. Nach jeder Phase meldet sich Claude Code und wartet auf dein OK.
+
+Wichtig: Die alte App (v20) bleibt online, bis alle Daten übernommen und geprüft sind.
+Vorher auf jedem Handy eine Sicherung machen (Einstellungen → Sichern).

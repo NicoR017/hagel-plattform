@@ -1,0 +1,4543 @@
+{
+ "_doc": "Anonymised real vehicles (Spain, Oct 2026) with results computed by app v20. Each case computed both with ES matrix (69 €/h) and DE BVAT (83 €/h, Teiler 10). The rebuilt calculation engine must reproduce 'expected' exactly (to the cent).",
+ "cases": [
+  {
+   "case": "case1_ES",
+   "input": {
+    "id": "case1",
+    "panels": {
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 3,
+       "20": 18,
+       "30": 5,
+       "40": 7,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 10,
+       "30": 5,
+       "40": 2
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 1,
+       "20": 8,
+       "30": 2,
+       "40": 2,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2,
+       "30": 2
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1,
+       "30": 2,
+       "40": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 8,
+       "30": 5,
+       "40": 7,
+       "50": 1,
+       "60": 4,
+       "70": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 5,
+       "20": 42,
+       "30": 23,
+       "40": 8,
+       "50": 6,
+       "60": 5,
+       "70": 1,
+       "80": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 5,
+       "20": 78,
+       "30": 27,
+       "40": 18,
+       "50": 10,
+       "60": 12,
+       "70": 12,
+       "80": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 19,
+       "30": 13,
+       "40": 4,
+       "50": 2,
+       "60": 5
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 2,
+       "20": 25,
+       "30": 11,
+       "40": 5,
+       "50": 3,
+       "60": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "10": 2,
+       "20": 15,
+       "30": 12,
+       "40": 2,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 8,
+       "30": 9,
+       "40": 1,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 6,
+       "30": 5,
+       "40": 3,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1652.82,
+    "brutto": 1999.91,
+    "dents": 523,
+    "bollos": 656,
+    "small": 390,
+    "large": 133,
+    "category": "G",
+    "baseHours": 26,
+    "totalHours": 21.78,
+    "matrixEur": 1794,
+    "kickback": 240,
+    "adjustments": [
+     {
+      "de": "Klebetechnik (+30 %): Dachholm re.",
+      "h": 0.5
+     },
+     {
+      "de": "Klebetechnik (+30 %): Dachholm li.",
+      "h": 0.73
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Heckklappe",
+      "h": -0.67
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Motorhaube",
+      "h": -3.52
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dachholm li.",
+      "h": -1.26
+     }
+    ]
+   }
+  },
+  {
+   "case": "case1_DE",
+   "input": {
+    "id": "case1",
+    "panels": {
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 3,
+       "20": 18,
+       "30": 5,
+       "40": 7,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 10,
+       "30": 5,
+       "40": 2
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 1,
+       "20": 8,
+       "30": 2,
+       "40": 2,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2,
+       "30": 2
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1,
+       "30": 2,
+       "40": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 8,
+       "30": 5,
+       "40": 7,
+       "50": 1,
+       "60": 4,
+       "70": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 5,
+       "20": 42,
+       "30": 23,
+       "40": 8,
+       "50": 6,
+       "60": 5,
+       "70": 1,
+       "80": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 5,
+       "20": 78,
+       "30": 27,
+       "40": 18,
+       "50": 10,
+       "60": 12,
+       "70": 12,
+       "80": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 19,
+       "30": 13,
+       "40": 4,
+       "50": 2,
+       "60": 5
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 2,
+       "20": 25,
+       "30": 11,
+       "40": 5,
+       "50": 3,
+       "60": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "10": 2,
+       "20": 15,
+       "30": 12,
+       "40": 2,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 8,
+       "30": 9,
+       "40": 1,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 6,
+       "30": 5,
+       "40": 3,
+       "50": 1
+      },
+      "big": 0,
+      "bigEur": 0,
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 4992.59,
+    "brutto": 5941.18,
+    "dents": 523,
+    "repairAW": 563.24,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 582.24,
+    "awNetto": 4832.59,
+    "kleberMat": 10,
+    "demEur": 150,
+    "panelAW": {
+     "dachholm_r": 67.6,
+     "sw_hr": 35,
+     "tuer_hr": 29,
+     "tuer_vr": 13,
+     "kfl_vr": 13,
+     "heck": 25.8,
+     "dach": 63,
+     "haube": 82.8,
+     "dachholm_l": 53.04,
+     "sw_hl": 65,
+     "tuer_hl": 50,
+     "tuer_vl": 36,
+     "kfl_vl": 30
+    }
+   }
+  },
+  {
+   "case": "case2_ES",
+   "input": {
+    "id": "case2",
+    "panels": {
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 26,
+       "20": 159,
+       "30": 34,
+       "40": 27,
+       "50": 20,
+       "60": 20,
+       "70": 7,
+       "80": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 2,
+       "20": 43,
+       "30": 30,
+       "40": 15,
+       "50": 10,
+       "60": 13,
+       "70": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 17
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "20": 13
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "30": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 13
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 9
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1909.5,
+    "brutto": 2310.5,
+    "dents": 503,
+    "bollos": 621,
+    "small": 385,
+    "large": 118,
+    "category": "G",
+    "baseHours": 25.5,
+    "totalHours": 25.5,
+    "matrixEur": 1759.5,
+    "kickback": 240,
+    "adjustments": []
+   }
+  },
+  {
+   "case": "case2_DE",
+   "input": {
+    "id": "case2",
+    "panels": {
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 26,
+       "20": 159,
+       "30": 34,
+       "40": 27,
+       "50": 20,
+       "60": 20,
+       "70": 7,
+       "80": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 2,
+       "20": 43,
+       "30": 30,
+       "40": 15,
+       "50": 10,
+       "60": 13,
+       "70": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 17
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "20": 13
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "30": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 13
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 9
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 3519.8,
+    "brutto": 4188.56,
+    "dents": 503,
+    "repairAW": 387,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 406,
+    "awNetto": 3369.8,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "dach": 118,
+     "haube": 104,
+     "dachholm_l": 24,
+     "dachholm_r": 20,
+     "heck": 9,
+     "sw_hl": 9,
+     "sw_hr": 23,
+     "tuer_hl": 9,
+     "tuer_vl": 8,
+     "kfl_vl": 15,
+     "kfl_vr": 20,
+     "tuer_vr": 12,
+     "tuer_hr": 16
+    }
+   }
+  },
+  {
+   "case": "case3_ES",
+   "input": {
+    "id": "case3",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 7,
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 2,
+       "20": 3
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 9
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 2,
+       "20": 5,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 1,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "10": 1,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 4,
+       "20": 6,
+       "30": 2
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 14,
+       "20": 64,
+       "30": 11,
+       "40": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1498.95,
+    "brutto": 1813.73,
+    "dents": 169,
+    "bollos": 177,
+    "small": 161,
+    "large": 8,
+    "category": "D",
+    "baseHours": 19,
+    "totalHours": 19.55,
+    "matrixEur": 1311,
+    "kickback": 120,
+    "adjustments": [
+     {
+      "de": "Klebetechnik (+30 %): Dachholm li.",
+      "h": 0.16
+     },
+     {
+      "de": "Klebetechnik (+30 %): Dachholm re.",
+      "h": 0.39
+     }
+    ]
+   }
+  },
+  {
+   "case": "case3_DE",
+   "input": {
+    "id": "case3",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 7,
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 2,
+       "20": 3
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 9
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 2,
+       "20": 5,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 1,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "10": 1,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 4,
+       "20": 6,
+       "30": 2
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 14,
+       "20": 64,
+       "30": 11,
+       "40": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1955.29,
+    "brutto": 2326.8,
+    "dents": 169,
+    "repairAW": 197.3,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 216.3,
+    "awNetto": 1795.29,
+    "kleberMat": 10,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 21,
+     "sw_hl": 8,
+     "dachholm_l": 15.6,
+     "heck_u": 7,
+     "heck": 16,
+     "sw_hr": 15,
+     "tuer_hr": 12,
+     "tuer_vr": 12,
+     "dachholm_r": 24.7,
+     "dach": 66
+    }
+   }
+  },
+  {
+   "case": "case4_ES",
+   "input": {
+    "id": "case4",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 0
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 9
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 13,
+       "20": 34,
+       "30": 1,
+       "40": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1008.36,
+    "brutto": 1220.12,
+    "dents": 72,
+    "bollos": 73,
+    "small": 71,
+    "large": 1,
+    "category": "C",
+    "baseHours": 12,
+    "totalHours": 12.44,
+    "matrixEur": 828,
+    "kickback": 120,
+    "adjustments": [
+     {
+      "de": "Klebetechnik (+30 %): Dachholm li.",
+      "h": 0.44
+     }
+    ]
+   }
+  },
+  {
+   "case": "case4_DE",
+   "input": {
+    "id": "case4",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 0
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 9
+      },
+      "alu": false,
+      "kleber": true,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 13,
+       "20": 34,
+       "30": 1,
+       "40": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1187.54,
+    "brutto": 1413.17,
+    "dents": 72,
+    "repairAW": 104.8,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 123.8,
+    "awNetto": 1027.54,
+    "kleberMat": 10,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 6,
+     "sw_hl": 9,
+     "dachholm_l": 20.8,
+     "heck_u": 8,
+     "heck": 7,
+     "tuer_vr": 8,
+     "kfl_vr": 6,
+     "dachholm_r": 8,
+     "dach": 32
+    }
+   }
+  },
+  {
+   "case": "case5_ES",
+   "input": {
+    "id": "case5",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 14,
+       "20": 22
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 1,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "10": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 9,
+       "20": 27,
+       "30": 5,
+       "40": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1185,
+    "brutto": 1433.85,
+    "dents": 95,
+    "bollos": 96,
+    "small": 94,
+    "large": 1,
+    "category": "C",
+    "baseHours": 15,
+    "totalHours": 15,
+    "matrixEur": 1035,
+    "kickback": 120,
+    "adjustments": []
+   }
+  },
+  {
+   "case": "case5_DE",
+   "input": {
+    "id": "case5",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 14,
+       "20": 22
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "10": 3,
+       "20": 1,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "10": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 9,
+       "20": 27,
+       "30": 5,
+       "40": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1229,
+    "brutto": 1462.51,
+    "dents": 95,
+    "repairAW": 111,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 130,
+    "awNetto": 1079,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 27,
+     "tuer_hl": 9,
+     "sw_hl": 8,
+     "heck": 10,
+     "sw_hr": 8,
+     "tuer_hr": 6,
+     "tuer_vr": 5,
+     "kfl_vr": 9,
+     "dach": 29
+    }
+   }
+  },
+  {
+   "case": "case6_ES",
+   "input": {
+    "id": "case6",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 21,
+       "20": 55,
+       "30": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 12
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 11,
+       "20": 18
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 9,
+       "30": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "20": 5,
+       "30": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 1,
+       "20": 26,
+       "30": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 0
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 6,
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 32,
+       "20": 127,
+       "30": 34
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1260.21,
+    "brutto": 1524.85,
+    "dents": 401,
+    "bollos": 401,
+    "small": 401,
+    "large": 0,
+    "category": "F",
+    "baseHours": 23.5,
+    "totalHours": 16.09,
+    "matrixEur": 1621.5,
+    "kickback": 240,
+    "adjustments": [
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Motorhaube",
+      "h": -2.16
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dachholm li.",
+      "h": -0.73
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dach",
+      "h": -4.52
+     }
+    ]
+   }
+  },
+  {
+   "case": "case6_DE",
+   "input": {
+    "id": "case6",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 21,
+       "20": 55,
+       "30": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 12
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 11,
+       "20": 18
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 9,
+       "30": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "20": 5,
+       "30": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 1,
+       "20": 26,
+       "30": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 0
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 6,
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 32,
+       "20": 127,
+       "30": 34
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 2432.5,
+    "brutto": 2894.68,
+    "dents": 401,
+    "repairAW": 256,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 275,
+    "awNetto": 2282.5,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 27.6,
+     "kfl_vl": 19,
+     "tuer_vl": 18,
+     "sw_hl": 34,
+     "heck": 22,
+     "heck_u": 16,
+     "dachholm_l": 29.4,
+     "dachholm_r": 21,
+     "dach": 69
+    }
+   }
+  },
+  {
+   "case": "case7_ES",
+   "input": {
+    "id": "case7",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 14,
+       "20": 92
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "10": 4,
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "10": 5,
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 2,
+       "20": 8,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 77,
+       "20": 108,
+       "30": 43
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1225.71,
+    "brutto": 1483.11,
+    "dents": 414,
+    "bollos": 414,
+    "small": 414,
+    "large": 0,
+    "category": "F",
+    "baseHours": 23.5,
+    "totalHours": 15.59,
+    "matrixEur": 1621.5,
+    "kickback": 240,
+    "adjustments": [
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Motorhaube",
+      "h": -2.41
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Heckklappe",
+      "h": -0.32
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dach",
+      "h": -5.18
+     }
+    ]
+   }
+  },
+  {
+   "case": "case7_DE",
+   "input": {
+    "id": "case7",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 14,
+       "20": 92
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "10": 4,
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "10": 5,
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 2,
+       "20": 8,
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 77,
+       "20": 108,
+       "30": 43
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 2078.92,
+    "brutto": 2473.91,
+    "dents": 414,
+    "repairAW": 213.4,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 232.4,
+    "awNetto": 1928.92,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 30.6,
+     "kfl_vl": 16,
+     "sw_hl": 11,
+     "dachholm_l": 25,
+     "heck": 10.8,
+     "sw_hr": 11,
+     "tuer_hr": 13,
+     "tuer_vr": 9,
+     "kfl_vr": 18,
+     "dachholm_r": 18,
+     "dach": 51
+    }
+   }
+  },
+  {
+   "case": "case8_ES",
+   "input": {
+    "id": "case8",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 32
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 2,
+       "20": 5,
+       "30": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 619.2,
+    "brutto": 749.23,
+    "dents": 55,
+    "bollos": 55,
+    "small": 55,
+    "large": 0,
+    "category": "C",
+    "baseHours": 10,
+    "totalHours": 6.8,
+    "matrixEur": 690,
+    "kickback": 120,
+    "adjustments": [
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Motorhaube",
+      "h": -2.33
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dach",
+      "h": -0.87
+     }
+    ]
+   }
+  },
+  {
+   "case": "case8_DE",
+   "input": {
+    "id": "case8",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 32
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "30": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "10": 1,
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 2,
+       "20": 5,
+       "30": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 898.66,
+    "brutto": 1069.41,
+    "dents": 55,
+    "repairAW": 71.2,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 90.2,
+    "awNetto": 748.66,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 15,
+     "dachholm_l": 7,
+     "heck": 7,
+     "sw_hr": 9,
+     "tuer_vr": 6,
+     "kfl_vr": 9,
+     "dach": 13.2,
+     "dachholm_r": 5
+    }
+   }
+  },
+  {
+   "case": "case9_ES",
+   "input": {
+    "id": "case9",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 76,
+       "20": 100
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 21
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 13,
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 56
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 11,
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 70,
+       "20": 216
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1404.42,
+    "brutto": 1699.35,
+    "dents": 649,
+    "bollos": 649,
+    "small": 649,
+    "large": 0,
+    "category": "G",
+    "baseHours": 26,
+    "totalHours": 18.18,
+    "matrixEur": 1794,
+    "kickback": 240,
+    "adjustments": [
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Motorhaube",
+      "h": -2.82
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dachholm li.",
+      "h": -0.42
+     },
+     {
+      "de": "Vordrücken zur Lackierung (−40 %): Dach",
+      "h": -4.58
+     }
+    ]
+   }
+  },
+  {
+   "case": "case9_DE",
+   "input": {
+    "id": "case9",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 76,
+       "20": 100
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 16
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 21
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "10": 13,
+       "20": 11
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 56
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 7,
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 11,
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "10": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {},
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "10": 70,
+       "20": 216
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "ptp",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 2829.24,
+    "brutto": 3366.8,
+    "dents": 649,
+    "repairAW": 303.8,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 322.8,
+    "awNetto": 2679.24,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 45.6,
+     "kfl_vl": 23,
+     "tuer_vl": 26,
+     "tuer_hl": 28,
+     "sw_hl": 30,
+     "heck": 33,
+     "sw_hr": 11,
+     "dachholm_l": 19.2,
+     "dachholm_r": 24,
+     "tuer_hr": 7,
+     "kfl_vr": 6,
+     "dach": 51
+    }
+   }
+  },
+  {
+   "case": "case10_ES",
+   "input": {
+    "id": "case10",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 0,
+       "20": 22
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 3,
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 10
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "20": 38
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1219.5,
+    "brutto": 1475.6,
+    "dents": 109,
+    "bollos": 109,
+    "small": 109,
+    "large": 0,
+    "category": "D",
+    "baseHours": 15.5,
+    "totalHours": 15.5,
+    "matrixEur": 1069.5,
+    "kickback": 120,
+    "adjustments": []
+   }
+  },
+  {
+   "case": "case10_DE",
+   "input": {
+    "id": "case10",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "10": 0,
+       "20": 22
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "10": 3,
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 10
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 8
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "20": 38
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "20": 3
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1602.5,
+    "brutto": 1906.98,
+    "dents": 109,
+    "repairAW": 156,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 175,
+    "awNetto": 1452.5,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 22,
+     "dachholm_l": 15,
+     "tuer_vl": 17,
+     "tuer_hl": 15,
+     "sw_hl": 12,
+     "heck": 9,
+     "dach": 27,
+     "kfl_vr": 9,
+     "tuer_vr": 8,
+     "sw_hr": 13,
+     "dachholm_r": 9
+    }
+   }
+  },
+  {
+   "case": "case11_ES",
+   "input": {
+    "id": "case11",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 83
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "20": 119
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "ES",
+    "stundensatz": 69,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 1633.5,
+    "brutto": 1976.54,
+    "dents": 285,
+    "bollos": 285,
+    "small": 285,
+    "large": 0,
+    "category": "E",
+    "baseHours": 21.5,
+    "totalHours": 21.5,
+    "matrixEur": 1483.5,
+    "kickback": 240,
+    "adjustments": []
+   }
+  },
+  {
+   "case": "case11_DE",
+   "input": {
+    "id": "case11",
+    "panels": {
+     "haube": {
+      "key": "haube",
+      "dents": {
+       "20": 83
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dach": {
+      "key": "dach",
+      "dents": {
+       "20": 119
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck": {
+      "key": "heck",
+      "dents": {
+       "20": 19
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "heck_u": {
+      "key": "heck_u",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vl": {
+      "key": "kfl_vl",
+      "dents": {
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vl": {
+      "key": "tuer_vl",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hl": {
+      "key": "tuer_hl",
+      "dents": {
+       "20": 1
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hl": {
+      "key": "sw_hl",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_l": {
+      "key": "dachholm_l",
+      "dents": {
+       "20": 14
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "kfl_vr": {
+      "key": "kfl_vr",
+      "dents": {
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_vr": {
+      "key": "tuer_vr",
+      "dents": {
+       "20": 2
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "tuer_hr": {
+      "key": "tuer_hr",
+      "dents": {
+       "20": 5
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "sw_hr": {
+      "key": "sw_hr",
+      "dents": {
+       "20": 6
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     },
+     "dachholm_r": {
+      "key": "dachholm_r",
+      "dents": {
+       "10": 2,
+       "20": 4
+      },
+      "alu": false,
+      "kleber": false,
+      "method": "sanft",
+      "finish": true,
+      "awManual": false,
+      "baseAW": null,
+      "big": 0,
+      "bigEur": 0
+     }
+    },
+    "demontage": true,
+    "glass": {},
+    "greifzone": false,
+    "hohlraum": false,
+    "verbringung": false,
+    "land": "DE",
+    "stundensatz": 83,
+    "teiler": 10
+   },
+   "expected": {
+    "netto": 2399.3,
+    "brutto": 2855.17,
+    "dents": 285,
+    "repairAW": 252,
+    "finishAW": 13,
+    "ruestAW": 6,
+    "totalAW": 271,
+    "awNetto": 2249.3,
+    "kleberMat": 0,
+    "demEur": 150,
+    "panelAW": {
+     "haube": 43,
+     "dach": 56,
+     "heck": 20,
+     "heck_u": 18,
+     "kfl_vl": 13,
+     "tuer_vl": 6,
+     "tuer_hl": 6,
+     "sw_hl": 12,
+     "dachholm_l": 21,
+     "kfl_vr": 11,
+     "tuer_vr": 8,
+     "tuer_hr": 12,
+     "sw_hr": 13,
+     "dachholm_r": 13
+    }
+   }
+  }
+ ]
+}

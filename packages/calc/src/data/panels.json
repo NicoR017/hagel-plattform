@@ -1,0 +1,100 @@
+[
+ {
+  "key": "haube",
+  "de": "Motorhaube",
+  "es": "Capó",
+  "short": "Haube",
+  "orientation": "waagrecht"
+ },
+ {
+  "key": "dach",
+  "de": "Dach",
+  "es": "Techo",
+  "short": "Dach",
+  "orientation": "waagrecht"
+ },
+ {
+  "key": "dachholm_l",
+  "de": "Dachholm li.",
+  "es": "Montante techo izq.",
+  "short": "Holm",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "dachholm_r",
+  "de": "Dachholm re.",
+  "es": "Montante techo dcho.",
+  "short": "Holm",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "heck",
+  "de": "Heckklappe",
+  "es": "Portón trasero",
+  "short": "Heck",
+  "orientation": "waagrecht"
+ },
+ {
+  "key": "heck_u",
+  "de": "Heckklappe unten",
+  "es": "Portón inferior",
+  "short": "Heck u.",
+  "orientation": "waagrecht"
+ },
+ {
+  "key": "kfl_vl",
+  "de": "Kotflügel v. li.",
+  "es": "Aleta del. izq.",
+  "short": "Kotfl.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "tuer_vl",
+  "de": "Tür vorn li.",
+  "es": "Puerta del. izq.",
+  "short": "Tür v.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "tuer_hl",
+  "de": "Tür hinten li.",
+  "es": "Puerta tras. izq.",
+  "short": "Tür h.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "sw_hl",
+  "de": "Seitenwand li.",
+  "es": "Lateral tras. izq.",
+  "short": "Seite",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "kfl_vr",
+  "de": "Kotflügel v. re.",
+  "es": "Aleta del. dcha.",
+  "short": "Kotfl.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "tuer_vr",
+  "de": "Tür vorn re.",
+  "es": "Puerta del. dcha.",
+  "short": "Tür v.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "tuer_hr",
+  "de": "Tür hinten re.",
+  "es": "Puerta tras. dcha.",
+  "short": "Tür h.",
+  "orientation": "senkrecht"
+ },
+ {
+  "key": "sw_hr",
+  "de": "Seitenwand re.",
+  "es": "Lateral tras. dcho.",
+  "short": "Seite",
+  "orientation": "senkrecht"
+ }
+]

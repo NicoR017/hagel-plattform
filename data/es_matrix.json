@@ -1,0 +1,109 @@
+{
+ "_doc": "Spain matrix (PDR Team). Bollos: dents <=30mm count 1, >30mm (40-80 and >85mm) count 2. Hours: <=25 bollos = 6h; between knots linear interpolation, rounded UP to 0.5h (Math.ceil(raw*2-1e-9)/2); >=1000 = 30h. Price = hours x rate. Category = by bollos; category hours = cap.",
+ "rate_eur_per_h": 69,
+ "knots": [
+  [
+   25,
+   6
+  ],
+  [
+   50,
+   9
+  ],
+  [
+   100,
+   15
+  ],
+  [
+   200,
+   20
+  ],
+  [
+   400,
+   23
+  ],
+  [
+   600,
+   25
+  ],
+  [
+   1000,
+   30
+  ]
+ ],
+ "categories": [
+  {
+   "cat": "A",
+   "from": 1,
+   "to": 25,
+   "cap_h": 6
+  },
+  {
+   "cat": "B",
+   "from": 26,
+   "to": 50,
+   "cap_h": 9
+  },
+  {
+   "cat": "C",
+   "from": 51,
+   "to": 100,
+   "cap_h": 15
+  },
+  {
+   "cat": "D",
+   "from": 101,
+   "to": 200,
+   "cap_h": 20
+  },
+  {
+   "cat": "E",
+   "from": 201,
+   "to": 400,
+   "cap_h": 23
+  },
+  {
+   "cat": "F",
+   "from": 401,
+   "to": 600,
+   "cap_h": 25
+  },
+  {
+   "cat": "G",
+   "from": 601,
+   "to": null,
+   "cap_h": 30
+  }
+ ],
+ "kickback_eur": [
+  {
+   "max_h": 9,
+   "eur": 60
+  },
+  {
+   "max_h": 20,
+   "eur": 120
+  },
+  {
+   "lt_h": 30,
+   "eur": 240
+  },
+  {
+   "else": true,
+   "eur": 320
+  }
+ ],
+ "adjustments": {
+  "alu_per_vehicle_h": 1,
+  "erneuern_per_panel_h": -1,
+  "kleber_share_pct": 30,
+  "ptp_share_pct": -40,
+  "note": "share = base hours x panel bollos / total bollos; PTP applies on share x1.30 if Kleber also set; hours adjustments rounded to 0.01h"
+ },
+ "demontage_presets_eur": {
+  "M1": 100,
+  "M2": 150,
+  "M3": 200
+ },
+ "vat": 0.21
+}
