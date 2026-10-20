@@ -29,8 +29,8 @@ import {
   auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
 } from "./schema";
 
-export interface Limits { requestLink: number; verify: number; accept: number; refresh: number }
-export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60 };
+export interface Limits { requestLink: number; verify: number; accept: number; refresh: number; login: number }
+export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60, login: 60 };
 export interface AppDeps {
   db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits>;
   storage?: Storage; hub?: Hub; az?: AzureSource | null; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
@@ -49,7 +49,11 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
   };
 }
 
-const ip = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0].trim() || "local";
+/**
+ * Client address behind Railway's proxy. The proxy appends the real client to X-Forwarded-For, so the LAST entry is the trustworthy one
+ * (the first can be written by the client); X-Real-IP, when present, is set by the proxy as well.
+ */
+const ip = (c: Context) => c.req.header("x-real-ip")?.trim() || c.req.header("x-forwarded-for")?.split(",").pop()?.trim() || "local";
 
 export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, ocr }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
@@ -85,7 +89,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const b = c.req.valid("json");
     return c.json(await acceptInvitation(db, cfg, b.token, b.name, b.language ?? "", c.req.header("user-agent") ?? "", b.password));
   });
-  auth.post("/login", rateLimit(L.verify, 15 * 60_000, ip), zValidator("json", passwordLoginInput, validationHook), async (c) => {
+  // per address 60 / 15 min; each account additionally locks after 10 wrong passwords (see passwordLogin)
+  auth.post("/login", rateLimit(L.login, 15 * 60_000, ip), zValidator("json", passwordLoginInput, validationHook), async (c) => {
     const b = c.req.valid("json");
     return c.json(await passwordLogin(db, cfg, b.email, b.password, b.device));
   });

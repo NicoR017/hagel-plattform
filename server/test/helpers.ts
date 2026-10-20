@@ -32,7 +32,7 @@ export async function setup(): Promise<Ctx> {
   const az = new FakeAzure();
   const app = createApp({
     db: h.db, cfg: loadConfig({}), mailer, storage, hub, az,
-    limits: { requestLink: 10000, verify: 10000, accept: 10000, refresh: 10000 },
+    limits: { requestLink: 10000, verify: 10000, accept: 10000, refresh: 10000, login: 10000 },
     ocr: { apiKey: "test-key", model: "test-model", fetch: fetchMock },
   });
   const s = await seed(h.db, { superadminEmail: "nicolas@example.test", testSites: true, storage });
