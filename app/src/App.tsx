@@ -89,6 +89,7 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
   const [ok, setOk] = useState(false);
   useEffect(() => { api<{ set: boolean }>("GET", "/me/password").then((r) => setIsSet(r.set)).catch(() => setIsSet(false)); }, []);
   const save = async () => {
+    if (pw.length < 10) { setErr(t("passwordShort")); return; }
     if (pw !== pw2) { setErr(t("passwordMismatch")); return; }
     try {
       await api("PUT", "/me/password", { password: pw, ...(cur ? { current_password: cur } : {}) });
@@ -96,7 +97,8 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
     } catch (e) { setErr((e as Error).message); }
   };
   return (
-    <div className="center" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 50 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 50, overflowY: "auto" }}>
+     <div className="center">
       <form className="card" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <h3>{isSet ? t("passwordChange") : t("passwordSet")}</h3>
         {isSet && <><label>{t("passwordCurrent")}</label><input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" /></>}
@@ -105,12 +107,13 @@ function PasswordDialog({ onClose }: { onClose: () => void }) {
         <label>{t("passwordConfirm")}</label>
         <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" />
         {err && <div className="err">{err}</div>}
-        {ok && <div className="ok">{t("passwordSaved")}</div>}
+        {ok && <div className="ok" style={{ fontWeight: 700, padding: "8px 0" }}>✓ {t("passwordSaved")}</div>}
         <p>
-          {!ok && <button className="btn" type="submit" disabled={pw.length < 10}>{t("save")}</button>}{" "}
+          {!ok && <button className="btn" type="submit">{t("save")}</button>}{" "}
           <button className="btn" type="button" onClick={onClose}>{ok ? "OK" : t("cancel")}</button>
         </p>
       </form>
+     </div>
     </div>
   );
 }
