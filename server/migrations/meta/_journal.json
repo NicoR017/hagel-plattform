@@ -64,6 +64,13 @@
       "when": 1792486638866,
       "tag": "0008_station_links",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792488727822,
+      "tag": "0009_station_bcs",
+      "breakpoints": true
     }
   ]
 }

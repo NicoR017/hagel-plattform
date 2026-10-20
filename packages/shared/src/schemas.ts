@@ -21,6 +21,7 @@ export const stationInput = z.object({
   azure_tenant: z.string().trim().min(1).max(120).nullable().default(null),
   azure_location_aliases: z.array(z.string().max(120)).default([]),
   azure_business_customer_id: z.string().max(80).nullable().default(null),
+  azure_business_customer_ids: z.array(z.string().max(80)).max(200).default([]),
   azure_link_ids: z.array(z.string().max(120)).max(200).default([]),
   report_emails: z.array(emailSchema).default([]),
   commission_mode: z.enum(["pct", "staffel"]).default("pct"),

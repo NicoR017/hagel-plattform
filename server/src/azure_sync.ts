@@ -97,10 +97,10 @@ export async function reconcileLinks(db: Db): Promise<{ linked: number; renamed:
   const bcs = new Map((await db.select().from(azureBusinessCustomers)).map((b) => [b.id, b]));
   const ins = new Map((await db.select().from(azureInsurances)).map((i) => [i.id, i]));
   const links = await db.select().from(azureBcInsuranceLinks);
-  const sts = (await db.select().from(stations)).filter((s) => s.azureBusinessCustomerId || s.azureLinkIds.length);
+  const sts = (await db.select().from(stations)).filter((s) => s.azureBcIds.length || s.azureLinkIds.length);
   const ours = (await db.select().from(insurers)).filter((i) => i.azureInsuranceId);
-  for (const s of sts.filter((x) => x.azureBusinessCustomerId)) {
-    const b = bcs.get(s.azureBusinessCustomerId!);
+  for (const s of sts.filter((x) => x.azureBcIds.length === 1 && !x.azureLinkIds.length)) { // the name follows Azure only when the site is exactly one customer
+    const b = bcs.get(s.azureBcIds[0]);
     if (b && b.name && b.name !== s.name) { await db.update(stations).set({ name: b.name, updatedAt: new Date() }).where(eq(stations.id, s.id)); renamed++; }
   }
   for (const i of ours) {
@@ -135,9 +135,9 @@ export async function loadMappingContext(db: Db): Promise<MappingContext> {
   };
 }
 
-/** A site with specific links takes exactly those; without any it takes every link of its BusinessCustomer. */
-export const siteTakesLink = (s: Pick<typeof stations.$inferSelect, "azureLinkIds" | "azureBusinessCustomerId">, l: Pick<typeof azureBcInsuranceLinks.$inferSelect, "id" | "businessCustomerId">) =>
-  s.azureLinkIds.length ? s.azureLinkIds.includes(l.id) : !!s.azureBusinessCustomerId && s.azureBusinessCustomerId === l.businessCustomerId;
+/** A site takes every link of its customers, plus the individually ticked links. */
+export const siteTakesLink = (s: Pick<typeof stations.$inferSelect, "azureLinkIds" | "azureBcIds">, l: Pick<typeof azureBcInsuranceLinks.$inferSelect, "id" | "businessCustomerId">) =>
+  s.azureLinkIds.includes(l.id) || s.azureBcIds.includes(l.businessCustomerId);
 
 export type ScanWarning = "no_link" | "no_site" | "tenant_mismatch" | "location_unmapped" | "no_insurer" | "scan_failed";
 export interface ScanMapping {

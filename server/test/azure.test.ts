@@ -241,17 +241,18 @@ describe("mapping rules (tenant isolation is a hard rule)", () => {
     expect(none.warnings).toContain("tenant_mismatch");
     expect(mapScan(row({ tenant: "" }), ctx).importable).toBe(false);
   });
-  it("a site tied to specific links takes only those; without links it takes every link of its customer", () => {
-    const withLinks = (ids: string[]) => ({ ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, azureLinkIds: ids } : s)) });
-    // the link of the scan (l-1) is ticked: still mapped
-    expect(mapScan(row({ location: "" }), withLinks(["l-1"])).clientStationId).toBe(A);
-    // only another link is ticked: the scan of l-1 no longer belongs to this site, even though the customer is the same
-    const m = mapScan(row({ location: "" }), withLinks(["l-2"]));
+  it("a site takes every link of its customers (several allowed) plus individually ticked links", () => {
+    const mod = (patch: Record<string, unknown>) => ({ ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, ...patch } : s)) });
+    expect(mapScan(row({ location: "" }), mod({})).clientStationId).toBe(A); // bc-1 set through the legacy field
+    const two = mod({ azureBcIds: ["bc-1", "bc-2"] }); // two customers on ONE site
+    expect(mapScan(row({ location: "" }), two).clientStationId).toBe(A);
+    expect(mapScan(row({ location: "", businessCustomer: "Taller Madrid - Allianz" }), two).clientStationId).toBe(A);
+    // no customer taken as a whole, only one link: the other link of the same customer is not taken
+    const onlyLink = mod({ azureBcIds: [], azureLinkIds: ["l-2"] });
+    expect(mapScan(row({ location: "", businessCustomer: "Taller Madrid - Allianz" }), onlyLink).clientStationId).toBe(A);
+    const m = mapScan(row({ location: "" }), onlyLink);
     expect(m.clientStationId).toBeNull();
-    expect(m.warnings).toContain("tenant_mismatch");
-    // a site linked ONLY by link id (no customer set) works as well
-    const only = { ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, azureLinkIds: ["l-1"], azureBusinessCustomerId: null } : s)) };
-    expect(mapScan(row({ location: "" }), only).clientStationId).toBe(A);
+    expect(m.warnings).toContain("tenant_mismatch"); // only the other tenant's site takes it
   });
   it("a Location alias of another tenant is ignored", () => {
     expect(mapScan(row({ tenant: "TenantB", location: "Nave Madrid" }), ctx).stationId).toBe(DEEA);
@@ -442,6 +443,17 @@ describe("administration: status, mapping, pickers", () => {
     expect((await call(c, "GET", "/admin/azure/tenants", { token: deAdmin, org: c.orgDE })).body).toEqual(["TenantB"]);
     expect((await call(c, "GET", "/admin/azure/tenants", { token: c.superToken, org: c.orgES })).body).toEqual(["TenantA", "TenantB"]);
     expect((await call(c, "GET", "/admin/azure/tenants", { token: importer, org: c.orgES })).status).toBe(403);
+  });
+
+  it("a site can be linked to several customers through the API; the single legacy field still works and mirrors the first", async () => {
+    const mk = await call(c, "POST", "/admin/stations", { token: admin, org: c.orgES, body: { type: "carrosserie", name: "Multi", azure_tenant: "TenantA", azure_business_customer_ids: ["bc-1", "bc-2"], azure_link_ids: ["l-9"], country: "ES" } });
+    expect(mk.status).toBe(201);
+    expect(mk.body).toMatchObject({ azureBcIds: ["bc-1", "bc-2"], azureBusinessCustomerId: "bc-1", azureLinkIds: ["l-9"] });
+    const legacy = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_id: "bc-2" } });
+    expect(legacy.body).toMatchObject({ azureBcIds: ["bc-2"], azureBusinessCustomerId: "bc-2" });
+    const clear = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_ids: [], azure_business_customer_id: null } });
+    expect(clear.body).toMatchObject({ azureBcIds: [], azureBusinessCustomerId: null });
+    await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { active: false } });
   });
 
   it("mapping a customer: create a new carrosserie from the Azure name, or link an existing one; tenant must belong to the organisation", async () => {

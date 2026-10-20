@@ -161,7 +161,7 @@ export function RolesPage() {
 }
 
 // ---------------- Sites ----------------
-const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", capacite: 0, azure_tenant: "", commission_pct: 0, report_emails: "", azure_bc: "", links: [] as string[], aliases: "" };
+const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", capacite: 0, azure_tenant: "", commission_pct: 0, report_emails: "", bcs: [] as string[], links: [] as string[], bcFilter: "", aliases: "" };
 
 export function SitesPage({ canManage }: { canManage: boolean }) {
   const sites = useLoad<Station[]>("/admin/stations");
@@ -180,7 +180,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
             <tr key={s.id}>
               <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.capacite}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
-                <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails.join(", "), azure_bc: (s as unknown as { azureBusinessCustomerId?: string | null }).azureBusinessCustomerId ?? "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", ") })}>{t("edit")}</button>{" "}
+                <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails.join(", "), bcs: (s as unknown as { azureBcIds?: string[] }).azureBcIds ?? [], bcFilter: "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", ") })}>{t("edit")}</button>{" "}
                 <button className="btn danger" onClick={() => act(() => api("POST", `/admin/stations/${s.id}/active`, { active: !s.active }), setErr, sites.reload)}>{s.active ? t("deactivate") : t("reactivate")}</button></>}</td>
             </tr>
           ))}</tbody>
@@ -204,20 +204,27 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
             <label>{t("commission")}</label><input type="number" min={0} max={100} value={f.commission_pct} onChange={(e) => setF({ ...f, commission_pct: Number(e.target.value) })} />
             <label>{t("reportEmails")}</label><input value={f.report_emails} onChange={(e) => setF({ ...f, report_emails: e.target.value })} />
             <label>{t("azureCustomer")}</label>
-            <select value={f.azure_bc} onChange={(e) => setF({ ...f, azure_bc: e.target.value })}>
-              <option value="">— {t("notLinked")} —</option>{(azBc.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.links?.length ? ` (${b.links.map((l) => l.name).join(", ")})` : ""}</option>)}
-            </select>
-            {f.azure_bc && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
-            {f.azure_bc && (azBc.data?.find((b) => b.id === f.azure_bc)?.links ?? []).length > 0 && <>
-              <label>{t("azureLinksOnly")}</label>
-              {azBc.data!.find((b) => b.id === f.azure_bc)!.links!.map((l) => (
-                <label key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
-                  <input type="checkbox" style={{ width: "auto" }} checked={f.links.includes(l.id)}
-                    onChange={(e) => setF({ ...f, links: e.target.checked ? [...f.links, l.id] : f.links.filter((x) => x !== l.id) })} />{l.name}
-                </label>
-              ))}
-              <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureLinksHint")}</div>
-            </>}
+            <input value={f.bcFilter} onChange={(e) => setF({ ...f, bcFilter: e.target.value })} placeholder={t("azureFilter")} />
+            <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 6, marginTop: 4 }}>
+              {(azBc.data ?? [])
+                .filter((b) => !f.bcFilter.trim() || (b.name + " " + (b.links ?? []).map((l) => l.name).join(" ")).toLowerCase().includes(f.bcFilter.trim().toLowerCase()) || f.bcs.includes(b.id) || (b.links ?? []).some((l) => f.links.includes(l.id)))
+                .map((b) => (
+                  <div key={b.id} style={{ marginBottom: 4 }}>
+                    <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 600 }}>
+                      <input type="checkbox" style={{ width: "auto" }} checked={f.bcs.includes(b.id)}
+                        onChange={(e) => setF({ ...f, bcs: e.target.checked ? [...f.bcs, b.id] : f.bcs.filter((x) => x !== b.id) })} />{b.name}
+                    </label>
+                    {!f.bcs.includes(b.id) && (b.links ?? []).length > 1 && (b.links ?? []).map((l) => (
+                      <label key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, marginLeft: 26, fontSize: 13 }}>
+                        <input type="checkbox" style={{ width: "auto" }} checked={f.links.includes(l.id)}
+                          onChange={(e) => setF({ ...f, links: e.target.checked ? [...f.links, l.id] : f.links.filter((x) => x !== l.id) })} />{l.name}
+                      </label>
+                    ))}
+                  </div>
+                ))}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureLinksHint")}</div>
+            {f.bcs.length === 1 && !f.links.length && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
           </>}
           {f.type !== "carrosserie" && <>
             <label>{t("locationAliases")}</label><input value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} />
@@ -227,7 +234,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
           <p className="row"><button className="btn" onClick={() => {
             const body = { type: f.type, name: f.name, address: f.address, country: f.country, capacite: f.capacite, azure_tenant: f.azure_tenant || null,
               commission_pct: f.commission_pct, report_emails: f.report_emails.split(",").map((x) => x.trim()).filter(Boolean),
-              azure_business_customer_id: f.type === "carrosserie" ? f.azure_bc || null : null, azure_link_ids: f.type === "carrosserie" && f.azure_bc ? f.links : [], azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
+              azure_business_customer_ids: f.type === "carrosserie" ? f.bcs : [], azure_link_ids: f.type === "carrosserie" ? f.links.filter((id) => !(azBc.data ?? []).some((b) => f.bcs.includes(b.id) && (b.links ?? []).some((l) => l.id === id))) : [], azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
             void act(() => (f.id ? api("PUT", `/admin/stations/${f.id}`, body) : api("POST", "/admin/stations", body)), setErr, () => { setF(null); void sites.reload(); });
           }}>{t("save")}</button><button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button></p>
         </Card>

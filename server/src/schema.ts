@@ -60,7 +60,9 @@ export const stations = pgTable("stations", {
   azureTenant: text("azure_tenant"),
   azureLocationAliases: text("azure_location_aliases").array().notNull().default(sql`'{}'::text[]`),
   azureBusinessCustomerId: text("azure_business_customer_id"),
-  /** specific BusinessCustomersInsurance links this site takes scans for; empty = every link of azure_business_customer_id */
+  /** every BusinessCustomer whose links this site takes scans for (azure_business_customer_id mirrors the first one) */
+  azureBcIds: text("azure_bc_ids").array().notNull().default(sql`'{}'::text[]`),
+  /** individual BusinessCustomersInsurance links taken in addition (for customers not taken as a whole) */
   azureLinkIds: text("azure_link_ids").array().notNull().default(sql`'{}'::text[]`),
   reportEmails: text("report_emails").array().notNull().default(sql`'{}'::text[]`),
   commissionMode: text("commission_mode").notNull().default("pct"),

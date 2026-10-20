@@ -134,10 +134,10 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
       const [s] = await db.select().from(stations).where(and(eq(stations.id, b.station_id), eq(stations.orgId, orgId)));
       if (!s) throw new HttpError(404, "station_not_found");
       if (s.azureTenant && s.azureTenant !== b.tenant) throw new HttpError(400, "tenant_not_allowed");
-      [station] = await db.update(stations).set({ azureBusinessCustomerId: link.businessCustomerId, azureTenant: b.tenant, type: "carrosserie", updatedAt: new Date() }).where(eq(stations.id, s.id)).returning();
+      [station] = await db.update(stations).set({ azureBusinessCustomerId: s.azureBusinessCustomerId ?? link.businessCustomerId, azureBcIds: [...new Set([...s.azureBcIds, link.businessCustomerId])], azureTenant: b.tenant, type: "carrosserie", updatedAt: new Date() }).where(eq(stations.id, s.id)).returning();
     } else {
       const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-      [station] = await db.insert(stations).values({ orgId, type: "carrosserie", name: bc?.name || b.link_name, country: org.country, azureTenant: b.tenant, azureBusinessCustomerId: link.businessCustomerId }).returning();
+      [station] = await db.insert(stations).values({ orgId, type: "carrosserie", name: bc?.name || b.link_name, country: org.country, azureTenant: b.tenant, azureBusinessCustomerId: link.businessCustomerId, azureBcIds: [link.businessCustomerId] }).returning();
     }
     await reconcileLinks(db);
     await audit(db, { orgId, userId: u.id, action: "azure.map_customer", entity: "station", entityId: station.id, after: { linkName: b.link_name, tenant: b.tenant, businessCustomerId: link.businessCustomerId } });

@@ -367,12 +367,15 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (!tenant) { if (creating) throw new HttpError(400, "tenant_required"); return; }
     if (!allowed.includes(tenant)) throw new HttpError(400, "tenant_not_allowed");
   };
+  /** Customers of a site: the list wins; the single legacy field still works (and null clears it). */
+  const bcIdsOf = (b: { azure_business_customer_ids?: string[]; azure_business_customer_id?: string | null }): string[] =>
+    b.azure_business_customer_ids?.length ? [...new Set(b.azure_business_customer_ids)] : b.azure_business_customer_id ? [b.azure_business_customer_id] : [];
   org.post("/stations", require("stations.gerer"), zValidator("json", stationInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     await checkTenant(orgId, b.azure_tenant, true);
     const [s] = await db.insert(stations).values({
       orgId, type: b.type, name: b.name, address: b.address, country: b.country, capacite: b.capacite, azureTenant: b.azure_tenant,
-      azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? b.azure_business_customer_id : null,
+      azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? bcIdsOf(b)[0] ?? null : null, azureBcIds: b.type === "carrosserie" ? bcIdsOf(b) : [],
       azureLinkIds: b.type === "carrosserie" ? b.azure_link_ids : [],
       reportEmails: b.type === "carrosserie" ? b.report_emails : [], commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
     }).returning();
@@ -392,7 +395,10 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.capacite !== undefined) set.capacite = b.capacite;
     if (b.azure_tenant !== undefined) set.azureTenant = b.azure_tenant;
     if (b.azure_location_aliases !== undefined) set.azureLocationAliases = b.azure_location_aliases;
-    if (b.azure_business_customer_id !== undefined) set.azureBusinessCustomerId = b.azure_business_customer_id;
+    if (b.azure_business_customer_ids !== undefined || b.azure_business_customer_id !== undefined) {
+      const ids = bcIdsOf(b);
+      set.azureBcIds = ids; set.azureBusinessCustomerId = ids[0] ?? null;
+    }
     if (b.azure_link_ids !== undefined) set.azureLinkIds = b.azure_link_ids;
     if (b.report_emails !== undefined) set.reportEmails = b.report_emails;
     if (b.commission_mode !== undefined) set.commissionMode = b.commission_mode;
