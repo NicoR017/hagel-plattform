@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../../fixtures/golden_cases_v20.json";
 import {
-  appendScanPdf, buildXlsx, dentBreak, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
+  appendScanPdf, buildTechnicianWorkbook, buildXlsx, dentBreak, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
   h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
   type DocPhoto, type DocVehicle, type Letterhead,
 } from "../src";
@@ -350,5 +350,51 @@ describe("pagination", () => {
     const pages = await pdfTexts(await generateKvaPdf(v, c, { now: NOW }));
     expect(pages.length).toBeGreaterThanOrEqual(2);
     expect(pages.join(" ")).toContain(eur(c.brutto));
+  });
+});
+
+describe("technician worksheet workbook", () => {
+  const t = (technician: string, cars: number, base = 100) => ({
+    technician, sites: ["Nave Madrid"],
+    vehicles: Array.from({ length: cars }, (_, i) => ({ plate: `P-${i + 1}`, model: "Seat Leon & Co", start: "2026-10-06", end: "2026-10-1" + i, aw: 10 + i, pdrEur: base + i, demEur: i === 0 ? 20 : 0, eur: base + i + (i === 0 ? 20 : 0) })),
+    totals: { n: cars, aw: 0, pdrEur: 0, demEur: 0, eur: 0 },
+  });
+  const data = { from: "2026-10-05", to: "2026-10-11", sheets: [t("Ana", 2), t("Ben / Jr: [x]", 1, 50), t("Ana", 1)] };
+  data.sheets.forEach((s) => { s.totals = { n: s.vehicles.length, aw: s.vehicles.reduce((a, v) => a + v.aw, 0), pdrEur: s.vehicles.reduce((a, v) => a + v.pdrEur, 0), demEur: s.vehicles.reduce((a, v) => a + v.demEur, 0), eur: s.vehicles.reduce((a, v) => a + v.eur, 0) }; });
+  const open = (b: Uint8Array) => unzipSync(b);
+
+  it("one overview sheet plus one worksheet per technician, names unique and legal", () => {
+    const f = open(buildTechnicianWorkbook(data, "de"));
+    expect(Object.keys(f).filter((k) => k.startsWith("xl/worksheets/")).length).toBe(4);
+    const wb = strFromU8(f["xl/workbook.xml"]);
+    const names = [...wb.matchAll(/<sheet name="([^"]*)"/g)].map((m) => m[1]);
+    expect(names).toEqual(["Übersicht", "Ana", "Ben - Jr- -x-", "Ana 2"]);
+    expect(new Set(names.map((n) => n.toLowerCase())).size).toBe(names.length);
+  });
+
+  it("worksheet like the paper one: technician, site, period, table, summary, signature lines (German)", () => {
+    const f = open(buildTechnicianWorkbook(data, "de"));
+    const s = strFromU8(f["xl/worksheets/sheet2.xml"]);
+    for (const w of ["PDR Technician Worksheet", "Techniker:", "Standort:", "Nave Madrid", "Zeitraum:", "05.10.2026 – 11.10.2026", "Arbeitsbeginn", "Arbeitsende", "Kennzeichen", "Vergütungsbetrag", "P-1", "P-2", "06.10.2026", "Seat Leon &amp; Co", "Zusammenfassung", "Fahrzeuge repariert", "Gesamt AW", "Gesamt Vergütung", "Unterschrift des Standortleiters", "Unterschrift des Technikers"]) expect(s).toContain(w);
+    // totals as numbers: 2 cars, AW 10 + 11, pay (100 + 20) + 101
+    expect(s).toContain("<v>221</v>");
+    expect(s).toContain("<v>21</v>");
+  });
+
+  it("overview totals and English labels", () => {
+    const f = open(buildTechnicianWorkbook(data, "en"));
+    const s = strFromU8(f["xl/worksheets/sheet1.xml"]);
+    expect(s).toContain("Technician"); expect(s).toContain("Total €");
+    const sheet = strFromU8(f["xl/worksheets/sheet3.xml"]);
+    expect(sheet).toContain("Signature of the technician"); expect(sheet).toContain("Vehicles repaired");
+    const sum = data.sheets.reduce((a, x) => a + x.totals.eur, 0);
+    expect(s).toContain(`<v>${Math.round(sum * 100) / 100}</v>`);
+  });
+
+  it("empty period: a readable overview, no technician sheets; file name", () => {
+    const f = open(buildTechnicianWorkbook({ from: null, to: null, sheets: [] }, "de"));
+    expect(Object.keys(f).filter((k) => k.startsWith("xl/worksheets/")).length).toBe(1);
+    expect(strFromU8(f["xl/worksheets/sheet1.xml"])).toContain("Keine Fahrzeuge in diesem Zeitraum.");
+    expect(techWorkbookFileName("2026-10-05", "2026-10-11")).toBe("Technikerabrechnung_2026-10-05_2026-10-11.xlsx");
   });
 });

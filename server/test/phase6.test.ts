@@ -157,3 +157,47 @@ describe("dashboard", () => {
     expect((await dash(c.superToken, "?from=2026-10-01&to=2026-10-31")).body.revenue.n).toBe(4);
   });
 });
+
+describe("weekly technician sheets (pay per technician)", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const sheets = (token: string, q = "") => call(c, "GET", `/dashboard/technician-sheets${q}`, { token, org: c.orgES });
+
+  it("cars that became 'fertig' in the period are listed per technician with the technician's share", async () => {
+    expect((await status(assessor, ids.b, "fertig")).body.results[0].status).toBe("ok");
+    const r = (await sheets(c.superToken, `?from=${today}&to=${today}`)).body;
+    expect(r.sheets.map((s: any) => s.technician)).toContain("Ana");
+    const ana = r.sheets.find((s: any) => s.technician === "Ana");
+    const v = ana.vehicles.find((x: any) => x.id === ids.b);
+    expect(v).toMatchObject({ end: today, plate: expect.stringMatching(/^P-/) });
+    expect(v.start).toBe(today); // it went through 'reparatur' today
+    expect(v.pdrEur).toBeGreaterThan(0);
+    expect(v.eur).toBeCloseTo(v.pdrEur + v.demEur, 2);
+    expect(ana.totals.n).toBe(ana.vehicles.length);
+    expect(ana.totals.eur).toBeCloseTo(ana.vehicles.reduce((a: number, x: any) => a + x.eur, 0), 2);
+  });
+
+  it("the period decides: other weeks give nothing", async () => {
+    expect((await sheets(c.superToken, "?from=2020-01-01&to=2020-01-07")).body.sheets).toEqual([]);
+    expect((await sheets(c.superToken, `?from=${today}`)).body.sheets.length).toBeGreaterThan(0);
+  });
+
+  it("filters by site; rights: no internal split = nothing, no dashboard right = 403", async () => {
+    expect((await sheets(c.superToken, `?from=${today}&to=${today}&sites=${A}`)).body.sheets.some((s: any) => s.vehicles.some((x: any) => x.id === ids.b))).toBe(false); // it is on site B
+    expect((await sheets(c.superToken, `?from=${today}&to=${today}&sites=${B}`)).body.sheets.some((s: any) => s.vehicles.some((x: any) => x.id === ids.b))).toBe(true);
+    const role = (await call(c, "GET", "/admin/roles", { token: c.superToken, org: c.orgES })).body.find((x: any) => x.name === "Dash only");
+    const tok = await inviteAndAccept(c, c.orgES, "dashonly2@example.test", { role_id: role.id });
+    expect((await sheets(tok)).body.sheets).toEqual([]); // sees the dashboard, but not what technicians are paid
+    expect((await sheets(tech)).status).toBe(403);
+    // a chef of site A has the split, but only for his own site: the car on B is not in his sheet
+    const a = (await sheets(chefA, `?from=${today}&to=${today}`)).body.sheets;
+    expect(a.some((s: any) => s.vehicles.some((x: any) => x.id === ids.b))).toBe(false);
+  });
+
+  it("the dashboard answers with the headline numbers (kpis) used by the tiles", async () => {
+    const k = (await dash(c.superToken, `?from=${today}&to=${today}`)).body.kpis;
+    expect(k.finished.ids).toContain(ids.b);
+    expect(k.present.n).toBeGreaterThan(0);
+    expect(k.fullSites.every((s: any) => s.present >= s.capacity)).toBe(true);
+    expect(k.delayed.ids).toEqual([ids.c]);
+  });
+});

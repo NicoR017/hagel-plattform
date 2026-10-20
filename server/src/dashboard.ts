@@ -20,6 +20,9 @@ export function berlinDayStart(now: Date): Date {
   return new Date(now.getTime() - sinceMidnight - now.getMilliseconds());
 }
 
+/** Calendar date (YYYY-MM-DD) of an instant in Europe/Berlin (same offset as Spain). */
+export const berlinDate = (d: Date): string => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
 const dateOf = (v: { header: unknown; createdAt: Date }): string => {
   const d = String((v.header as Record<string, unknown>)?.leistungsdatum ?? "");
   return /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : v.createdAt.toISOString().slice(0, 10);
@@ -49,7 +52,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   });
   const ids = rows.map((r) => r.id);
   const inPeriod = (d: Date | string) => {
-    const day = typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+    const day = typeof d === "string" ? d.slice(0, 10) : berlinDate(d);
     return (!f.from || day >= f.from) && (!f.to || day <= f.to);
   };
 
@@ -181,10 +184,96 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     split: split.seen ? { technicians: split.technicians, commissions: split.commissions, rest: split.rest, n: split.seen } : null,
   };
 
+  // cars that became "fertig" (or were handed back directly) in the period
+  const finishedIds = rows.filter((r) => {
+    const e = (histBy.get(r.id) ?? []).find((h) => h.statut === "fertig" || h.statut === "rendu");
+    return !!e && inPeriod(e.at);
+  }).map((r) => r.id);
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const arrIds = uniq(sitesOut.flatMap((x) => x.arrivalsToday.ids)), depIds = uniq(sitesOut.flatMap((x) => x.departuresToday.ids));
+  const kpis = {
+    present: { n: sitesOut.reduce((a, x) => a + x.visiblePresent, 0), ids: sitesOut.flatMap((x) => x.presentIds) },
+    arrivalsToday: { n: arrIds.length, ids: arrIds },
+    departuresToday: { n: depIds.length, ids: depIds },
+    delayed: { n: delayed.length, ids: delayed.map((d) => d.id) },
+    finished: { n: finishedIds.length, ids: finishedIds },
+    fullSites: sitesOut.filter((x) => x.capacity > 0 && x.present >= x.capacity).map((x) => ({ id: x.id, name: x.name, present: x.present, capacity: x.capacity })),
+  };
+
   return {
-    generatedAt: now.toISOString(), vehicles: rows.length, delayDays,
+    generatedAt: now.toISOString(), vehicles: rows.length, delayDays, kpis,
     sites: sitesOut,
     durations: { avgArrivalToReturnedDays: avg(toReturned), avgRepairDays: avg(repairTimes), returnedSamples: toReturned.length, repairSamples: repairTimes.length },
     delayed, hold, technicians: techOut, revenue,
   };
+}
+
+// ------------------------------------------------------------------ weekly technician sheet
+
+export interface TechSheetVehicle { id: string; plate: string; model: string; start: string | null; end: string; aw: number; pdrEur: number; demEur: number; eur: number }
+export interface TechSheet { technician: string; sites: string[]; vehicles: TechSheetVehicle[]; totals: { n: number; aw: number; pdrEur: number; demEur: number; eur: number } }
+
+/**
+ * Who has to be paid how much for the cars finished in [from, to]: the technician share of the PDR work (techName) and of the
+ * de-/re-mounting (demTechName) of every car that became "fertig" (or "rendu") in the period. Only cars where the user may see the
+ * internal split are considered; nothing else is ever returned.
+ */
+export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; sheets: TechSheet[] }> {
+  const settings = await loadOrgSettings(db, orgId);
+  const calcs = calcSettings(settings);
+  const allRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt)));
+  const assign = await db.select().from(vehicleAssignments).where(inArray(vehicleAssignments.vehicleId, db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.orgId, orgId))));
+  const assignees = new Map<string, string[]>();
+  for (const a of assign) assignees.set(a.vehicleId, [...(assignees.get(a.vehicleId) ?? []), a.userId]);
+  const siteSet = f.sites?.length ? new Set(f.sites) : null;
+  const rows = allRows.filter((r) => {
+    const eff = effectivePermissions(u, refOf(r, assignees.get(r.id) ?? []));
+    if (!eff.has("vehicules.voir") || !eff.has("repartition_interne.voir")) return false;
+    if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
+    return (!f.campaign || r.campaignId === f.campaign) && (!f.client || r.clientStationId === f.client) && (!f.insurer || r.insurerId === f.insurer);
+  });
+  const ids = rows.map((r) => r.id);
+  const history = ids.length ? await db.select().from(vehicleStatusHistory).where(inArray(vehicleStatusHistory.vehicleId, ids)).orderBy(asc(vehicleStatusHistory.at)) : [];
+  const histBy = new Map<string, typeof history>();
+  for (const h of history) histBy.set(h.vehicleId, [...(histBy.get(h.vehicleId) ?? []), h]);
+  const userIds = [...new Set(rows.flatMap((r) => assignees.get(r.id) ?? []))];
+  const people = userIds.length ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, userIds)) : [];
+  const personName = (id: string) => people.find((p) => p.id === id)?.name || people.find((p) => p.id === id)?.email || "";
+  const stationRows = await db.select().from(stations).where(eq(stations.orgId, orgId));
+  const stName = new Map(stationRows.map((s) => [s.id, s.name]));
+
+  const by = new Map<string, TechSheet>();
+  const sheetOf = (name: string) => { if (!by.has(name)) by.set(name, { technician: name, sites: [], vehicles: [], totals: { n: 0, aw: 0, pdrEur: 0, demEur: 0, eur: 0 } }); return by.get(name)!; };
+  for (const r of rows) {
+    const h = histBy.get(r.id) ?? [];
+    const end = h.find((x) => x.statut === "fertig") ?? h.find((x) => x.statut === "rendu");
+    if (!end) continue;
+    const endDay = berlinDate(end.at);
+    if ((f.from && endDay < f.from) || (f.to && endDay > f.to)) continue;
+    const start = h.find((x) => x.statut === "reparatur");
+    const flat = flatten(r, assignees.get(r.id) ?? [], null);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs);
+    const sh = computeShares(flat as never, calc);
+    const firstAssignee = (assignees.get(r.id) ?? []).map(personName).find(Boolean) ?? "";
+    const pdrName = (sh.techName || firstAssignee || "—").trim();
+    const demName = (sh.demTechName || sh.techName || firstAssignee || "—").trim();
+    const header = r.header as Record<string, unknown>;
+    const base = { id: r.id, plate: String(header.kennzeichen ?? ""), model: String(header.modell ?? ""), start: start ? berlinDate(start.at) : null, end: endDay };
+    const add = (name: string, pdrEur: number, demEur: number, aw: number) => {
+      if (pdrEur <= 0 && demEur <= 0) return;
+      const t = sheetOf(name);
+      const site = r.stationId ? stName.get(r.stationId) : "";
+      if (site && !t.sites.includes(site)) t.sites.push(site);
+      t.vehicles.push({ ...base, aw: round2(aw), pdrEur: round2(pdrEur), demEur: round2(demEur), eur: round2(pdrEur + demEur) });
+    };
+    if (pdrName === demName) add(pdrName, sh.techEur, sh.demTechEur, calc.totalAW);
+    else { add(pdrName, sh.techEur, 0, calc.totalAW); add(demName, 0, sh.demTechEur, 0); }
+  }
+  const sum = (t: TechSheet, k: "aw" | "pdrEur" | "demEur" | "eur") => round2(t.vehicles.reduce((a, v) => a + v[k], 0));
+  const sheets = [...by.values()].map((t) => {
+    t.vehicles.sort((a, b) => a.end.localeCompare(b.end) || a.plate.localeCompare(b.plate));
+    t.totals = { n: new Set(t.vehicles.map((v) => v.id)).size, aw: sum(t, "aw"), pdrEur: sum(t, "pdrEur"), demEur: sum(t, "demEur"), eur: sum(t, "eur") };
+    return t;
+  }).sort((a, b) => a.technician.localeCompare(b.technician, "de"));
+  return { from: f.from ?? null, to: f.to ?? null, sheets };
 }
