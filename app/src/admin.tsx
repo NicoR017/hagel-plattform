@@ -166,7 +166,7 @@ const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", c
 export function SitesPage({ canManage }: { canManage: boolean }) {
   const sites = useLoad<Station[]>("/admin/stations");
   const tenants = useLoad<string[]>("/admin/tenants");
-  const azBc = useLoad<{ id: string; name: string }[]>(canManage ? "/admin/azure/business-customers" : "/me/none");
+  const azBc = useLoad<{ id: string; name: string; links?: string[] }[]>(canManage ? "/admin/azure/business-customers" : "/me/none");
   const [f, setF] = useState<(typeof emptySite & { id?: string }) | null>(null);
   const [err, setErr] = useState("");
   const typeLabel = (x: string) => t(x as Key);
@@ -205,7 +205,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
             <label>{t("reportEmails")}</label><input value={f.report_emails} onChange={(e) => setF({ ...f, report_emails: e.target.value })} />
             <label>{t("azureCustomer")}</label>
             <select value={f.azure_bc} onChange={(e) => setF({ ...f, azure_bc: e.target.value })}>
-              <option value="">— {t("notLinked")} —</option>{(azBc.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              <option value="">— {t("notLinked")} —</option>{(azBc.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.links?.length ? ` (${b.links.join(", ")})` : ""}</option>)}
             </select>
             {f.azure_bc && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
           </>}

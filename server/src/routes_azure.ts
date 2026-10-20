@@ -95,7 +95,15 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
   });
 
   /** Mirrors for the pickers of the site / insurer forms (names are read-only: Azure is master). */
-  r.get("/admin/azure/business-customers", needAuth, needOrg, manage, async (c) => c.json(await db.select().from(azureBusinessCustomers).orderBy(azureBusinessCustomers.name)));
+  // The scans carry the BusinessCustomersInsurance name ("<customer>-<insurance>"), so the customers on offer are those that appear in that
+  // table, each with the link names a scan can carry.
+  r.get("/admin/azure/business-customers", needAuth, needOrg, manage, async (c) => {
+    const links = await db.select().from(azureBcInsuranceLinks);
+    const byBc = new Map<string, string[]>();
+    for (const l of links) if (l.businessCustomerId) byBc.set(l.businessCustomerId, [...(byBc.get(l.businessCustomerId) ?? []), l.name]);
+    const bcs = await db.select().from(azureBusinessCustomers).orderBy(azureBusinessCustomers.name);
+    return c.json(bcs.filter((b) => byBc.has(b.id)).map((b) => ({ ...b, links: (byBc.get(b.id) ?? []).sort() })));
+  });
   r.get("/admin/azure/insurances", needAuth, needOrg, manage, async (c) => c.json(await db.select().from(azureInsurances).orderBy(azureInsurances.name)));
   r.get("/admin/azure/tenants", needAuth, needOrg, async (c) => {
     const u = c.get("principal"), orgId = c.get("orgId");
