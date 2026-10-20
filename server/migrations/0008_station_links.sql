@@ -1,0 +1,1 @@
+ALTER TABLE "stations" ADD COLUMN "azure_link_ids" text[] DEFAULT '{}'::text[] NOT NULL;

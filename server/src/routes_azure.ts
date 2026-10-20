@@ -99,10 +99,10 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
   // table, each with the link names a scan can carry.
   r.get("/admin/azure/business-customers", needAuth, needOrg, manage, async (c) => {
     const links = await db.select().from(azureBcInsuranceLinks);
-    const byBc = new Map<string, string[]>();
-    for (const l of links) if (l.businessCustomerId) byBc.set(l.businessCustomerId, [...(byBc.get(l.businessCustomerId) ?? []), l.name]);
+    const byBc = new Map<string, { id: string; name: string }[]>();
+    for (const l of links) if (l.businessCustomerId) byBc.set(l.businessCustomerId, [...(byBc.get(l.businessCustomerId) ?? []), { id: l.id, name: l.name }]);
     const bcs = await db.select().from(azureBusinessCustomers).orderBy(azureBusinessCustomers.name);
-    return c.json(bcs.filter((b) => byBc.has(b.id)).map((b) => ({ ...b, links: (byBc.get(b.id) ?? []).sort() })));
+    return c.json(bcs.filter((b) => byBc.has(b.id)).map((b) => ({ ...b, links: (byBc.get(b.id) ?? []).sort((a, z) => a.name.localeCompare(z.name)) })));
   });
   r.get("/admin/azure/insurances", needAuth, needOrg, manage, async (c) => c.json(await db.select().from(azureInsurances).orderBy(azureInsurances.name)));
   r.get("/admin/azure/tenants", needAuth, needOrg, async (c) => {

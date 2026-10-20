@@ -373,6 +373,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const [s] = await db.insert(stations).values({
       orgId, type: b.type, name: b.name, address: b.address, country: b.country, capacite: b.capacite, azureTenant: b.azure_tenant,
       azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? b.azure_business_customer_id : null,
+      azureLinkIds: b.type === "carrosserie" ? b.azure_link_ids : [],
       reportEmails: b.type === "carrosserie" ? b.report_emails : [], commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
     }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "station", entityId: s.id, after: s });
@@ -392,6 +393,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.azure_tenant !== undefined) set.azureTenant = b.azure_tenant;
     if (b.azure_location_aliases !== undefined) set.azureLocationAliases = b.azure_location_aliases;
     if (b.azure_business_customer_id !== undefined) set.azureBusinessCustomerId = b.azure_business_customer_id;
+    if (b.azure_link_ids !== undefined) set.azureLinkIds = b.azure_link_ids;
     if (b.report_emails !== undefined) set.reportEmails = b.report_emails;
     if (b.commission_mode !== undefined) set.commissionMode = b.commission_mode;
     if (b.commission_pct !== undefined) set.commissionPct = String(b.commission_pct);

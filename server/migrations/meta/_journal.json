@@ -57,6 +57,13 @@
       "when": 1792483311170,
       "tag": "0007_password",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792486638866,
+      "tag": "0008_station_links",
+      "breakpoints": true
     }
   ]
 }

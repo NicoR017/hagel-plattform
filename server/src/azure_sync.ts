@@ -97,9 +97,9 @@ export async function reconcileLinks(db: Db): Promise<{ linked: number; renamed:
   const bcs = new Map((await db.select().from(azureBusinessCustomers)).map((b) => [b.id, b]));
   const ins = new Map((await db.select().from(azureInsurances)).map((i) => [i.id, i]));
   const links = await db.select().from(azureBcInsuranceLinks);
-  const sts = (await db.select().from(stations)).filter((s) => s.azureBusinessCustomerId);
+  const sts = (await db.select().from(stations)).filter((s) => s.azureBusinessCustomerId || s.azureLinkIds.length);
   const ours = (await db.select().from(insurers)).filter((i) => i.azureInsuranceId);
-  for (const s of sts) {
+  for (const s of sts.filter((x) => x.azureBusinessCustomerId)) {
     const b = bcs.get(s.azureBusinessCustomerId!);
     if (b && b.name && b.name !== s.name) { await db.update(stations).set({ name: b.name, updatedAt: new Date() }).where(eq(stations.id, s.id)); renamed++; }
   }
@@ -108,7 +108,7 @@ export async function reconcileLinks(db: Db): Promise<{ linked: number; renamed:
     if (a && a.name && a.name !== i.name) { await db.update(insurers).set({ name: a.name, updatedAt: new Date() }).where(eq(insurers.id, i.id)); renamed++; }
   }
   for (const l of links) {
-    for (const s of sts.filter((x) => x.azureBusinessCustomerId === l.businessCustomerId)) {
+    for (const s of sts.filter((x) => siteTakesLink(x, l))) {
       for (const i of ours.filter((x) => x.azureInsuranceId === l.insuranceId && x.orgId === s.orgId)) {
         const [ex] = await db.select().from(stationInsurers).where(and(eq(stationInsurers.stationId, s.id), eq(stationInsurers.insurerId, i.id)));
         const names = [...new Set([...(ex?.azureLinkNames ?? []), l.name].filter(Boolean))];
@@ -135,6 +135,10 @@ export async function loadMappingContext(db: Db): Promise<MappingContext> {
   };
 }
 
+/** A site with specific links takes exactly those; without any it takes every link of its BusinessCustomer. */
+export const siteTakesLink = (s: Pick<typeof stations.$inferSelect, "azureLinkIds" | "azureBusinessCustomerId">, l: Pick<typeof azureBcInsuranceLinks.$inferSelect, "id" | "businessCustomerId">) =>
+  s.azureLinkIds.length ? s.azureLinkIds.includes(l.id) : !!s.azureBusinessCustomerId && s.azureBusinessCustomerId === l.businessCustomerId;
+
 export type ScanWarning = "no_link" | "no_site" | "tenant_mismatch" | "location_unmapped" | "no_insurer" | "scan_failed";
 export interface ScanMapping {
   orgId: string | null;
@@ -160,9 +164,9 @@ export function mapScan(scan: Pick<typeof colibriScans.$inferSelect, "tenant" | 
   const link = norm ? ctx.links.find((l) => normalizeName(l.name) === norm) : undefined;
   if (!link) warnings.push("no_link");
   const sameTenant = ctx.stations.filter((s) => s.azureTenant === scan.tenant && !!scan.tenant);
-  let client = link ? sameTenant.find((s) => s.type === "carrosserie" && s.azureBusinessCustomerId === link.businessCustomerId) ?? null : null;
+  let client = link ? sameTenant.find((s) => s.type === "carrosserie" && siteTakesLink(s, link)) ?? null : null;
   if (link && !client) {
-    warnings.push(ctx.stations.some((s) => s.azureBusinessCustomerId === link.businessCustomerId) ? "tenant_mismatch" : "no_site");
+    warnings.push(ctx.stations.some((s) => siteTakesLink(s, link)) ? "tenant_mismatch" : "no_site");
   }
   let current = client;
   const loc = normalizeName(scan.location);

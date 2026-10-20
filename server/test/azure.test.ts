@@ -241,6 +241,18 @@ describe("mapping rules (tenant isolation is a hard rule)", () => {
     expect(none.warnings).toContain("tenant_mismatch");
     expect(mapScan(row({ tenant: "" }), ctx).importable).toBe(false);
   });
+  it("a site tied to specific links takes only those; without links it takes every link of its customer", () => {
+    const withLinks = (ids: string[]) => ({ ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, azureLinkIds: ids } : s)) });
+    // the link of the scan (l-1) is ticked: still mapped
+    expect(mapScan(row({ location: "" }), withLinks(["l-1"])).clientStationId).toBe(A);
+    // only another link is ticked: the scan of l-1 no longer belongs to this site, even though the customer is the same
+    const m = mapScan(row({ location: "" }), withLinks(["l-2"]));
+    expect(m.clientStationId).toBeNull();
+    expect(m.warnings).toContain("tenant_mismatch");
+    // a site linked ONLY by link id (no customer set) works as well
+    const only = { ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, azureLinkIds: ["l-1"], azureBusinessCustomerId: null } : s)) };
+    expect(mapScan(row({ location: "" }), only).clientStationId).toBe(A);
+  });
   it("a Location alias of another tenant is ignored", () => {
     expect(mapScan(row({ tenant: "TenantB", location: "Nave Madrid" }), ctx).stationId).toBe(DEEA);
   });
