@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { STATUSES } from "@hagel/shared";
-import { buildTechnicianWorkbook, eur, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
+import { buildTechnicianWorkbook, eur, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
 import { api } from "../api";
 import { getLang, t } from "../i18n";
 import { go } from "./route";
@@ -10,6 +10,7 @@ import { holdReasonLabel, statusLabel } from "./Dialogs";
 import { shareOrDownload } from "./docs";
 import { useField } from "./store";
 import { toast } from "./toast";
+import { Dialog } from "./ui";
 
 interface Ids { n: number; ids: string[] }
 interface Row { id: string; name: string; net: number; n: number; ids: string[] }
@@ -105,6 +106,7 @@ export function Dashboard() {
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [thr, setThr] = useState<Record<string, number> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [choose, setChoose] = useState(false);
 
   const range = useMemo(() => (period === "custom" ? custom : periodRange(period)), [period, custom]);
   const query = useCallback(() => {
@@ -125,13 +127,15 @@ export function Dashboard() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (data && !thr) setThr(data.delayDays); }, [data, thr]);
 
-  const exportTech = async () => {
+  const exportTech = async (kind: "pdf" | "xlsx") => {
+    setChoose(false);
     setBusy(true);
     try {
       const d = await api<{ from: string | null; to: string | null; sheets: TechSheetData[] }>("GET", `/dashboard/technician-sheets${query()}`);
       if (!d.sheets.length) { toast(t("exportEmpty")); return; }
       const lang = getLang() === "en" ? "en" : "de";
-      await shareOrDownload(buildTechnicianWorkbook(d, lang), techWorkbookFileName(d.from, d.to, lang), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      if (kind === "pdf") await shareOrDownload(await generateTechnicianWorksheets(d, lang), techPdfFileName(d.from, d.to, lang), "application/pdf");
+      else await shareOrDownload(buildTechnicianWorkbook(d, lang), techWorkbookFileName(d.from, d.to, lang), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -215,7 +219,7 @@ export function Dashboard() {
             </Section>
 
             <Section title={t("dashTech")} right={f.can("repartition_interne.voir") ? (
-              <button className="chip on" disabled={busy} onClick={exportTech} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📥 ${t("exportTech")}`}</button>
+              <button className="chip on" disabled={busy} onClick={() => setChoose(true)} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📥 ${t("exportTech")}`}</button>
             ) : undefined}>
               {f.can("repartition_interne.voir") && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t("exportTechHint")}</div>}
               {data.technicians.length === 0 ? <div className="muted">{t("noneDash")}</div> : (
@@ -292,6 +296,13 @@ export function Dashboard() {
               </Section>
             )}
             <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("vehicles")}</button>
+            {choose && (
+              <Dialog title={t("exportTech")} onClose={() => setChoose(false)}>
+                <div className="muted" style={{ marginBottom: 8 }}>{t("exportChoose")} · {fmtDay(range.from)} – {fmtDay(range.to)}</div>
+                <button className="pbtn" onClick={() => void exportTech("pdf")}>📄 {t("exportPdf")}</button>
+                <button className="pbtn sec" onClick={() => void exportTech("xlsx")}>📊 {t("exportExcel")}</button>
+              </Dialog>
+            )}
           </>
         )}
       </div>

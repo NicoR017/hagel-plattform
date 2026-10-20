@@ -4,6 +4,7 @@ import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
 import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, plabel, zustStr } from "./text";
 import type { DocPhoto, DocVehicle, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
+import { TECH_LABELS, techDate, type TechSheetData } from "./techsheet";
 
 const W = 595.28, H = 841.89, L = 42, R = 553;
 
@@ -348,5 +349,70 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
   }
   drawFooters(cv, lh);
   cv.doc.setTitle(X.fotobericht + " " + (v.kennzeichen || ""));
+  return cv.doc.save();
+}
+
+// ------------------------------------------------------------------ technician worksheets (one page per technician)
+
+/**
+ * "PDR Technician Worksheet" like the paper one: technician, site, period, table of the cars finished in the period with the amount,
+ * summary and two signature lines. One section per technician (it flows to further pages when the table is long). Internal document.
+ */
+export async function generateTechnicianWorksheets(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: "de" | "en" = "de", now: Date = new Date()): Promise<Uint8Array> {
+  const l = TECH_LABELS[lang];
+  const cv = await Canvas.create(now);
+  const money = (n: number) => `${n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  const aw = (n: number) => n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const period = `${data.from ? techDate(data.from) : "…"} – ${data.to ? techDate(data.to) : "…"}`;
+  // columns: start, end, plate, model, AW (right), amount (right)
+  const X = [L, L + 78, L + 156, L + 246, L + 420, R];
+  const right = (x: number, y: number, s: string, size: number, bold = false) => cv.T(x - cv.widthOf(s, size, bold), y, s, size, bold);
+  const clip = (s: string, w: number, size: number) => { let t = s; while (t.length > 1 && cv.widthOf(t, size) > w) t = t.slice(0, -1); return t; };
+
+  const header = (t: TechSheetData | null) => {
+    cv.top(); cv.black();
+    cv.T(L, cv.y, l.title, 20, true); cv.y -= 28;
+    if (t) {
+      cv.T(L, cv.y, `${l.tech}: `, 11, true); cv.T(L + cv.widthOf(`${l.tech}: `, 11, true), cv.y, t.technician, 11); cv.y -= 18;
+      cv.T(L, cv.y, `${l.site}: `, 11, true); cv.T(L + cv.widthOf(`${l.site}: `, 11, true), cv.y, clip(t.sites.join(", ") || "—", 400, 11), 11); cv.y -= 18;
+    }
+    cv.T(L, cv.y, `${l.period}: `, 11, true); cv.T(L + cv.widthOf(`${l.period}: `, 11, true), cv.y, period, 11); cv.y -= 26;
+  };
+  const tableHead = () => {
+    cv.rgbc(243, 243, 243); cv.rect(L, cv.y - 6, R - L, 24);
+    cv.black();
+    cv.T(X[0] + 4, cv.y, l.start, 9.5, true); cv.T(X[1] + 4, cv.y, l.end, 9.5, true); cv.T(X[2] + 4, cv.y, l.plate, 9.5, true); cv.T(X[3] + 4, cv.y, l.model, 9.5, true);
+    right(X[4] - 4, cv.y, l.aw, 9.5, true); right(X[5] - 4, cv.y, l.pay, 9.5, true);
+    cv.RG(22, 35, 63); cv.line(L, cv.y - 6, R, cv.y - 6, 1.6);
+    cv.y -= 24;
+  };
+
+  if (!data.sheets.length) { header(null); cv.T(L, cv.y, l.none, 12); return cv.doc.save(); }
+  data.sheets.forEach((t, idx) => {
+    if (idx > 0) cv.np();
+    header(t); tableHead();
+    for (const v of t.vehicles) {
+      if (cv.y < 120) { cv.np(); cv.top(); tableHead(); }
+      cv.black();
+      cv.T(X[0] + 4, cv.y, v.start ? techDate(v.start) : "—", 10); cv.T(X[1] + 4, cv.y, techDate(v.end), 10);
+      cv.T(X[2] + 4, cv.y, clip(v.plate, X[3] - X[2] - 8, 10), 10); cv.T(X[3] + 4, cv.y, clip(v.model, X[4] - X[3] - 40, 10), 10);
+      right(X[4] - 4, cv.y, aw(v.aw), 10); right(X[5] - 4, cv.y, money(v.eur), 10);
+      cv.RG(225, 229, 238); cv.line(L, cv.y - 6, R, cv.y - 6, 0.6);
+      cv.y -= 20;
+    }
+    if (cv.y < 300) { cv.np(); cv.top(); }
+    cv.y -= 14; cv.black(); cv.T(L, cv.y, l.summary, 15, true); cv.y -= 22;
+    const line = (label: string, value: string, strong = false) => {
+      if (strong) { cv.rgbc(243, 243, 243); cv.rect(L, cv.y - 6, R - L, 22); cv.RG(22, 35, 63); cv.line(L, cv.y + 16, R, cv.y + 16, 1.6); cv.line(L, cv.y - 6, R, cv.y - 6, 1.6); }
+      cv.black(); cv.T(L + 6, cv.y, label, 10.5, true); right(R - 6, cv.y, value, 10.5, strong);
+      if (!strong) { cv.RG(225, 229, 238); cv.line(L, cv.y - 6, R, cv.y - 6, 0.6); }
+      cv.y -= 22;
+    };
+    line(l.cars, String(t.totals.n)); line(l.totalAw, aw(t.totals.aw)); line(l.totalPdr, money(t.totals.pdrEur)); line(l.totalDem, money(t.totals.demEur)); line(l.total, money(t.totals.eur), true);
+    for (const label of [l.signSite, l.signTech]) {
+      cv.y -= 46; cv.black(); cv.RG(0, 0, 0); cv.line(L, cv.y, L + 360, cv.y, 1.2);
+      cv.T(L, cv.y - 15, l.date, 10.5); cv.T(L + 110, cv.y - 15, label, 10.5);
+    }
+  });
   return cv.doc.save();
 }

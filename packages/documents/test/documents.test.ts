@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../../fixtures/golden_cases_v20.json";
 import {
-  appendScanPdf, buildTechnicianWorkbook, buildXlsx, dentBreak, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
+  appendScanPdf, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
   h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
   type DocPhoto, type DocVehicle, type Letterhead,
 } from "../src";
@@ -396,5 +396,31 @@ describe("technician worksheet workbook", () => {
     expect(Object.keys(f).filter((k) => k.startsWith("xl/worksheets/")).length).toBe(1);
     expect(strFromU8(f["xl/worksheets/sheet1.xml"])).toContain("Keine Fahrzeuge in diesem Zeitraum.");
     expect(techWorkbookFileName("2026-10-05", "2026-10-11")).toBe("Technikerabrechnung_2026-10-05_2026-10-11.xlsx");
+  });
+});
+
+describe("technician worksheet PDF", () => {
+  const car = (i: number) => ({ plate: `MN-IS ${i}`, model: "Seat Leon", start: "2026-10-06", end: "2026-10-10", aw: 20.5, pdrEur: 800 + i, demEur: 0, eur: 800 + i });
+  const sheet = (technician: string, n: number) => {
+    const vehicles = Array.from({ length: n }, (_, i) => car(i + 1));
+    return { technician, sites: ["HUK Untermeitingen"], vehicles, totals: { n, aw: 20.5 * n, pdrEur: vehicles.reduce((a, v) => a + v.pdrEur, 0), demEur: 0, eur: vehicles.reduce((a, v) => a + v.eur, 0) } };
+  };
+  it("one section per technician with the fields of the paper worksheet (German)", async () => {
+    const b = await generateTechnicianWorksheets({ from: "2026-10-05", to: "2026-10-11", sheets: [sheet("SmartPro NRW GmbH", 4), sheet("Ana", 1)] }, "de", new Date("2026-10-16T10:00:00Z"));
+    const pages = await pdfTexts(b);
+    expect(pages.length).toBe(2);
+    for (const w of ["PDR Technician Worksheet", "Techniker: ", "SmartPro NRW GmbH", "HUK Untermeitingen", "05.10.2026", "11.10.2026", "Arbeitsbeginn", "Arbeitsende", "Kennzeichen", "MN-IS 4", "Zusammenfassung", "Gesamt Verg", "Unterschrift des Standortleiters", "Unterschrift des Technikers"]) expect(pages[0]).toContain(w);
+    expect(pages[1]).toContain("Ana");
+    expect(pages[0]).not.toContain("Ana");
+    expect(pages[0]).toContain("3.210,00"); // 801 + 802 + 803 + 804
+  });
+  it("a long table flows onto more pages, the summary stays after the last row; empty period gives a readable page", async () => {
+    const long = await pdfTexts(await generateTechnicianWorksheets({ from: null, to: null, sheets: [sheet("Ben", 60)] }, "en"));
+    expect(long.length).toBeGreaterThan(1);
+    expect(long.join("\n")).toContain("Summary");
+    expect(long[long.length - 1]).toContain("Signature of the technician");
+    const none = await pdfTexts(await generateTechnicianWorksheets({ from: null, to: null, sheets: [] }, "de"));
+    expect(none).toHaveLength(1); expect(none[0]).toContain("Keine Fahrzeuge in diesem Zeitraum.");
+    expect(techPdfFileName("2026-10-05", "2026-10-11")).toBe("Technikerabrechnung_2026-10-05_2026-10-11.pdf");
   });
 });

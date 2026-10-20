@@ -9,7 +9,7 @@ export interface TechSheetData {
   totals: { n: number; aw: number; pdrEur: number; demEur: number; eur: number };
 }
 
-const L = {
+export const TECH_LABELS = {
   de: {
     overview: "Übersicht", title: "PDR Technician Worksheet", tech: "Techniker", site: "Standort", period: "Zeitraum", start: "Arbeitsbeginn", end: "Arbeitsende", plate: "Kennzeichen", model: "Modell",
     aw: "AW", pdr: "PDR-Vergütung", dem: "Demontage-Vergütung", pay: "Vergütungsbetrag", summary: "Zusammenfassung", cars: "Fahrzeuge repariert", totalAw: "Gesamt AW",
@@ -23,6 +23,7 @@ const L = {
     ovCars: "Vehicles", ovPdr: "PDR €", ovDem: "De-/re-mounting €", ovTotal: "Total €", sum: "Total", none: "No vehicles in this period.",
   },
 } as const;
+const L = TECH_LABELS;
 
 function xesc(s: unknown): string {
   const m: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" };
@@ -162,4 +163,9 @@ export function buildTechnicianWorkbook(data: { from: string | null; to: string 
     F("xl/workbook.xml", wb), F("xl/_rels/workbook.xml.rels", wbRels), F("xl/styles.xml", STYLES),
     ...sheets.map((s, i) => F(`xl/worksheets/sheet${i + 1}.xml`, s.xml)),
   ]);
+}
+
+export const techDate = fmtDate;
+export function techPdfFileName(from: string | null, to: string | null, lang: "de" | "en" = "de"): string {
+  return techWorkbookFileName(from, to, lang).replace(/\.xlsx$/, ".pdf");
 }

@@ -5,6 +5,6 @@ export {
   kvaFileName, dentBreak, esRange, esFormula, esLines, mailTexts, kvaPlainText,
 } from "./text";
 export type { EsLine } from "./text";
-export { generateKvaPdf, appendScanPdf, generateRepairPhotoReport, winAnsi, wrapText } from "./pdf";
+export { generateTechnicianWorksheets, generateKvaPdf, appendScanPdf, generateRepairPhotoReport, winAnsi, wrapText } from "./pdf";
 export { buildXlsx, xlsxFileName, xlsxColumnHeaders } from "./xlsx";
-export { buildTechnicianWorkbook, techWorkbookFileName, type TechSheetData } from "./techsheet";
+export { buildTechnicianWorkbook, techWorkbookFileName, techPdfFileName, type TechSheetData } from "./techsheet";
