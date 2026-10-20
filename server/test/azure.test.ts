@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import sharp from "sharp";
 import { AzureRest, odataString } from "../src/azure";
-import { parsePhotoName, pdfBlobName, positionLabel } from "../src/azure_import";
+import { parsePhotoName, pdfBlobName, photoStems, positionLabel } from "../src/azure_import";
 import { mapScan, normalizeName, scanFromRow, syncAzure, type MappingContext } from "../src/azure_sync";
 import { campaignStations, campaigns, colibriScans, photos, stationInsurers, stations, vehicles } from "../src/schema";
 import { call, inviteAndAccept, pull, setup, uuid, type Ctx } from "./helpers";
@@ -134,6 +134,12 @@ describe("pure helpers", () => {
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_7-0.png`)).toEqual({ position: "LEFT", index: 0 });
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_0-3`)).toEqual({ position: "FRONT_UPPER_RIGHT", index: 3 });
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_EXTRA_LEFT-0.jpeg`)).toEqual({ position: "EXTRA_LEFT", index: 0 });
+    // real-world naming: PartitionKey 202610191627, files named after the PDF `20261019-1627_9547 LPV.pdf`
+    const stems = photoStems("https://storagecolibri.blob.core.windows.net/allscans/20261019-1627_9547%20LPV.pdf", "202610191627");
+    expect(stems).toEqual(["20261019-1627_9547 LPV", "202610191627", "20261019-1627"]);
+    expect(parsePhotoName("202610191627", "20261019-1627_9547 LPV_Overview_Pictures_FRONT-0.jpg", stems)).toEqual({ position: "FRONT", index: 0 });
+    expect(parsePhotoName("202610191627", "20261019-1627_Overview_Pictures_BACK-1.jpg", stems)).toEqual({ position: "BACK", index: 1 });
+    expect(parsePhotoName("202610191627", "20261019-1700_Overview_Pictures_BACK-1.jpg", stems)).toBeNull();
     expect(parsePhotoName(PK, `20261019-9999_Overview_Pictures_FRONT-0.jpg`)).toBeNull();
     expect(parsePhotoName(PK, `${PK}_Other_FRONT-0.jpg`)).toBeNull();
     expect(parsePhotoName("a.b", "aXb_Overview_Pictures_FRONT-0")).toBeNull(); // the key is matched literally, not as a regex

@@ -18,8 +18,9 @@ const POSITIONS = ["FRONT_UPPER_RIGHT", "FRONT_BOTTOM_RIGHT", "RIGHT", "BACK_UPP
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Blob name `<PartitionKey>_Overview_Pictures_<Position>-<n>` (the position may be the enum name or its number; any file extension). */
-export function parsePhotoName(partitionKey: string, blobName: string): { position: string; index: number } | null {
-  const m = new RegExp(`^${escapeRe(partitionKey)}_Overview_Pictures_([A-Za-z_]+|\\d+)-(\\d+)(?:\\.[A-Za-z0-9]+)?$`).exec(blobName);
+export function parsePhotoName(partitionKey: string, blobName: string, stems: string[] = []): { position: string; index: number } | null {
+  const prefixes = [partitionKey, ...stems].map(escapeRe).join("|");
+  const m = new RegExp(`^(?:${prefixes})_Overview_Pictures_([A-Za-z_]+|\\d+)-(\\d+)(?:\\.[A-Za-z0-9]+)?$`).exec(blobName);
   if (!m) return null;
   const raw = m[1];
   const position = /^\d+$/.test(raw) ? POSITIONS[Number(raw)] ?? `UNKNOWN_${raw}` : raw.toUpperCase();
@@ -47,6 +48,14 @@ export function pdfBlobName(urlPdf: string, partitionKey: string): string[] {
     } catch { out.push(urlPdf.replace(new RegExp(`^/?${SCANS_CONTAINER}/`), "")); }
   }
   out.push(`${partitionKey}.pdf`);
+  return [...new Set(out.filter(Boolean))];
+}
+
+/** Possible blob-name prefixes of the photos: the PDF name without extension, and the PartitionKey (yyyyMMddHHmm) written as yyyyMMdd-HHmm. */
+export function photoStems(urlPdf: string, partitionKey: string): string[] {
+  const out = pdfBlobName(urlPdf, partitionKey).map((n) => (n.split("/").pop() ?? n).replace(/\.pdf$/i, ""));
+  const m = /^(\d{8})(\d{4})/.exec(partitionKey);
+  if (m) out.push(`${m[1]}-${m[2]}`);
   return [...new Set(out.filter(Boolean))];
 }
 
@@ -142,8 +151,12 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
     type P = { position: string; index: number; label: string; bytes: Uint8Array };
     const prepared: P[] = [];
     let photoErrors = 0;
-    for (const name of await d.az.listBlobs(PICTURES_CONTAINER, scan.partitionKey)) {
-      const pn = parsePhotoName(scan.partitionKey, name);
+    // real blob names start with the PDF's stem (`20261019-1627_<plate>`), the PartitionKey is the same time without the dash (`202610191627`)
+    const stems = photoStems(scan.urlPdf, scan.partitionKey);
+    const names = new Set<string>();
+    for (const prefix of [scan.partitionKey, ...stems.map((s) => s.split("_")[0])]) for (const n of await d.az.listBlobs(PICTURES_CONTAINER, prefix)) names.add(n);
+    for (const name of names) {
+      const pn = parsePhotoName(scan.partitionKey, name, stems);
       if (!pn) continue;
       try {
         const raw = await d.az.getBlob(PICTURES_CONTAINER, name);
