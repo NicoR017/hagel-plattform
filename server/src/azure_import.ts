@@ -20,11 +20,11 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Blob name `<PartitionKey>_Overview_Pictures_<Position>-<n>` (the position may be the enum name or its number; any file extension). */
 export function parsePhotoName(partitionKey: string, blobName: string, stems: string[] = []): { position: string; index: number } | null {
   const prefixes = [partitionKey, ...stems].map(escapeRe).join("|");
-  const m = new RegExp(`^(?:${prefixes})_Overview_Pictures_([A-Za-z_]+|\\d+)-(\\d+)(?:\\.[A-Za-z0-9]+)?$`).exec(blobName);
+  const m = new RegExp(`^(?:${prefixes})_Overview_Pictures_([A-Za-z]+(?:_[A-Za-z]+)*|\\d+)(?:[-_](\\d+))?(?:\\.[A-Za-z0-9]+)?$`).exec(blobName);
   if (!m) return null;
   const raw = m[1];
   const position = /^\d+$/.test(raw) ? POSITIONS[Number(raw)] ?? `UNKNOWN_${raw}` : raw.toUpperCase();
-  return { position, index: Number(m[2]) };
+  return { position, index: m[2] != null ? Number(m[2]) : 0 };
 }
 
 /** Stored labels stay German (the documents translate them for Spanish). */
@@ -166,8 +166,9 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
       } catch { photoErrors++; }
     }
     prepared.sort((a, b) => POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position) || a.index - b.index);
-    const firstOfLabel = new Map<string, number>();
-    for (const p of prepared) if (!firstOfLabel.has(p.label) || p.index < firstOfLabel.get(p.label)!) firstOfLabel.set(p.label, p.index);
+    // only the first photo (in position order) of each view goes into the PDF
+    const firstOfLabel = new Map<string, P>();
+    for (const p of prepared) if (!firstOfLabel.has(p.label)) firstOfLabel.set(p.label, p);
     const photoRows = prepared.map((p, i) => ({ id: crypto.randomUUID(), p, sort: i }));
     for (const r of photoRows) { const key = photoKey(m.orgId, vehicleId, r.id); await d.storage.put(key, r.p.bytes, "image/jpeg"); stored.push(key); }
 
@@ -185,7 +186,7 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
       for (const r of photoRows) {
         await tx.insert(photos).values({
           id: r.id, vehicleId, fileKey: photoKey(m.orgId!, vehicleId, r.id), size: r.p.bytes.length, label: r.p.label, phase: "besichtigung", source: "colibri",
-          colibriPosition: r.p.position, colibriIndex: r.p.index, inPdf: r.p.index === firstOfLabel.get(r.p.label), takenAt: scan.scanDateTime ?? now, takenBy: u.id,
+          colibriPosition: r.p.position, colibriIndex: r.p.index, inPdf: firstOfLabel.get(r.p.label) === r.p, takenAt: scan.scanDateTime ?? now, takenBy: u.id,
           sort: r.sort, seq: await nextSeq(tx),
         });
       }

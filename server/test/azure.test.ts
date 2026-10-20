@@ -134,6 +134,12 @@ describe("pure helpers", () => {
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_7-0.png`)).toEqual({ position: "LEFT", index: 0 });
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_0-3`)).toEqual({ position: "FRONT_UPPER_RIGHT", index: 3 });
     expect(parsePhotoName(PK, `${PK}_Overview_Pictures_EXTRA_LEFT-0.jpeg`)).toEqual({ position: "EXTRA_LEFT", index: 0 });
+    // current Colibri naming (seen on storagecolibri): mixed case, number after an underscore or none
+    const K = "2026101518033949BRJ";
+    expect(parsePhotoName(K, `${K}_Overview_Pictures_Back_Upper_Left.jpg`)).toEqual({ position: "BACK_UPPER_LEFT", index: 0 });
+    expect(parsePhotoName(K, `${K}_Overview_Pictures_Left_3.jpg`)).toEqual({ position: "LEFT", index: 3 });
+    expect(parsePhotoName(K, `${K}_Overview_Pictures_Extra_Left_6.jpg`)).toEqual({ position: "EXTRA_LEFT", index: 6 });
+    expect(parsePhotoName(K, `${K}_Overview_Pictures_Top_Front.jpg`)).toEqual({ position: "TOP_FRONT", index: 0 });
     // real-world naming: PartitionKey 202610191627, files named after the PDF `20261019-1627_9547 LPV.pdf`
     const stems = photoStems("https://storagecolibri.blob.core.windows.net/allscans/20261019-1627_9547%20LPV.pdf", "202610191627");
     expect(stems).toEqual(["20261019-1627_9547 LPV", "202610191627", "20261019-1627"]);
