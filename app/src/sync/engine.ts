@@ -37,7 +37,7 @@ export class SyncEngine {
   private inflight = new Set<number>();
   private st: SyncStatus = { online: true, syncing: false, pendingOps: 0, pendingUploads: 0, signedOut: false, lastSyncAt: null, lastError: null };
   /** called with a human-relevant notice (vehicle no longer accessible, op rejected, …) */
-  onNotice?: (n: { kind: "gone" | "rejected"; vehicleId?: string; code?: string; message?: string }) => void;
+  onNotice?: (n: { kind: "gone" | "rejected" | "warning"; vehicleId?: string; code?: string; message?: string }) => void;
   onData?: () => void;
 
   constructor(d: EngineDeps) { this.db = d.db; this.http = d.http; this.now = d.now ?? Date.now; }
@@ -139,6 +139,7 @@ export class SyncEngine {
     await this.db.outbox.delete(row.id!);
     touched.add(row.vehicleId);
     if (r.status === "ok") {
+      for (const w of r.warnings ?? []) this.onNotice?.({ kind: "warning", vehicleId: row.vehicleId, code: w }); // accepted, but worth a look (site full, other tenant)
       // The server accepted it, but its snapshot on this phone is only refreshed by the next pull: advance the snapshot by the
       // acknowledged op meanwhile, otherwise the screen would briefly fall back to an older state (or lose a just-created vehicle).
       if (row.op.type.startsWith("vehicle.") && row.op.type !== "vehicle.delete") {

@@ -24,7 +24,8 @@ import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
-import { loadOrgSettings, visibleSettings, visibleStations } from "./sync";
+import { buildDashboard } from "./dashboard";
+import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
   auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
 } from "./schema";
@@ -180,6 +181,24 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   me.post("/logout", async (c) => { await revokeSession(db, c.get("sessionId")); return c.json({ ok: true }); });
   me.post("/logout-all", async (c) => { await revokeAllSessions(db, c.get("principal").id); return c.json({ ok: true }); });
   app.route("/me", me);
+
+  // ---------- dashboard (scope-limited; amounts only where the user may see prices) ----------
+  const mayDashboard: MiddlewareHandler<Env> = async (c, next) => {
+    // any grant of this organisation with the right (a chef of site has it for his site only): the data is cut to the scope afterwards
+    const u = c.get("principal"), now = new Date();
+    if (!(u.isSuperadmin || u.grants.some((g) => g.orgId === c.get("orgId") && g.permissions.includes("dashboard.voir") && (!g.expiresAt || g.expiresAt > now)))) throw new HttpError(403, "forbidden");
+    await next();
+  };
+  app.get("/dashboard", needAuth, needOrg, mayDashboard, async (c) => {
+    const q = c.req.query();
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const uuidOrUndef = (x?: string) => (x && z.string().uuid().safeParse(x).success ? x : undefined);
+    return c.json(await buildDashboard(db, c.get("principal"), c.get("orgId"), {
+      sites: (q.sites ?? "").split(",").filter((x) => z.string().uuid().safeParse(x).success),
+      campaign: uuidOrUndef(q.campaign), client: uuidOrUndef(q.client), insurer: uuidOrUndef(q.insurer),
+      from: q.from && day.test(q.from) ? q.from : undefined, to: q.to && day.test(q.to) ? q.to : undefined,
+    }));
+  });
 
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
@@ -357,8 +376,14 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   org.get("/stations", async (c) => {
     // managers get everything; other members only the sites they may know, without commission / report e-mails / Azure ids
     const orgId = c.get("orgId"), u = c.get("principal");
-    if (canOrg(u, "stations.gerer", orgId)) return c.json(await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(stations.name));
-    return c.json((await visibleStations(db, u, orgId)).map((x) => ({ id: x.id, type: x.type, name: x.name, country: x.country, capacite: x.capacite, active: x.active })));
+    if (canOrg(u, "stations.gerer", orgId)) {
+      const all = await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(stations.name);
+      const occ = await occupancyOf(db, orgId, all.map((x) => x.id));
+      return c.json(all.map((x) => ({ ...x, present: occ[x.id] ?? 0 })));
+    }
+    const vis = await visibleStations(db, u, orgId);
+    const occ = await occupancyOf(db, orgId, vis.map((x) => x.id));
+    return c.json(vis.map((x) => ({ id: x.id, type: x.type, name: x.name, country: x.country, capacite: x.capacite, active: x.active, present: occ[x.id] ?? 0 })));
   });
   const checkTenant = async (orgId: string, tenant: string | null, creating: boolean) => {
     const allowed = (await db.select().from(orgTenants).where(eq(orgTenants.orgId, orgId))).map((t) => t.azureTenant);

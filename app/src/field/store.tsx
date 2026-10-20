@@ -43,6 +43,7 @@ export function FieldProvider({ userId, orgId, children }: { userId: string; org
   useEffect(() => {
     engine.onNotice = (n) => {
       if (n.kind === "gone") toast(t("noticeGone"), 6000);
+      else if (n.kind === "warning") toast(`⚠ ${t(("w." + n.code) as never)}`, 7000);
       else if (n.kind === "rejected") toast(`${t("noticeRejected")}${n.message ? `: ${n.message}` : ""}`, 6000);
     };
     return () => { engine.onNotice = undefined; };

@@ -1,3 +1,4 @@
+import { Occ } from "./field/occupancy";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LANG_LIST, getLang } from "./i18n";
 import { PERMISSIONS, SCOPES, SYSTEM_ROLES, type Lang } from "@hagel/shared";
@@ -32,7 +33,7 @@ export async function act(fn: () => Promise<unknown>, setErr: (m: string) => voi
 
 // ---------------- Users ----------------
 interface UserRow { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: { id: string; stationId: string | null; roleId: string; roleName: string; roleKey: string | null; scope: string; expiresAt: string | null }[] }
-interface Station { id: string; type: string; name: string; capacite: number; country: string; azureTenant: string | null; active: boolean; commissionPct: string; reportEmails: string[]; address: string }
+interface Station { id: string; type: string; name: string; capacite: number; present?: number; country: string; azureTenant: string | null; active: boolean; commissionPct: string; reportEmails: string[]; address: string }
 interface RoleLite { id: string; name: string; key: string | null; scope: string }
 
 export function UsersPage({ canManage }: { canManage: boolean }) {
@@ -178,7 +179,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
           <thead><tr><th>{t("name")}</th><th>{t("type")}</th><th>{t("capacity")}</th><th>{t("country")}</th><th>{t("tenant")}</th><th /></tr></thead>
           <tbody>{sites.data?.map((s) => (
             <tr key={s.id}>
-              <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.capacite}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
+              <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.type === "carrosserie" && !s.capacite ? "—" : <Occ present={s.present ?? 0} capacity={s.capacite} />}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
                 <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails.join(", "), bcs: (s as unknown as { azureBcIds?: string[] }).azureBcIds ?? [], bcFilter: "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", ") })}>{t("edit")}</button>{" "}
                 <button className="btn danger" onClick={() => act(() => api("POST", `/admin/stations/${s.id}/active`, { active: !s.active }), setErr, sites.reload)}>{s.active ? t("deactivate") : t("reactivate")}</button></>}</td>

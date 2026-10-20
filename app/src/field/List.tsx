@@ -5,7 +5,9 @@ import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { t } from "../i18n";
 import { applyColibriToVehicle, colibriBadge, readColibriFile } from "../sync/colibriImport";
 import { createVehicle, deleteVehicle, getPrefs } from "../sync/mutations";
-import { go } from "./route";
+import { go, useRoute } from "./route";
+import { Occ } from "./occupancy";
+import { readDashFilter } from "./dashFilter";
 import { shareOrDownload, toDoc } from "./docs";
 import { AssignDialog, MoveDialog, SettingsDialog, SharesDialog, StatusDialog, statusLabel } from "./Dialogs";
 import { BackupImport } from "./BackupImport";
@@ -39,13 +41,16 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const [busy, setBusy] = useState("");
   const bulkRef = useRef<HTMLInputElement>(null);
 
+  const route = useRoute();
+  const dashF = useMemo(() => (route.page === "list" && route.dash ? readDashFilter() : null), [route]);
+  const dashIds = useMemo(() => (dashF ? new Set(dashF.ids) : null), [dashF]);
   const prices = f.can("prix.voir");
   const split = f.can("repartition_interne.voir");
   const rows = useMemo(() => all.map((v) => ({ v, c: computeVehicle(v as unknown as CalcVehicle, f.calc) })), [all, f.calc]);
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const q = query.toLowerCase();
   const filtered = sorted.filter(({ v }) =>
-    (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) && (!insurer || v.insurerId === insurer) && (!campaign || v.campaignId === campaign) &&
+    (!dashIds || dashIds.has(v.id)) && (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) && (!insurer || v.insurerId === insurer) && (!campaign || v.campaignId === campaign) &&
     `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.demTechName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(STATUSES.map((s) => [s, all.filter((v) => v.statut === s).length]));
   const days = [...new Set(all.map((v) => v.leistungsdatum as string).filter(Boolean))].sort().reverse();
@@ -98,6 +103,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
         <div className="top">
           <SyncBadge />
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {f.can("dashboard.voir") && <a className="iconbtn" href="#/dashboard" style={{ textDecoration: "none" }} aria-label={t("dashboard")}>📊</a>}
             <a className="iconbtn" href="#/admin" style={{ textDecoration: "none" }} aria-label={t("admin")}>👥</a>
             <button className="iconbtn" onClick={() => setDlg("settings")} aria-label={t("settings")}>⚙</button>
           </div>
@@ -110,6 +116,21 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
           <button className={"chip" + (filter === "all" ? " on" : "")} onClick={() => setFilter("all")}>{t("all")} ({all.length})</button>
           {STATUSES.map((s) => <button key={s} className={"chip" + (filter === s ? " on" : "")} style={{ whiteSpace: "nowrap" }} onClick={() => setFilter(s)}>{statusLabel(s)} ({counts[s]})</button>)}
         </div>
+        {dashF && (
+          <div className="chip on" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "4px 0" }}>
+            <span>{t("filterActive")}: {dashF.label} ({dashF.ids.length})</span>
+            <button className="chip" onClick={() => go({ page: "list" })}>{t("clearFilter")} ✕</button>
+          </div>
+        )}
+        {sites.some((s) => s.active && s.capacite > 0) && (
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6 }}>
+            {sites.filter((s) => s.active && s.capacite > 0).map((s) => (
+              <button key={s.id} className={"chip" + (site === s.id ? " on" : "")} style={{ whiteSpace: "nowrap" }} onClick={() => setSite(site === s.id ? "" : s.id)}>
+                {s.name} <Occ present={f.refs?.occupancy?.[s.id] ?? 0} capacity={s.capacite} />
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid var(--line)", borderRadius: 16, padding: "4px 14px", marginTop: 8 }}>
           <span className="muted">🔍</span>
           <input className="inp" style={{ border: "none", padding: 0 }} placeholder={t("searchVehicles")} value={query} onChange={(e) => setQuery(e.target.value)} />

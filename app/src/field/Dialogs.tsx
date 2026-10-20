@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LocalVehicle } from "../sync/db";
 import { assignVehicle, moveVehicle, setShares, setStatus } from "../sync/mutations";
 import { LANG_LIST, getLang, setLang, t, tOr } from "../i18n";
@@ -6,8 +6,9 @@ import { api } from "../api";
 import { buildOldFormatBackup } from "../sync/exportBackup";
 import { shareOrDownload } from "./docs";
 import { Dialog, Field, NumInput, Seg } from "./ui";
-import { useField, useIssues } from "./store";
+import { useField, useIssues, useVehicle } from "./store";
 import { toast } from "./toast";
+import { Occ } from "./occupancy";
 import type { Key } from "../i18n";
 import { STATUSES } from "@hagel/shared";
 
@@ -19,6 +20,10 @@ export const holdReasonLabel = (r: string) => tOr("hold." + r, r);
 export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[]; current?: string; onClose: () => void; onDone?: () => void }) {
   const f = useField();
   const [statut, setSt] = useState(current ?? "besichtigung");
+  // leaving 'on hold' offers the status the car had before (the server remembers it)
+  const before = useVehicle(ids[0] ?? "");
+  const prev = current === "attente" && ids.length === 1 ? ((before?.statutAvant as string | null | undefined) ?? null) : null;
+  useEffect(() => { if (prev) setSt(prev); }, [prev]);
   const [reason, setReason] = useState<string>("Teile");
   const [other, setOther] = useState("");
   const motif = statut === "attente" ? (reason === "Sonstiges" ? other.trim() : reason) : "";
@@ -26,7 +31,7 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
   return (
     <Dialog title={t("changeStatus")} onClose={onClose}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} onClick={() => setSt(s)}>{statusLabel(s)}</button>)}
+        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} onClick={() => setSt(s)}>{s === prev ? "↩ " : ""}{statusLabel(s)}</button>)}
       </div>
       {statut === "attente" && (
         <div style={{ marginTop: 14 }}>
@@ -54,13 +59,25 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
   const dest = sites.find((s) => s.id === to);
+  const occ = f.refs?.occupancy ?? {};
+  const src = (f.refs?.stations ?? []).find((s) => s.id === from);
+  // the server warns when the site is already full before the move; show the same warning as soon as the move would fill it
+  const full = !!dest && dest.capacite > 0 && (occ[dest.id] ?? 0) + ids.length > dest.capacite;
+  const tenantDiffers = !!dest && !!src?.azureTenant && !!dest.azureTenant && src.azureTenant !== dest.azureTenant;
   return (
     <Dialog title={t("moveTitle")} onClose={onClose}>
       <Field label={t("moveTo")}>
         <select className="sel" value={to} onChange={(e) => setTo(e.target.value)}>
           <option value="">—</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}{s.capacite ? ` (${s.capacite})` : ""}</option>)}
+          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}{s.capacite ? ` (${occ[s.id] ?? 0}/${s.capacite})` : ""}</option>)}
         </select>
+        {dest && (
+          <div style={{ marginTop: 8 }}>
+            <Occ present={(occ[dest.id] ?? 0) + ids.length} capacity={dest.capacite} /> <span className="muted" style={{ fontSize: 12 }}>{t("occupancy")} {t("afterMove")}</span>
+            {full && <div style={{ color: "var(--brick)", fontSize: 13, marginTop: 4 }}>⚠ {t("moveFullWarn")}</div>}
+            {tenantDiffers && <div style={{ color: "var(--brick)", fontSize: 13, marginTop: 4 }}>⚠ {t("moveTenantWarn")}</div>}
+          </div>
+        )}
       </Field>
       <Field label={t("moveNote")}><input className="inp" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       <div className="muted" style={{ fontSize: 12 }}>{t("moveHint")}</div>

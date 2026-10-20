@@ -58,13 +58,13 @@ export const refOf = (r: VehicleRow, assigneeIds: string[]): VehicleRef => ({
 });
 
 /** Full (unfiltered) flat vehicle in v20 shape + server metadata. */
-function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: string | null): ClientVehicle {
+export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: string | null): ClientVehicle {
   const shares = (r.shares ?? {}) as Record<string, unknown>;
   return {
     ...(r.header as Record<string, unknown>),
     ...shares,
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
-    statut: r.statut, statutMotif: r.statutMotif, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
+    statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
     assigneeIds, updatedAt: r.updatedAt.toISOString(), updatedBy: updatedByName, seq: r.seq,
@@ -268,8 +268,12 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
           .where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu")));
         if (n >= dest.capacite) warnings.push("capacity_full");
       }
+      if (row.stationId && row.stationId !== dest.id) {
+        const [from] = await tx.select().from(stations).where(eq(stations.id, row.stationId));
+        if (from?.azureTenant && dest.azureTenant && from.azureTenant !== dest.azureTenant) warnings.push("tenant_differs");
+      }
       // the customer (clientStationId), the commission snapshot and the report recipients do NOT change with a move
-      const r = await commit(tx, u, row, { stationId: dest.id, groupAt: stamps }, ["site"], [], op.type, { before: { stationId: row.stationId }, after: { stationId: dest.id, note: op.note } });
+      const r = await commit(tx, u, row, { stationId: dest.id, groupAt: stamps }, ["site"], [], op.type, { before: { stationId: row.stationId }, after: { stationId: dest.id, note: op.note, ...(warnings.length ? { warnings } : {}) } });
       return { ...r, warnings };
     }
 
@@ -516,11 +520,22 @@ export async function visibleStations(db: Db, u: Principal, orgId: string, vs: P
   return all.filter((x) => ids.has(x.id));
 }
 
+/** Vehicles physically present per site: every status but `rendu`, deleted ones excluded. */
+export async function occupancyOf(db: Pick<Db, "select">, orgId: string, stationIds: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = Object.fromEntries(stationIds.map((id) => [id, 0]));
+  if (!stationIds.length) return out;
+  const rows = await db.select({ id: vehicles.stationId, n: sql<number>`count(*)::int` }).from(vehicles)
+    .where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu"), inArray(vehicles.stationId, stationIds)))
+    .groupBy(vehicles.stationId);
+  for (const r of rows) if (r.id) out[r.id] = r.n;
+  return out;
+}
+
 async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSettings, vs: ClientVehicle[]): Promise<PullResponse["refs"]> {
   const list = await visibleStations(db, u, orgId, vs);
   const showCommission = canOrg(u, "commission.modifier", orgId) || canOrg(u, "stations.gerer", orgId);
   const st: ClientStation[] = list.map((s) => ({
-    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active,
+    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active, azureTenant: s.azureTenant,
     ...(showCommission ? { commissionMode: s.commissionMode, commissionPct: Number(s.commissionPct) } : {}),
   }));
   const [me] = await db.select().from(users).where(eq(users.id, u.id));
@@ -546,8 +561,9 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const compRows = await db.select().from(companies).where(and(eq(companies.orgId, orgId), eq(companies.active, true))).orderBy(asc(companies.name));
   const maySplit = u.isSuperadmin || perms.has("repartition_interne.voir");
   const techRows = maySplit ? await db.select().from(technicians).where(and(eq(technicians.orgId, orgId), eq(technicians.active, true))).orderBy(asc(technicians.name)) : [];
+  const occ = await occupancyOf(db, orgId, list.map((x) => x.id));
   return {
-    stations: st, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    stations: st, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

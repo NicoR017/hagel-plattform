@@ -81,3 +81,16 @@
 .overlay .dialog .sel{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 10px;font-size:15px;background:#fff;min-height:48px;}
 .overlay .dialog .muted{color:var(--sub);}
 .toastbox{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#16233f;color:#fff;padding:12px 16px;border-radius:12px;font-size:14px;z-index:80;max-width:90vw;text-align:center;box-shadow:0 6px 18px rgba(20,35,63,.35);}
+
+/* occupancy (present / capacity): green < 80 %, orange >= 80 %, red when full, red flashing when over capacity */
+.occ{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;background:#e4eee5;color:#3f6b44;}
+.occ.warn{background:#fdeccb;color:#8a5a00;}
+.occ.full{background:#f6dcd6;color:#a23b2e;}
+.occ.over{background:#a23b2e;color:#fff;animation:occblink 1s steps(2,start) infinite;}
+@keyframes occblink{to{opacity:.45;}}
+@media (prefers-reduced-motion:reduce){.occ.over{animation:none;}}
+.occbar{height:8px;border-radius:4px;background:#e6e9ee;overflow:hidden;margin:6px 0;}
+.occbar>i{display:block;height:100%;background:#86b08a;}
+.occbar.warn>i{background:#e0a02c;}
+.occbar.full>i,.occbar.over>i{background:#a23b2e;}
+.fld.wide{max-width:1180px;}

@@ -168,14 +168,19 @@ export interface ClientPhoto {
 
 export interface ClientStation {
   id: string; type: string; name: string; country: string; capacite: number;
+  /** Colibri tenant of the site: moving a car to a site of another tenant shows a warning */
+  azureTenant?: string | null;
   commissionMode?: string; commissionPct?: number; active: boolean;
 }
 export interface OrgSettings {
   rateDE: number; rateES: number; defaultTeiler: number;
   /** editable Spain matrix (see packages/calc EsMatrix); absent = built-in default */
   esMatrix?: unknown;
+  /** a vehicle is "delayed" when it stays in a status for more than N days (status -> days; absent = never delayed) */
+  delayDays?: Record<string, number>;
 }
-export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defaultTeiler: 10 };
+export const DEFAULT_DELAY_DAYS: Record<string, number> = { attente: 3, reparatur: 5 };
+export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defaultTeiler: 10, delayDays: DEFAULT_DELAY_DAYS };
 
 export interface ClientInsurer { id: string; name: string }
 export interface ClientCampaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
@@ -194,6 +199,8 @@ export interface PullResponse {
   gone: string[];
   refs: {
     stations: ClientStation[];
+    /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
+    occupancy: Record<string, number>;
     settings: OrgSettings;
     me: { id: string; name: string; language: string; permissions: string[] };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
@@ -224,6 +231,7 @@ export const settingsInput = z.object({
   rateDE: z.number().min(0).max(1000),
   rateES: z.number().min(0).max(1000),
   defaultTeiler: z.union([z.literal(10), z.literal(12)]),
+  delayDays: z.record(z.enum(STATUSES), z.number().int().min(0).max(365)),
   esMatrix: esMatrixSchema.nullable().optional(),
 }).partial();
 export const ocrInput = z.object({

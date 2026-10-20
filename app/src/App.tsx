@@ -6,6 +6,7 @@ import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage 
 import { FieldProvider, useField } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
+import { Dashboard } from "./field/Dashboard";
 import { Toasts } from "./field/toast";
 import { useRoute } from "./field/route";
 import "./field/field.css";
@@ -190,6 +191,7 @@ function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) =
   const route = useRoute();
   const f = useField();
   if (route.page === "vehicle") return <VehicleScreen id={route.id} tab={route.tab} />;
+  if (route.page === "dashboard") return <Dashboard />;
   if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
   const orgSwitch = me.organizations.length > 1 ? (
     <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")} style={{ minHeight: 44, borderRadius: 10, border: "none", padding: "0 8px", fontWeight: 700 }}>
