@@ -1,9 +1,9 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, ne } from "drizzle-orm";
 import { sign, verify } from "hono/jwt";
 import { type ErrorCode, type Lang, isLang } from "@hagel/shared";
 import type { Config } from "./config";
 import { accessMail, inviteMail, loginMail } from "./mails";
-import { hashToken, newToken } from "./crypto";
+import { hashPassword, hashToken, newToken, verifyPassword } from "./crypto";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
 import { audit } from "./audit";
@@ -88,6 +88,40 @@ export async function verifyLogin(db: Db, cfg: Config, token: string, device: st
   return createSession(db, cfg, u.id, device);
 }
 
+// ---- password login (optional; the magic link stays as account creation / "forgot password") ----
+const fails = new Map<string, { n: number; reset: number }>();
+const MAX_FAILS = 10, FAIL_WINDOW_MS = 15 * 60_000;
+
+export async function passwordLogin(db: Db, cfg: Config, email: string, password: string, device: string): Promise<Tokens> {
+  const t = Date.now();
+  const f = fails.get(email);
+  if (f && f.reset > t && f.n >= MAX_FAILS) throw new HttpError(429, "too_many_requests"); // per account, whatever the IP
+  const [u] = await db.select().from(users).where(eq(users.email, email));
+  const ok = await verifyPassword(password, u?.passwordHash);
+  if (!u || !ok || u.status !== "active") {
+    const cur = f && f.reset > t ? f : { n: 0, reset: t + FAIL_WINDOW_MS };
+    cur.n++; fails.set(email, cur);
+    if (fails.size > 5000) for (const [k, v] of fails) if (v.reset < t) fails.delete(k);
+    throw new HttpError(401, "invalid_credentials");
+  }
+  fails.delete(email);
+  return createSession(db, cfg, u.id, device);
+}
+
+const FRESH_SESSION_MS = 10 * 60_000;
+/** Sets or changes the password. Without the current password only within 10 minutes after signing in (e.g. via the e-mail link = "forgot password"). */
+export async function setPassword(db: Db, userId: string, sessionId: string, password: string, current?: string) {
+  const [u] = await db.select().from(users).where(eq(users.id, userId));
+  const [s] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+  if (u.passwordHash) {
+    const fresh = s && Date.now() - s.createdAt.getTime() < FRESH_SESSION_MS;
+    if (!(current && (await verifyPassword(current, u.passwordHash))) && !(fresh && current === undefined)) throw new HttpError(401, "wrong_current_password");
+  }
+  await db.update(users).set({ passwordHash: await hashPassword(password), updatedAt: now() }).where(eq(users.id, userId));
+  // every other device has to sign in again
+  await db.update(sessions).set({ revokedAt: now() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt), ne(sessions.id, sessionId)));
+}
+
 // ---- invitations ----
 export interface InviteParams {
   orgId: string; email: string; roleId: string; stationId: string | null;
@@ -142,7 +176,7 @@ async function addAccess(db: Db, userId: string, p: Pick<InviteParams, "orgId" |
   });
 }
 
-export async function acceptInvitation(db: Db, cfg: Config, token: string, name: string, language: string, device = ""): Promise<Tokens> {
+export async function acceptInvitation(db: Db, cfg: Config, token: string, name: string, language: string, device = "", password?: string): Promise<Tokens> {
   // single use: atomically mark used
   const claimed = await db.update(invitations)
     .set({ usedAt: now() })
@@ -155,8 +189,12 @@ export async function acceptInvitation(db: Db, cfg: Config, token: string, name:
   if (existing) {
     if (existing.status === "disabled") throw new HttpError(409, "account_disabled");
     userId = existing.id;
+    if (password && !existing.passwordHash) await db.update(users).set({ passwordHash: await hashPassword(password) }).where(eq(users.id, userId));
   } else {
-    const [u] = await db.insert(users).values({ email: inv.email, name, language: isLang(language) ? language : isLang(inv.language) ? inv.language : "de", status: "active" }).returning();
+    const [u] = await db.insert(users).values({
+      email: inv.email, name, language: isLang(language) ? language : isLang(inv.language) ? inv.language : "de", status: "active",
+      passwordHash: password ? await hashPassword(password) : null,
+    }).returning();
     userId = u.id;
   }
   await addAccess(db, userId, {

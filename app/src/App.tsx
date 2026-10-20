@@ -49,19 +49,69 @@ function Center({ children }: { children: ReactNode }) {
 
 function LoginPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
+  const signIn = async () => {
+    try { setAuth(await api("POST", "/auth/login", { email: email.trim(), password, device: navigator.userAgent.slice(0, 120) })); location.replace("/"); }
+    catch (e) { setErr((e as Error).message); }
+  };
   return (
     <Center>
-      <p>{t("loginIntro")}</p>
-      <label>{t("email")}</label>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-      {err && <div className="err">{err}</div>}
-      {sent && <div className="ok">{t("linkSent")}</div>}
-      <p><button className="btn" onClick={async () => {
-        try { await api("POST", "/auth/request-link", { email }); setSent(true); setErr(""); } catch (e) { setErr((e as Error).message); }
-      }}>{t("sendLink")}</button></p>
+      <form onSubmit={(e) => { e.preventDefault(); void signIn(); }}>
+        <p>{t("loginIntro")}</p>
+        <label>{t("email")}</label>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+        <label>{t("password")}</label>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        {err && <div className="err">{err}</div>}
+        {sent && <div className="ok">{t("linkSent")}</div>}
+        <p><button className="btn" type="submit" disabled={!email.trim() || !password}>{t("login")}</button></p>
+      </form>
+      <p style={{ fontSize: 13 }}>
+        <a href="#" onClick={async (e) => {
+          e.preventDefault();
+          try { await api("POST", "/auth/request-link", { email: email.trim() }); setSent(true); setErr(""); } catch (x) { setErr((x as Error).message); }
+        }}>{t("forgotPassword")}</a>
+      </p>
+      <p style={{ fontSize: 12, opacity: 0.7 }}>{t("firstLoginHint")}</p>
     </Center>
+  );
+}
+
+/** Set (no password yet / fresh sign-in) or change the password. Other devices are signed out afterwards. */
+function PasswordDialog({ onClose }: { onClose: () => void }) {
+  const [isSet, setIsSet] = useState<boolean | null>(null);
+  const [cur, setCur] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
+  useEffect(() => { api<{ set: boolean }>("GET", "/me/password").then((r) => setIsSet(r.set)).catch(() => setIsSet(false)); }, []);
+  const save = async () => {
+    if (pw !== pw2) { setErr(t("passwordMismatch")); return; }
+    try {
+      await api("PUT", "/me/password", { password: pw, ...(cur ? { current_password: cur } : {}) });
+      setOk(true); setErr("");
+    } catch (e) { setErr((e as Error).message); }
+  };
+  return (
+    <div className="center" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 50 }}>
+      <form className="card" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        <h3>{isSet ? t("passwordChange") : t("passwordSet")}</h3>
+        {isSet && <><label>{t("passwordCurrent")}</label><input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" /></>}
+        <label>{t("passwordNew")}</label>
+        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
+        <label>{t("passwordConfirm")}</label>
+        <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" />
+        {err && <div className="err">{err}</div>}
+        {ok && <div className="ok">{t("passwordSaved")}</div>}
+        <p>
+          {!ok && <button className="btn" type="submit" disabled={pw.length < 10}>{t("save")}</button>}{" "}
+          <button className="btn" type="button" onClick={onClose}>{ok ? "OK" : t("cancel")}</button>
+        </p>
+      </form>
+    </div>
   );
 }
 
@@ -77,6 +127,8 @@ function VerifyLogin({ token }: { token: string }) {
 
 function AcceptInvite({ token }: { token: string }) {
   const [name, setName] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
   const [err, setErr] = useState("");
   return (
     <Center>
@@ -84,9 +136,14 @@ function AcceptInvite({ token }: { token: string }) {
       <p>{t("inviteIntro")}</p>
       <label>{t("name")}</label>
       <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+      <label>{t("passwordNew")}</label>
+      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
+      <label>{t("passwordConfirm")}</label>
+      <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" />
       {err && <div className="err">{err}</div>}
-      <p><button className="btn" disabled={!name.trim()} onClick={async () => {
-        try { setAuth(await api("POST", "/auth/accept-invite", { token, name, language: getLang() })); location.replace("/"); } catch (e) { setErr((e as Error).message); }
+      <p><button className="btn" disabled={!name.trim() || pw.length < 10} onClick={async () => {
+        if (pw !== pw2) { setErr(t("passwordMismatch")); return; }
+        try { setAuth(await api("POST", "/auth/accept-invite", { token, name, password: pw, language: getLang() })); location.replace("/"); } catch (e) { setErr((e as Error).message); }
       }}>{t("createAccount")}</button></p>
     </Center>
   );
@@ -142,6 +199,7 @@ function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) =
 
 function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
   const [tab, setTab] = useState<AdminTab>("users");
+  const [pwOpen, setPwOpen] = useState(false);
   const perms = new Set(me.grants.filter((g) => g.orgId === org && g.stationId === null).flatMap((g) => g.permissions));
   const has = (p: string) => me.user.isSuperadmin || perms.has(p);
   const tabs: { k: AdminTab; label: string; show: boolean }[] = [
@@ -168,8 +226,10 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
         </select>
         <LangSwitch signedIn />
         <span>{me.user.name || me.user.email}</span>
+        <button onClick={() => setPwOpen(true)}>{t("password")}</button>
         <button onClick={async () => { try { await api("POST", "/me/logout"); } catch { /* already gone */ } setAuth(null); location.replace("/"); }}>{t("logout")}</button>
       </header>
+      {pwOpen && <PasswordDialog onClose={() => setPwOpen(false)} />}
       <nav>{visible.map((x) => <button key={x.k} className={current === x.k ? "on" : ""} onClick={() => setTab(x.k)}>{x.label}</button>)}</nav>
       <main key={org}>
         {current === "users" && <UsersPage canManage={has("utilisateurs.gerer")} />}

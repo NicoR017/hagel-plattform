@@ -23,6 +23,8 @@ export const users = pgTable("users", {
   /** invited | active | disabled */
   status: text("status").notNull().default("active"),
   isSuperadmin: boolean("is_superadmin").notNull().default(false),
+  /** scrypt hash (`scrypt$N$salt$hash`); null = no password yet (magic link only) */
+  passwordHash: text("password_hash"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

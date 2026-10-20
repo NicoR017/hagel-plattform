@@ -3,12 +3,12 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
-  acceptInviteInput, assignmentInput, inviteInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
+  acceptInviteInput, assignmentInput, inviteInput, passwordLoginInput, setPasswordInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
   PERMISSIONS, SYSTEM_ROLES, type Permission, errorMessage, pickLang, languageInput, settingsInput,
 } from "@hagel/shared";
 import { audit } from "./audit";
 import {
-  HttpError, acceptInvitation, authenticate, inviteUser, refreshSession, requestLogin, resendInvitation, revokeAllSessions, revokeSession, verifyLogin,
+  HttpError, acceptInvitation, authenticate, inviteUser, passwordLogin, setPassword, refreshSession, requestLogin, resendInvitation, revokeAllSessions, revokeSession, verifyLogin,
 } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db";
@@ -83,7 +83,11 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   });
   auth.post("/accept-invite", rateLimit(L.accept, 15 * 60_000, ip), zValidator("json", acceptInviteInput, validationHook), async (c) => {
     const b = c.req.valid("json");
-    return c.json(await acceptInvitation(db, cfg, b.token, b.name, b.language ?? "", c.req.header("user-agent") ?? ""));
+    return c.json(await acceptInvitation(db, cfg, b.token, b.name, b.language ?? "", c.req.header("user-agent") ?? "", b.password));
+  });
+  auth.post("/login", rateLimit(L.verify, 15 * 60_000, ip), zValidator("json", passwordLoginInput, validationHook), async (c) => {
+    const b = c.req.valid("json");
+    return c.json(await passwordLogin(db, cfg, b.email, b.password, b.device));
   });
   auth.post("/refresh", rateLimit(L.refresh, 15 * 60_000, ip), zValidator("json", refreshInput, validationHook), async (c) => {
     return c.json(await refreshSession(db, cfg, c.req.valid("json").refresh_token));
@@ -157,6 +161,15 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   });
   me.put("/language", zValidator("json", languageInput, validationHook), async (c) => {
     await db.update(users).set({ language: c.req.valid("json").language, updatedAt: new Date() }).where(eq(users.id, c.get("principal").id));
+    return c.json({ ok: true });
+  });
+  me.get("/password", async (c) => {
+    const [u] = await db.select({ h: users.passwordHash }).from(users).where(eq(users.id, c.get("principal").id));
+    return c.json({ set: !!u?.h });
+  });
+  me.put("/password", rateLimit(L.verify, 15 * 60_000, ip), zValidator("json", setPasswordInput, validationHook), async (c) => {
+    const b = c.req.valid("json");
+    await setPassword(db, c.get("principal").id, c.get("sessionId"), b.password, b.current_password);
     return c.json({ ok: true });
   });
   me.post("/logout", async (c) => { await revokeSession(db, c.get("sessionId")); return c.json({ ok: true }); });

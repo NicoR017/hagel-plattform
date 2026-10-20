@@ -37,8 +37,13 @@ export const inviteInput = z.object({
   language: z.enum(LANGS).default("de"),
 });
 
+export const passwordSchema = z.string().min(10).max(200);
+export const passwordLoginInput = z.object({ email: emailSchema, password: z.string().min(1).max(200), device: z.string().max(200).default("") });
+export const setPasswordInput = z.object({ password: passwordSchema, current_password: z.string().max(200).optional() });
+
 export const acceptInviteInput = z.object({
   token: z.string().min(20).max(200),
+  password: passwordSchema.optional(),
   name: z.string().trim().min(1).max(120),
   language: z.enum(LANGS).optional(),
 });
