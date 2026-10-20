@@ -204,27 +204,30 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
             <label>{t("commission")}</label><input type="number" min={0} max={100} value={f.commission_pct} onChange={(e) => setF({ ...f, commission_pct: Number(e.target.value) })} />
             <label>{t("reportEmails")}</label><input value={f.report_emails} onChange={(e) => setF({ ...f, report_emails: e.target.value })} />
             <label>{t("azureCustomer")}</label>
-            <input value={f.bcFilter} onChange={(e) => setF({ ...f, bcFilter: e.target.value })} placeholder={t("azureFilter")} />
-            <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 6, marginTop: 4 }}>
-              {(azBc.data ?? [])
-                .filter((b) => !f.bcFilter.trim() || (b.name + " " + (b.links ?? []).map((l) => l.name).join(" ")).toLowerCase().includes(f.bcFilter.trim().toLowerCase()) || f.bcs.includes(b.id) || (b.links ?? []).some((l) => f.links.includes(l.id)))
-                .map((b) => (
-                  <div key={b.id} style={{ marginBottom: 4 }}>
-                    <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 600 }}>
-                      <input type="checkbox" style={{ width: "auto" }} checked={f.bcs.includes(b.id)}
-                        onChange={(e) => setF({ ...f, bcs: e.target.checked ? [...f.bcs, b.id] : f.bcs.filter((x) => x !== b.id) })} />{b.name}
+            {(() => {
+              const all = (azBc.data ?? []).flatMap((b) => (b.links ?? []).map((l) => ({ id: l.id, name: l.name, bcId: b.id, bcName: b.name })));
+              const q = f.bcFilter.trim().toLowerCase();
+              const picked = all.filter((l) => f.links.includes(l.id));
+              const wholeBcs = (azBc.data ?? []).filter((b) => f.bcs.includes(b.id));
+              const free = all.filter((l) => !f.links.includes(l.id) && !f.bcs.includes(l.bcId) && (!q || l.name.toLowerCase().includes(q)));
+              return <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "4px 0" }}>
+                  {wholeBcs.map((b) => <span key={b.id} className="pill">{b.name} ({t("azureAll")}) <a href="#" onClick={(e) => { e.preventDefault(); setF({ ...f, bcs: f.bcs.filter((x) => x !== b.id) }); }}>✕</a></span>)}
+                  {picked.map((l) => <span key={l.id} className="pill">{l.name} <a href="#" onClick={(e) => { e.preventDefault(); setF({ ...f, links: f.links.filter((x) => x !== l.id) }); }}>✕</a></span>)}
+                  {!wholeBcs.length && !picked.length && <span style={{ fontSize: 12, color: "var(--sub)" }}>— {t("notLinked")} —</span>}
+                </div>
+                <input value={f.bcFilter} onChange={(e) => setF({ ...f, bcFilter: e.target.value })} placeholder={t("azureFilter")} />
+                <div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 6, marginTop: 4 }}>
+                  {free.slice(0, 200).map((l) => (
+                    <label key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
+                      <input type="checkbox" style={{ width: "auto" }} checked={false} onChange={() => setF({ ...f, links: [...f.links, l.id] })} />{l.name}
                     </label>
-                    {!f.bcs.includes(b.id) && (b.links ?? []).length > 1 && (b.links ?? []).map((l) => (
-                      <label key={l.id} style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400, marginLeft: 26, fontSize: 13 }}>
-                        <input type="checkbox" style={{ width: "auto" }} checked={f.links.includes(l.id)}
-                          onChange={(e) => setF({ ...f, links: e.target.checked ? [...f.links, l.id] : f.links.filter((x) => x !== l.id) })} />{l.name}
-                      </label>
-                    ))}
-                  </div>
-                ))}
-            </div>
+                  ))}
+                  {!free.length && <span style={{ fontSize: 12, color: "var(--sub)" }}>{t("azureNoMore")}</span>}
+                </div>
+              </>;
+            })()}
             <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureLinksHint")}</div>
-            {f.bcs.length === 1 && !f.links.length && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
           </>}
           {f.type !== "carrosserie" && <>
             <label>{t("locationAliases")}</label><input value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} />
@@ -234,7 +237,7 @@ export function SitesPage({ canManage }: { canManage: boolean }) {
           <p className="row"><button className="btn" onClick={() => {
             const body = { type: f.type, name: f.name, address: f.address, country: f.country, capacite: f.capacite, azure_tenant: f.azure_tenant || null,
               commission_pct: f.commission_pct, report_emails: f.report_emails.split(",").map((x) => x.trim()).filter(Boolean),
-              azure_business_customer_ids: f.type === "carrosserie" ? f.bcs : [], azure_link_ids: f.type === "carrosserie" ? f.links.filter((id) => !(azBc.data ?? []).some((b) => f.bcs.includes(b.id) && (b.links ?? []).some((l) => l.id === id))) : [], azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
+              azure_business_customer_ids: f.type === "carrosserie" ? f.bcs : [], azure_link_ids: f.type === "carrosserie" ? f.links : [], azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
             void act(() => (f.id ? api("PUT", `/admin/stations/${f.id}`, body) : api("POST", "/admin/stations", body)), setErr, () => { setF(null); void sites.reload(); });
           }}>{t("save")}</button><button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button></p>
         </Card>
