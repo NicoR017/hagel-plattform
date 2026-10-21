@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { STATUSES } from "@hagel/shared";
+import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
 import { buildTechnicianWorkbook, eur, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
 import { api } from "../api";
 import { getLang, t } from "../i18n";
@@ -17,7 +17,7 @@ interface Row { id: string; name: string; net: number; n: number; ids: string[] 
 interface Dash {
   generatedAt: string; vehicles: number; delayDays: Record<string, number>;
   kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
-  sites: { id: string; name: string; type: string; capacity: number; present: number; presentIds: string[]; byStatus: Record<string, Ids>; arrivalsToday: Ids; departuresToday: Ids }[];
+  sites: { id: string; name: string; type: string; capacity: number; present: number; presentIds: string[]; byStatus: Record<string, Ids>; arrivalsToday: Ids; departuresToday: Ids; byStage?: Record<string, Ids>; repairsToday?: { booked: number; capacity: number } }[];
   durations: { avgArrivalToReturnedDays: number | null; avgRepairDays: number | null; returnedSamples: number; repairSamples: number };
   delayed: { id: string; plate: string; statut: string; motif: string | null; days: number; stationName: string; thresholdDays: number }[];
   hold: { reason: string; n: number; ids: string[] }[];
@@ -97,7 +97,8 @@ function Bars({ rows, title, money }: { rows: Row[]; title: string; money: (n: n
   );
 }
 
-export function Dashboard() {
+/** `embedded`: inside the new interface (its own header above); without it the old full-page header */
+export function Dashboard({ embedded = false }: { embedded?: boolean }) {
   const f = useField();
   const [data, setData] = useState<Dash | null>(null);
   const [err, setErr] = useState("");
@@ -153,12 +154,19 @@ export function Dashboard() {
   );
 
   return (
-    <div className="fld wide">
-      <div className="hdr">
-        <div className="top"><a className="iconbtn" href="#/" style={{ textDecoration: "none" }} aria-label={t("vehicles")}>‹</a></div>
-        <h1>{t("dashboard")}</h1>
-        <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
-      </div>
+    <div className={"fld wide" + (embedded ? " dashv3" : "")}>
+      {embedded ? (
+        <div className="dashtitle">
+          <h1>{t("dashboard")}</h1>
+          <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
+        </div>
+      ) : (
+        <div className="hdr">
+          <div className="top"><a className="iconbtn" href="#/" style={{ textDecoration: "none" }} aria-label={t("vehicles")}>‹</a></div>
+          <h1>{t("dashboard")}</h1>
+          <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
+        </div>
+      )}
       <div className="sheet">
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
           {chip("today", t("periodToday"))}{chip("week", t("periodWeek"))}{chip("lastWeek", t("periodLastWeek"))}{chip("month", t("periodMonth"))}{chip("all", t("periodAll"))}{chip("custom", t("periodCustom"))}
@@ -209,6 +217,12 @@ export function Dashboard() {
                         </span>
                       ))}
                     </div>
+                    {s.byStage && REPAIR_STAGES.some((st) => s.byStage![st]?.n) && (
+                      <div className="stagechips" aria-label={t("v6DashBoard")}>
+                        {REPAIR_STAGES.map((st) => <span key={st} className={s.byStage![st].n ? "on" : ""} title={`${t(("v5Stage_" + st) as never)}: ${s.byStage![st].n}`}>{t(("v5Stage_" + st) as never)} <N v={s.byStage![st].n} ids={s.byStage![st].ids} label={`${s.name} · ${t(("v5Stage_" + st) as never)}`} /></span>)}
+                      </div>
+                    )}
+                    {s.repairsToday && s.repairsToday.capacity > 0 && <div style={{ fontSize: 13, marginTop: 6 }}>{t("v6DashToday")}: <b>{s.repairsToday.booked} / {s.repairsToday.capacity}</b></div>}
                     <div style={{ fontSize: 13, marginTop: 6, color: "var(--sub)" }}>
                       {t("arrivalsToday")}: <N v={s.arrivalsToday.n} ids={s.arrivalsToday.ids} label={`${s.name} · ${t("arrivalsToday")}`} />
                       {" · "}{t("departuresToday")}: <N v={s.departuresToday.n} ids={s.departuresToday.ids} label={`${s.name} · ${t("departuresToday")}`} />
@@ -218,10 +232,13 @@ export function Dashboard() {
               </div>
             </Section>
 
-            <Section title={t("dashTech")} right={f.can("repartition_interne.voir") ? (
+            <Section title={t("dashTech")} right={embedded ? (f.can("wochenbericht.voir") ? (
+              // in the new interface the weekly report (Verwaltung) replaces the old technician sheet and its Excel
+              <a className="chip on" href="#/admin/weekly" style={{ minHeight: 40, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>{t("v6MenuWeekly")}</a>
+            ) : undefined) : f.can("repartition_interne.voir") ? (
               <button className="chip on" disabled={busy} onClick={() => setChoose(true)} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📥 ${t("exportTech")}`}</button>
             ) : undefined}>
-              {f.can("repartition_interne.voir") && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t("exportTechHint")}</div>}
+              {!embedded && f.can("repartition_interne.voir") && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t("exportTechHint")}</div>}
               {data.technicians.length === 0 ? <div className="muted">{t("noneDash")}</div> : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>

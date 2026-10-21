@@ -18,6 +18,7 @@ import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
 import { syncRoutes } from "./routes_sync";
 import { repairRoutes } from "./routes_repair";
+import { weeklyRoutes } from "./weekly";
 import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./routes_master";
 import { azureRoutes } from "./routes_azure";
@@ -29,7 +30,7 @@ import { loadPrincipal } from "./principal";
 import { buildDashboard, buildTechSheets } from "./dashboard";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
-  auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
+  auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
 } from "./schema";
 
 export interface Limits { requestLink: number; verify: number; accept: number; refresh: number; login: number }
@@ -219,6 +220,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
   app.route("/", repairRoutes({ db, storage, mailer, needAuth, needOrg }));
+  app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
 
@@ -319,6 +321,41 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   };
   org.post("/users/:id/deactivate", require("utilisateurs.gerer"), setStatus("disabled"));
   org.post("/users/:id/reactivate", require("utilisateurs.gerer"), setStatus("active"));
+  org.put("/users/:id", require("utilisateurs.gerer"), zValidator("json", z.object({ name: z.string().trim().min(1).max(120).optional(), language: languageInput.shape.language.optional() }), validationHook), async (c) => {
+    const orgId = c.get("orgId"), b = c.req.valid("json");
+    const u = await memberOrFail(c.req.param("id") ?? "", orgId);
+    if (u.status === "deleted") throw new HttpError(404, "user_not_found");
+    const set: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+    if (b.name !== undefined) set.name = b.name;
+    if (b.language !== undefined) set.language = b.language;
+    const [n] = await db.update(users).set(set).where(eq(users.id, u.id)).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "user", entityId: u.id, before: { name: u.name, language: u.language }, after: { name: n.name, language: n.language } });
+    return c.json({ ok: true });
+  });
+  /**
+   * Delete a user: gone from the organisation (no more roles, no login, sessions revoked, pending invitations withdrawn). The row stays
+   * (anonymised when it was the user's only organisation) because vehicles, history and the audit log point at it: they then read "Gelöschter Benutzer".
+   */
+  org.delete("/users/:id", require("utilisateurs.gerer"), async (c) => {
+    const orgId = c.get("orgId"), p = c.get("principal");
+    const u = await memberOrFail(c.req.param("id") ?? "", orgId);
+    if (u.isSuperadmin) throw new HttpError(403, "superadmin_undeletable");
+    if (u.id === p.id) throw new HttpError(403, "self_delete");
+    const held = await db.select({ r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId)).where(and(eq(roleAssignments.userId, u.id), eq(roleAssignments.orgId, orgId)));
+    for (const { r } of held) assertCanGrant(p, orgId, r.permissions); // you cannot remove someone who holds more than you could give
+    const email = u.email;
+    await db.transaction(async (tx) => {
+      await tx.delete(roleAssignments).where(and(eq(roleAssignments.userId, u.id), eq(roleAssignments.orgId, orgId)));
+      await tx.delete(memberships).where(and(eq(memberships.userId, u.id), eq(memberships.orgId, orgId)));
+      await tx.delete(invitations).where(and(eq(invitations.orgId, orgId), eq(invitations.email, email), sql`${invitations.usedAt} is null`));
+      await tx.update(technicians).set({ userId: null, updatedAt: new Date() }).where(and(eq(technicians.orgId, orgId), eq(technicians.userId, u.id)));
+      const [other] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberships).where(eq(memberships.userId, u.id));
+      if (!other.n) await tx.update(users).set({ status: "deleted", email: `deleted-${u.id}@deleted.invalid`, name: "Gelöschter Benutzer", passwordHash: null, updatedAt: new Date() }).where(eq(users.id, u.id));
+    });
+    await revokeAllSessions(db, u.id);
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: "user", entityId: u.id, before: { email, name: u.name, roles: held.map((x) => x.r.name) } });
+    return c.json({ ok: true });
+  });
   org.post("/users/:id/revoke-sessions", require("utilisateurs.gerer"), async (c) => {
     const u = await memberOrFail(c.req.param("id"), c.get("orgId"));
     await revokeAllSessions(db, u.id);
@@ -377,17 +414,39 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "role", entityId: r.id, before, after: r });
     return c.json(r);
   });
+  /**
+   * Delete a role. A role that people hold can only go together with a replacement role that takes over their assignments (and the
+   * pending invitations); default roles stay.
+   */
   org.delete("/roles/:id", require("roles.gerer"), async (c) => {
-    const orgId = c.get("orgId");
-    const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id")), eq(roles.orgId, orgId)));
+    const orgId = c.get("orgId"), p = c.get("principal");
+    // the body is optional (a role nobody holds needs none)
+    const parsed = z.object({ replacement_role_id: z.string().uuid().nullable().default(null) }).safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) throw new HttpError(400, "invalid_input");
+    const b = parsed.data;
+    const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id") ?? ""), eq(roles.orgId, orgId)));
     if (!r) throw new HttpError(404, "role_not_found");
     if (r.isSystem) throw new HttpError(409, "system_role_undeletable");
     const used = await db.select({ n: sql<number>`count(*)::int` }).from(roleAssignments).where(eq(roleAssignments.roleId, r.id));
     const inv = await db.select({ n: sql<number>`count(*)::int` }).from(invitations).where(and(eq(invitations.roleId, r.id), sql`${invitations.usedAt} is null`));
-    if (used[0].n || inv[0].n) throw new HttpError(409, "role_in_use");
-    await db.delete(roles).where(eq(roles.id, r.id));
-    await audit(db, { orgId, userId: c.get("principal").id, action: "delete", entity: "role", entityId: r.id, before: r });
-    return c.json({ ok: true });
+    let moved = 0;
+    if (used[0].n || inv[0].n) {
+      if (!b.replacement_role_id) throw new HttpError(409, "role_in_use");
+      const [rep] = await db.select().from(roles).where(and(eq(roles.id, b.replacement_role_id), eq(roles.orgId, orgId)));
+      if (!rep || rep.id === r.id || rep.scope !== r.scope) throw new HttpError(400, "replacement_invalid");
+      assertCanGrant(p, orgId, rep.permissions);
+      await db.transaction(async (tx) => {
+        await tx.update(roleAssignments).set({ roleId: rep.id }).where(eq(roleAssignments.roleId, r.id));
+        await tx.update(invitations).set({ roleId: rep.id }).where(eq(invitations.roleId, r.id)); // also the accepted ones: they still point at the role
+        await tx.delete(roles).where(eq(roles.id, r.id));
+      });
+      moved = used[0].n + inv[0].n;
+    } else {
+      // nobody holds it and nothing waits for it: only accepted invitations may still point at it, they go with it
+      await db.transaction(async (tx) => { await tx.delete(invitations).where(eq(invitations.roleId, r.id)); await tx.delete(roles).where(eq(roles.id, r.id)); });
+    }
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: "role", entityId: r.id, before: r, after: { replacementRoleId: b.replacement_role_id, moved } });
+    return c.json({ ok: true, moved });
   });
 
   // stations (sites)

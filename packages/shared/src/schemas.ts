@@ -100,5 +100,7 @@ export const technicianInput = z.object({
   default_pct_demontage: z.number().min(0).max(100).default(100),
   /** pdr | headliner */
   kind: z.enum(["pdr", "headliner"]).default("pdr"),
+  /** address of the weekly report; empty = the account's address */
+  email: z.string().trim().toLowerCase().email().max(200).nullable().default(null),
   active: z.boolean().default(true),
 });

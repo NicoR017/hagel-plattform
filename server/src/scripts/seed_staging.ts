@@ -9,7 +9,7 @@ import { hashPassword } from "../crypto";
 import { seed } from "../seed";
 import { systemMethodFor } from "../methods";
 import { nextSeq } from "../sync";
-import { memberships, organizations, roleAssignments, roles, stations, technicians, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
+import { insurers, memberships, organizations, roleAssignments, roles, stationInsurers, stations, technicians, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
 
 const PEOPLE = [
   { key: "chef", email: "chef@staging.test", name: "Test Chef", role: "chef_site" },
@@ -37,6 +37,9 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
       ]).returning();
     }
     const site = sts.find((s) => s.type === "carrosserie") ?? sts[0];
+    // one fake insurer (receives reports, fake address) linked to the carrosserie: shows the automatic recipient of the station list
+    const [fakeIns] = await db.insert(insurers).values({ orgId: org.id, name: "Test Versicherung", reportEmails: ["schaden@versicherung.staging.test"], sendReports: true, reportsToSend: "both" }).returning();
+    await db.insert(stationInsurers).values({ stationId: site.id, insurerId: fakeIns.id });
     const roleRows = await db.select().from(roles).where(eq(roles.orgId, org.id));
     const people: Record<string, string> = {};
     for (const p of PEOPLE) {
@@ -51,7 +54,7 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
     // one PDR technician (with his account) and one headliner (without account), with default shares
     await db.insert(technicians).values([
       { orgId: org.id, name: "Test Techniker", userId: people.tech, kind: "pdr", defaultPctPdr: "50", defaultPctDemontage: "100" },
-      { orgId: org.id, name: "Test Headliner", userId: null, kind: "headliner", defaultPctPdr: "50", defaultPctDemontage: "80" },
+      { orgId: org.id, name: "Test Headliner", userId: null, kind: "headliner", email: "headliner@staging.test", defaultPctPdr: "50", defaultPctDemontage: "80" },
     ]);
     const method = await systemMethodFor(db, org.id, country);
     for (let i = 0; i < 16; i++) {

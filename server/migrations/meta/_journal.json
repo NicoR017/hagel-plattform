@@ -85,6 +85,13 @@
       "when": 1792592427329,
       "tag": "0011_v3_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792597714446,
+      "tag": "0012_technician_email",
+      "breakpoints": true
     }
   ]
 }

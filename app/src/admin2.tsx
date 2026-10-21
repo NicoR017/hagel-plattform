@@ -9,7 +9,29 @@ interface Insurer { id: string; name: string; reportEmails: string[]; sendReport
 const emails = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
 
 // ---------------------------------------------------------------- insurers
-export function InsurersPage() {
+/** the calculation method of an insurer per country (— Standard — = the system method of the country) */
+function InsurerMethods({ insurerId, methods }: { insurerId: string; methods: { id: string; name: string; country: string; archived: boolean }[] }) {
+  const cur = useLoad<{ DE: string | null; ES: string | null }>(`/admin/insurers/${insurerId}/methods`);
+  const [err, setErr] = useState("");
+  const set = (country: "DE" | "ES", id: string) => act(() => api("PUT", `/admin/insurers/${insurerId}/methods`, { ...(cur.data ?? { DE: null, ES: null }), [country]: id || null }), setErr, cur.reload);
+  return (
+    <div className="row" style={{ marginTop: 6 }}>
+      {(["DE", "ES"] as const).map((c) => (
+        <div key={c} style={{ minWidth: 200 }}>
+          <label style={{ margin: 0 }}>{c === "DE" ? t("v6MethodDE") : t("v6MethodES")}</label>
+          <select value={cur.data?.[c] ?? ""} onChange={(e) => void set(c, e.target.value)}>
+            <option value="">{t("v6MethodStandard")}</option>
+            {methods.filter((m) => m.country === c && !m.archived).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
+      ))}
+      <Err msg={cur.err || err} />
+    </div>
+  );
+}
+
+export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
+  const methods = useLoad<{ id: string; name: string; country: string; archived: boolean; isSystem: boolean }[]>(canMethods ? "/admin/methods" : "");
   const list = useLoad<Insurer[]>("/admin/insurers");
   const sites = useLoad<Station[]>("/admin/stations");
   const [f, setF] = useState<{ id?: string; name: string; emails: string; send: boolean; which: string; azure: string } | null>(null);
@@ -35,6 +57,7 @@ export function InsurersPage() {
               <button className="btn danger" onClick={() => { if (window.confirm(`${t("delete")}: ${i.name}?`)) void act(() => api("DELETE", `/admin/insurers/${i.id}`), setErr, list.reload); }}>{t("delete")}</button>
             </div>
             <div style={{ color: "var(--sub)", fontSize: 13, marginTop: 4 }}>{i.reportEmails.join(", ") || "—"}</div>
+            {canMethods && methods.data && <InsurerMethods insurerId={i.id} methods={methods.data} />}
             <div style={{ marginTop: 6 }}>
               <span style={{ fontSize: 13, color: "var(--sub)" }}>{t("worksWith")}: </span>
               {carros.map((s) => (
@@ -191,25 +214,26 @@ export function CompaniesPage() {
 }
 
 // ---------------------------------------------------------------- technicians
-interface Tech { id: string; name: string; userId: string | null; defaultPctPdr: string; defaultPctDemontage: string; active: boolean }
+interface Tech { id: string; name: string; userId: string | null; defaultPctPdr: string; defaultPctDemontage: string; kind?: string; email?: string | null; active: boolean }
 interface UserLite { id: string; name: string; email: string }
 export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
   const list = useLoad<Tech[]>("/admin/technicians");
-  const users = useLoad<UserLite[]>(canUsers ? "/admin/users" : "/me/none");
-  const [f, setF] = useState<{ id?: string; name: string; userId: string; pdr: number; dem: number; active: boolean } | null>(null);
+  const users = useLoad<UserLite[]>(canUsers ? "/admin/users" : "");
+  const [f, setF] = useState<{ id?: string; name: string; userId: string; pdr: number; dem: number; kind: string; email: string; active: boolean } | null>(null);
   const [err, setErr] = useState("");
   return (
     <>
-      <Card title={t("technicians")} actions={<button className="btn" onClick={() => setF({ name: "", userId: "", pdr: 50, dem: 100, active: true })}>{t("newTechnician")}</button>}>
+      <Card title={t("technicians")} actions={<button className="btn" onClick={() => setF({ name: "", userId: "", pdr: 50, dem: 100, kind: "pdr", email: "", active: true })}>{t("newTechnician")}</button>}>
         <p className="muted" style={{ marginTop: 0 }}>{t("technicianAdminHint")}</p>
         <Err msg={list.err || err} />
         <table>
-          <thead><tr><th>{t("name")}</th><th>{t("pctPdr")}</th><th>{t("pctDem")}</th><th>{t("account")}</th><th /></tr></thead>
+          <thead><tr><th>{t("name")}</th><th>{t("v6TechKind")}</th><th>{t("pctPdr")}</th><th>{t("pctDem")}</th><th>{t("account")}</th><th>{t("email")}</th><th /></tr></thead>
           <tbody>{(list.data ?? []).map((x) => (
             <tr key={x.id}>
-              <td>{x.name}{!x.active && <span className="pill off">{t("inactive")}</span>}</td><td>{Number(x.defaultPctPdr)} %</td><td>{Number(x.defaultPctDemontage)} %</td>
-              <td>{x.userId ? users.data?.find((u) => u.id === x.userId)?.email ?? "✓" : t("external")}</td>
-              <td><button className="btn sec" onClick={() => setF({ id: x.id, name: x.name, userId: x.userId ?? "", pdr: Number(x.defaultPctPdr), dem: Number(x.defaultPctDemontage), active: x.active })}>{t("edit")}</button></td>
+              <td>{x.name}{!x.active && <span className="pill off">{t("inactive")}</span>}</td><td>{x.kind === "headliner" ? t("v6TechHeadliner") : t("v6TechPdr")}</td><td>{Number(x.defaultPctPdr)} %</td><td>{Number(x.defaultPctDemontage)} %</td>
+              <td>{x.userId ? users.data?.find((u) => u.id === x.userId)?.email ?? t("v6TechAccount") : t("v6TechNoAccount")}</td>
+              <td>{x.email ?? "—"}</td>
+              <td><button className="btn sec" onClick={() => setF({ id: x.id, name: x.name, userId: x.userId ?? "", pdr: Number(x.defaultPctPdr), dem: Number(x.defaultPctDemontage), kind: x.kind ?? "pdr", email: x.email ?? "", active: x.active })}>{t("edit")}</button></td>
             </tr>
           ))}</tbody>
         </table>
@@ -217,6 +241,9 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
       {f && (
         <Card title={f.id ? f.name : t("newTechnician")}>
           <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <label>{t("v6TechKind")}</label>
+          <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="pdr">{t("v6TechPdr")}</option><option value="headliner">{t("v6TechHeadliner")}</option></select>
+          <label>{t("v6TechEmail")}</label><input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           {canUsers && <><label>{t("account")}</label>
             <select value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}><option value="">{t("external")}</option>{(users.data ?? []).map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}</select></>}
           <div className="row">
@@ -227,7 +254,7 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
           <Err msg={err} />
           <p className="row">
             <button className="btn" onClick={() => {
-              const body = { name: f.name, user_id: f.userId || null, default_pct_pdr: f.pdr, default_pct_demontage: f.dem, active: f.active };
+              const body = { name: f.name, user_id: f.userId || null, default_pct_pdr: f.pdr, default_pct_demontage: f.dem, kind: f.kind, email: f.email.trim() || null, active: f.active };
               void act(() => (f.id ? api("PUT", `/admin/technicians/${f.id}`, body) : api("POST", "/admin/technicians", body)), setErr, () => { setF(null); void list.reload(); });
             }}>{t("save")}</button>
             <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>

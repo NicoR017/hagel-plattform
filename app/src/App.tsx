@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
+import { Admin3 } from "./v3/Admin3";
+import { Shell3 } from "./v3/Shell3";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
 import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
 import { FieldProvider, useField } from "./field/store";
@@ -196,8 +198,12 @@ function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) =
   const cfg = useAppConfig();
   const ui = useUiMode(cfg?.uiV3Default);
   if (route.page === "vehicle" && ui === "legacy") return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={{ page: "list" }} />;
-  if (route.page === "dashboard") return <Dashboard />;
-  if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
+  if (route.page === "dashboard") {
+    return ui === "v3"
+      ? <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("dashboard") }]}><Dashboard embedded /></Shell3>
+      : <Dashboard />;
+  }
+  if (route.page === "admin") return ui === "v3" ? <Admin3 me={me} org={org} onOrg={onOrg} route={route} /> : <AdminShell me={me} org={org} onOrg={onOrg} />;
   // the old flat list stays reachable: in the old interface, and for the filtered list opened from the dashboard
   if (ui === "v3" && !(route.page === "list" && route.dash)) return <V3Routes me={me} org={org} onOrg={onOrg} route={route} />;
   const orgSwitch = me.organizations.length > 1 ? (

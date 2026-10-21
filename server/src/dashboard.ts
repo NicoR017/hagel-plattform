@@ -1,9 +1,9 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { computeShares, computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { STATUSES } from "@hagel/shared";
+import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
 import type { Db } from "./db";
 import { effectivePermissions, type Principal } from "./permissions";
-import { insurers, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
+import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
 import { loadMethodMap, methodOf } from "./methods";
 import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "./sync";
 
@@ -65,6 +65,9 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   const allStations = await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(asc(stations.name));
   const stName = new Map(allStations.map((s) => [s.id, s.name]));
   const today = berlinDayStart(now);
+  const todayYmd = berlinDate(now);
+  const bookedToday = await db.select({ stationId: repairBookings.stationId }).from(repairBookings)
+    .where(and(eq(repairBookings.date, todayYmd), inArray(repairBookings.status, ["booked", "started"]), inArray(repairBookings.stationId, allStations.map((s) => s.id))));
 
   // ---- 1. sites
   const present = await occupancyOf(db, orgId, allStations.map((s) => s.id));
@@ -88,8 +91,16 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
         if (r.createdAt >= today && (firstMove ? firstMove.fromStationId : r.stationId) === s.id) arrIds.add(r.id);
         if (r.stationId === s.id && (histBy.get(r.id) ?? []).some((h) => h.statut === "rendu" && h.at >= today)) depIds.add(r.id);
       }
+      // the repair board of the site: who stands in which column (cars in repair or finished, or in the repair flow; returned cars leave)
+      const byStage: Record<string, { n: number; ids: string[] }> = Object.fromEntries(REPAIR_STAGES.map((x) => [x, { n: 0, ids: [] as string[] }]));
+      for (const r of here) {
+        if (r.statut === "rendu" || !(r.repairStage != null || r.statut === "reparatur" || r.statut === "fertig")) continue;
+        const stage = (REPAIR_STAGES as readonly string[]).includes(r.repairStage ?? "") ? r.repairStage! : r.statut === "fertig" ? "finish" : "bereit";
+        byStage[stage].n++; byStage[stage].ids.push(r.id);
+      }
+      const booked = bookedToday.filter((b) => b.stationId === s.id).length;
       return {
-        id: s.id, name: s.name, type: s.type, capacity: s.capacite,
+        id: s.id, name: s.name, type: s.type, capacity: s.capacite, byStage, repairsToday: { booked, capacity: s.repairsPerDay },
         // the occupancy of the whole site (also vehicles this user may not see) is what matters for the capacity; the lists only hold visible ones
         present: present[s.id] ?? 0, visiblePresent: presentHere.length, presentIds: presentHere.map((r) => r.id),
         byStatus, arrivalsToday: { n: arrIds.size, ids: [...arrIds] }, departuresToday: { n: depIds.size, ids: [...depIds] },

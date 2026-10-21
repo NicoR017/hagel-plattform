@@ -241,7 +241,7 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
   r.post("/technicians", require("parametres.gerer"), zValidator("json", technicianInput, validationHook), async (c) => {
     const b = c.req.valid("json");
     await checkUser(org(c), b.user_id);
-    const [t] = await db.insert(technicians).values({ orgId: org(c), name: b.name, userId: b.user_id, defaultPctPdr: String(b.default_pct_pdr), defaultPctDemontage: String(b.default_pct_demontage), kind: b.kind, active: b.active }).returning();
+    const [t] = await db.insert(technicians).values({ orgId: org(c), name: b.name, userId: b.user_id, defaultPctPdr: String(b.default_pct_pdr), defaultPctDemontage: String(b.default_pct_demontage), kind: b.kind, email: b.email, active: b.active }).returning();
     await audit(db, { orgId: org(c), userId: who(c), action: "create", entity: "technician", entityId: t.id, after: t });
     touch(org(c));
     return c.json(t, 201);
@@ -258,6 +258,7 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
     if (b.default_pct_pdr !== undefined) set.defaultPctPdr = String(b.default_pct_pdr);
     if (b.default_pct_demontage !== undefined) set.defaultPctDemontage = String(b.default_pct_demontage);
     if (b.kind !== undefined) set.kind = b.kind;
+    if (b.email !== undefined) set.email = b.email;
     if (b.active !== undefined) set.active = b.active;
     const [t] = await db.update(technicians).set(set).where(eq(technicians.id, id)).returning();
     await audit(db, { orgId: org(c), userId: who(c), action: "update", entity: "technician", entityId: id, before, after: t });

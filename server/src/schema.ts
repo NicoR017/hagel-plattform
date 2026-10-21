@@ -305,6 +305,8 @@ export const technicians = pgTable("technicians", {
   defaultPctDemontage: numeric("default_pct_demontage", { precision: 5, scale: 2 }).notNull().default("100"),
   /** pdr | headliner */
   kind: text("kind").notNull().default("pdr"),
+  /** where the weekly report goes (a technician without an account has no other address) */
+  email: text("email"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
