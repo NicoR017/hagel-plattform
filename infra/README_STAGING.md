@@ -50,6 +50,18 @@ node infra/scripts/local_staging.mjs  # http://localhost:3100, base en mémoire,
 
 Super-admin : `nicolas.rasteiro@pdr-team.de` (même mot de passe). Autres comptes : `de.chef@`, `de.assessor@`, `de.tech@` (et `es.`) `staging.test`, mot de passe `staging-local-test-1` (ou `STAGING_TEST_PASSWORD`). Tout disparaît à l'arrêt.
 
+### Création sur Railway (prévue, pas encore exécutée : panne Railway du 21/10)
+
+Ordre prévu, toujours avec l'environnement `staging` lié **avant** toute commande qui agit sur « l'environnement lié » (`railway add`, `railway up`) :
+
+1. `railway environment new staging` (environnement **vide**, pas de duplication : aucun secret de prod n'est copié).
+2. `railway environment link staging`, puis vérifier avec `railway status` que l'environnement affiché est bien `staging`.
+3. `railway add --database postgres` (base staging à part), puis les services `api` et `worker`.
+4. Variables : voir §2 (jeu minimal) ; `MAIL_MODE=off` au départ.
+5. `railway up --service api` depuis la branche locale `feature/ui-v3` (aucun push sur GitHub nécessaire) ; le worker démarre avec `npm run worker`.
+6. `npm run seed:staging` (ou `STAGING_SEED=1` + `STAGING_TEST_PASSWORD` au premier démarrage) pour les données fictives.
+7. Rien n'est lancé contre l'environnement `production` ; `railway link` est remis sur `production` seulement si Nicolas le demande.
+
 ## 4. Contrôle d'intégrité
 
 ```bash
