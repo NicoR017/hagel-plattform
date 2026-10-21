@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from "react";
 import { DEFAULT_LANG, LANGS, isLang, type Lang } from "@hagel/shared";
 import { deField, enField } from "./i18n_field";
+import { deV3, enV3 } from "./i18n_v3";
 
 const deBase = {
   appName: "PDR Hagel",
@@ -36,15 +37,15 @@ const deBase = {
   forgotPassword: "Passwort vergessen / noch keins? Link per E-Mail senden", firstLoginHint: "Beim ersten Mal: Link per E-Mail anfordern, anmelden und dann unter „Passwort“ ein Passwort setzen.",
   verifying: "Anmeldung läuft …", linkInvalid: "Link ungültig oder abgelaufen.",
   inviteTitle: "Konto erstellen", inviteIntro: "Bitte geben Sie Ihren Namen ein.", createAccount: "Konto erstellen",
-  users: "Benutzer", roles: "Rollen", sites: "Werkstätten", audit: "Protokoll", orgs: "Organisationen",
+  users: "Benutzer", roles: "Rollen", sites: "Stationen", audit: "Protokoll", orgs: "Organisationen",
   invite: "Einladen", invitations: "Offene Einladungen", resend: "Erneut senden", revoke: "Zurückziehen",
   deactivate: "Deaktivieren", reactivate: "Reaktivieren", signOutEverywhere: "Alle Sitzungen abmelden",
-  role: "Rolle", site: "Werkstatt", allSites: "Alle Werkstätten", scope: "Bereich", expires: "Läuft ab", status: "Status",
+  role: "Rolle", site: "Station", allSites: "Alle Stationen", scope: "Bereich", expires: "Läuft ab", status: "Status",
   permissions: "Berechtigungen", description: "Beschreibung", newRole: "Neue Rolle", system: "Standard",
   type: "Typ", capacity: "Plätze", country: "Land", address: "Adresse", tenant: "Tenant", commission: "Provision %",
-  reportEmails: "Berichts-E-Mails (Komma)", newSite: "Neue Werkstatt", active: "Aktiv", inactive: "Inaktiv",
+  reportEmails: "Berichts-E-Mails (Komma)", newSite: "Neue Station", active: "Aktiv", inactive: "Inaktiv",
   carrosserie: "Carrosserie", hall: "Halle", parc: "Parkplatz/Logistik",
-  scopeAssigne: "Nur zugewiesene Fahrzeuge", scopeStation: "Alle Fahrzeuge der Werkstatt", scopeCampagne: "Fahrzeuge einer Kampagne",
+  scopeAssigne: "Nur zugewiesene Fahrzeuge", scopeStation: "Alle Fahrzeuge der Station", scopeCampagne: "Fahrzeuge einer Kampagne",
   scopeClient: "Fahrzeuge dieser Carrosserie (Kunde)", scopeAssurance: "Fahrzeuge einer Versicherung",
   clientStation: "Carrosserie (Kunde)", loading: "Lädt …", forbidden: "Keine Berechtigung",
   org: "Organisation", superAdmin: "Super-Admin", current: "aktiv", invalidInput: "Ungültige Eingabe", networkError: "Server nicht erreichbar",
@@ -56,7 +57,7 @@ const deBase = {
   "a.accept_invitation": "Einladung angenommen", "a.revoke": "Zurückgezogen", "a.deactivate": "Deaktiviert", "a.reactivate": "Reaktiviert",
   "a.revoke_sessions": "Sitzungen beendet", "a.assign_role": "Rolle zugewiesen", "a.unassign_role": "Rolle entzogen",
   "e.organization": "Organisation", "e.org_tenants": "Tenants", "e.invitation": "Einladung", "e.user": "Benutzer", "e.role_assignment": "Rollenzuweisung",
-  "e.role": "Rolle", "e.station": "Werkstatt",
+  "e.role": "Rolle", "e.station": "Station",
   // system roles
   "r.org_admin": "Admin der Organisation", "r.chef_site": "Stationsleiter", "r.aufnehmer": "Aufnehmer / Gutachter", "r.technicien": "Techniker",
   "r.freelance": "Freelancer", "r.carrosserie": "Carrosserie", "r.assureur": "Versicherer",
@@ -69,12 +70,12 @@ const deBase = {
   "p.prix.voir": "Preise ansehen", "p.repartition_interne.voir": "Interne Aufteilung ansehen", "p.ma_part.voir": "Eigenen Anteil ansehen", "p.ma_commission.voir": "Eigene Provision ansehen",
   "p.commission.modifier": "Provision ändern", "p.kva.envoyer": "KVA senden", "p.rapport_reparation.envoyer": "Reparaturbericht senden",
   "p.photos.ajouter": "Fotos hinzufügen", "p.photos.supprimer": "Fotos löschen", "p.colibri.importer": "Colibri importieren", "p.export.excel": "Excel-Export",
-  "p.assurances.gerer": "Versicherungen verwalten", "p.campagnes.gerer": "Kampagnen verwalten", "p.stations.gerer": "Werkstätten verwalten", "p.parametres.gerer": "Einstellungen verwalten",
+  "p.assurances.gerer": "Versicherungen verwalten", "p.campagnes.gerer": "Kampagnen verwalten", "p.stations.gerer": "Stationen verwalten", "p.parametres.gerer": "Einstellungen verwalten",
   "p.utilisateurs.gerer": "Benutzer verwalten", "p.roles.gerer": "Rollen verwalten", "p.audit.voir": "Protokoll ansehen", "p.dashboard.voir": "Dashboard ansehen",
   "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
-const de = { ...deBase, ...deField };
+const de = { ...deBase, ...deField, ...deV3 };
 export type Key = keyof typeof de;
 
 const enBase: Record<keyof typeof deBase, string> = {
@@ -90,31 +91,31 @@ const enBase: Record<keyof typeof deBase, string> = {
   sasExpires: "Azure access token (SAS) valid until", sasExpired: "The Azure access token has expired: create a new one and set it in Railway",
   afterMove: "after the move", occupancy: "Occupancy", full: "full", over: "over capacity",
   "w.capacity_full": "Destination is full – moved anyway.", "w.tenant_differs": "Destination belongs to another tenant – moved anyway.",
-  moveFullWarn: "This site is full. The vehicle can still be moved.", moveTenantWarn: "Different tenant than the current site.",
-  dashboard: "Dashboard", dashSites: "Sites", dashDurations: "Durations and delays", dashTech: "Technicians", dashRevenue: "Revenue",
+  moveFullWarn: "This station is full. The vehicle can still be moved.", moveTenantWarn: "Different tenant than the current station.",
+  dashboard: "Dashboard", dashSites: "Stations", dashDurations: "Durations and delays", dashTech: "Technicians", dashRevenue: "Revenue",
   arrivalsToday: "Arrivals today", departuresToday: "Departures today", avgToReturned: "Avg. arrival → returned", avgRepair: "Avg. repair time",
   daysShort: "days", delayedVehicles: "Delayed vehicles", holdByReason: "On hold by reason", noneDash: "None.", sinceDays: "for {n} d (limit {max})",
-  assignedN: "Assigned", inProgressN: "In progress", finishedN: "Finished in period", noRoleOnSite: "without a role on the site",
-  revTotal: "Net total", revBySite: "By site", revByClient: "By carrosserie", revByInsurer: "By insurer", revByMonth: "By month",
+  assignedN: "Assigned", inProgressN: "In progress", finishedN: "Finished in period", noRoleOnSite: "without a role on the station",
+  revTotal: "Net total", revBySite: "By station", revByClient: "By carrosserie", revByInsurer: "By insurer", revByMonth: "By month",
   splitTech: "Technician shares", splitComm: "Carrosserie commissions", splitRest: "Remaining PDR",
   periodFrom: "From", periodTo: "To", allCampaigns: "All campaigns", allClients: "All carrosseries", allInsurers: "All insurers",
   delayThresholds: "Delay after (days per status)", dashOnline: "The dashboard needs an internet connection.", filterActive: "Filter from the dashboard", clearFilter: "Clear filter",
   vehiclesCount: "Vehicles", presentN: "present",
-  azureLinksOnly: "Only these links (customer-insurance)", azureFilter: "Search link (customer-insurance) …", azureAll: "all", azureNoMore: "No more links.", azureLinksHint: "Pick as many links (customer-insurance) as you like; scans carrying one of these names belong to this site.",
+  azureLinksOnly: "Only these links (customer-insurance)", azureFilter: "Search link (customer-insurance) …", azureAll: "all", azureNoMore: "No more links.", azureLinksHint: "Pick as many links (customer-insurance) as you like; scans carrying one of these names belong to this station.",
   passwordShort: "The password must be at least 10 characters long.",
   passwordMismatch: "The passwords do not match.", passwordChange: "Change password", passwordSet: "Set password", passwordSaved: "Password saved. Other devices were signed out.",
   forgotPassword: "Forgot your password / no password yet? E-mail me a link", firstLoginHint: "First time: request a link by e-mail, sign in, then set a password under “Password”.",
   verifying: "Signing you in …", linkInvalid: "Link invalid or expired.",
   inviteTitle: "Create account", inviteIntro: "Please enter your name.", createAccount: "Create account",
-  users: "Users", roles: "Roles", sites: "Sites", audit: "Audit log", orgs: "Organisations",
+  users: "Users", roles: "Roles", sites: "Stations", audit: "Audit log", orgs: "Organisations",
   invite: "Invite", invitations: "Pending invitations", resend: "Resend", revoke: "Revoke",
   deactivate: "Deactivate", reactivate: "Reactivate", signOutEverywhere: "Sign out everywhere",
-  role: "Role", site: "Site", allSites: "All sites", scope: "Scope", expires: "Expires", status: "Status",
+  role: "Role", site: "Station", allSites: "All stations", scope: "Scope", expires: "Expires", status: "Status",
   permissions: "Permissions", description: "Description", newRole: "New role", system: "Default",
   type: "Type", capacity: "Places", country: "Country", address: "Address", tenant: "Tenant", commission: "Commission %",
-  reportEmails: "Report e-mails (comma)", newSite: "New site", active: "Active", inactive: "Inactive",
+  reportEmails: "Report e-mails (comma)", newSite: "New station", active: "Active", inactive: "Inactive",
   carrosserie: "Body shop (carrosserie)", hall: "Hall", parc: "Yard / logistics",
-  scopeAssigne: "Assigned vehicles only", scopeStation: "All vehicles of the site", scopeCampagne: "Vehicles of a campaign",
+  scopeAssigne: "Assigned vehicles only", scopeStation: "All vehicles of the station", scopeCampagne: "Vehicles of a campaign",
   scopeClient: "Vehicles of this body shop (customer)", scopeAssurance: "Vehicles of an insurer",
   clientStation: "Body shop (customer)", loading: "Loading …", forbidden: "Not permitted",
   org: "Organisation", superAdmin: "Super-admin", current: "current", invalidInput: "Invalid input", networkError: "Server unreachable",
@@ -125,7 +126,7 @@ const enBase: Record<keyof typeof deBase, string> = {
   "a.accept_invitation": "Invitation accepted", "a.revoke": "Revoked", "a.deactivate": "Deactivated", "a.reactivate": "Reactivated",
   "a.revoke_sessions": "Sessions ended", "a.assign_role": "Role assigned", "a.unassign_role": "Role removed",
   "e.organization": "Organisation", "e.org_tenants": "Tenants", "e.invitation": "Invitation", "e.user": "User", "e.role_assignment": "Role assignment",
-  "e.role": "Role", "e.station": "Site",
+  "e.role": "Role", "e.station": "Station",
   "r.org_admin": "Organisation admin", "r.chef_site": "Station manager", "r.aufnehmer": "Assessor / expert", "r.technicien": "Technician",
   "r.freelance": "Freelancer", "r.carrosserie": "Body shop", "r.assureur": "Insurer",
   "rd.org_admin": "Everything within the organisation", "rd.chef_site": "Manages the vehicles and team of one station", "rd.aufnehmer": "Records and prices vehicles",
@@ -136,12 +137,12 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.prix.voir": "View prices", "p.repartition_interne.voir": "View internal split", "p.ma_part.voir": "View own share", "p.ma_commission.voir": "View own commission",
   "p.commission.modifier": "Change commission", "p.kva.envoyer": "Send estimate (KVA)", "p.rapport_reparation.envoyer": "Send repair report",
   "p.photos.ajouter": "Add photos", "p.photos.supprimer": "Delete photos", "p.colibri.importer": "Import Colibri", "p.export.excel": "Excel export",
-  "p.assurances.gerer": "Manage insurers", "p.campagnes.gerer": "Manage campaigns", "p.stations.gerer": "Manage sites", "p.parametres.gerer": "Manage settings",
+  "p.assurances.gerer": "Manage insurers", "p.campagnes.gerer": "Manage campaigns", "p.stations.gerer": "Manage stations", "p.parametres.gerer": "Manage settings",
   "p.utilisateurs.gerer": "Manage users", "p.roles.gerer": "Manage roles", "p.audit.voir": "View audit log", "p.dashboard.voir": "View dashboard",
   "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
-const en: Record<Key, string> = { ...enBase, ...enField };
+const en: Record<Key, string> = { ...enBase, ...enField, ...enV3 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en };
 

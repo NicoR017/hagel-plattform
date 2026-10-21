@@ -579,7 +579,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const list = await visibleStations(db, u, orgId, vs);
   const showCommission = canOrg(u, "commission.modifier", orgId) || canOrg(u, "stations.gerer", orgId);
   const st: ClientStation[] = list.map((s) => ({
-    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active, azureTenant: s.azureTenant, repairsPerDay: s.repairsPerDay,
+    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active, azureTenant: s.azureTenant, repairsPerDay: s.repairsPerDay, address: s.address,
     ...(showCommission ? { commissionMode: s.commissionMode, commissionPct: Number(s.commissionPct) } : {}),
   }));
   const [me] = await db.select().from(users).where(eq(users.id, u.id));

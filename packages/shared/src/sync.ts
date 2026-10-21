@@ -243,6 +243,7 @@ export interface ClientStation {
   commissionMode?: string; commissionPct?: number; active: boolean;
   /** repair places per day (repair calendar) */
   repairsPerDay?: number;
+  address?: string;
 }
 export interface OrgSettings {
   rateDE: number; rateES: number; defaultTeiler: number;

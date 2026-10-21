@@ -3,13 +3,15 @@ import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
 import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
-import { FieldProvider, useField } from "./field/store";
+import { FieldProvider, useField, useVehicle } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
 import { Dashboard } from "./field/Dashboard";
 import { Toasts } from "./field/toast";
-import { useRoute } from "./field/route";
-import { EnvBanner } from "./env";
+import { parentRoute, useRoute } from "./field/route";
+import { useUiMode } from "./field/uiMode";
+import { V3Routes } from "./v3/Routes3";
+import { EnvBanner, useAppConfig } from "./env";
 import "./field/field.css";
 
 interface Me {
@@ -191,9 +193,18 @@ function Shell() {
 function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
   const route = useRoute();
   const f = useField();
-  if (route.page === "vehicle") return <VehicleScreen id={route.id} tab={route.tab} />;
+  const cfg = useAppConfig();
+  const ui = useUiMode(cfg?.uiV3Default);
+  const vehicle = useVehicle(route.page === "vehicle" ? route.id : "");
+  if (route.page === "vehicle") {
+    // "‹ Zurück": one level up (new interface: the list the vehicle was opened from; old interface: the flat list)
+    const back = ui === "legacy" ? { page: "list" as const } : parentRoute(route, vehicle?.stationId as string | null | undefined) ?? { page: "list" as const };
+    return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={back} />;
+  }
   if (route.page === "dashboard") return <Dashboard />;
   if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
+  // the old flat list stays reachable: in the old interface, and for the filtered list opened from the dashboard
+  if (ui === "v3" && !(route.page === "list" && route.dash)) return <V3Routes me={me} org={org} onOrg={onOrg} route={route} />;
   const orgSwitch = me.organizations.length > 1 ? (
     <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")} style={{ minHeight: 44, borderRadius: 10, border: "none", padding: "0 8px", fontWeight: 700 }}>
       {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -225,7 +236,7 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
   return (
     <>
       <header>
-        <a href="#/" style={{ color: "#fff", textDecoration: "none", fontWeight: 700 }}>‹ {t("vehicles")}</a>
+        <a href="#/" style={{ color: "#fff", textDecoration: "none", fontWeight: 700, minHeight: 44, display: "inline-flex", alignItems: "center" }}>‹ {t("back")}</a>
         <b>{t("appName")}</b>
         <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")}>
           {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}

@@ -295,7 +295,7 @@ export function Dashboard() {
                 </div>
               </Section>
             )}
-            <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("vehicles")}</button>
+            <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("back")}</button>
             {choose && (
               <Dialog title={t("exportTech")} onClose={() => setChoose(false)}>
                 <div className="muted" style={{ marginBottom: 8 }}>{t("exportChoose")} · {fmtDay(range.from)} – {fmtDay(range.to)}</div>

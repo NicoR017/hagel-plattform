@@ -9,9 +9,14 @@ import { Dialog, Field, NumInput, Seg } from "./ui";
 import { useField, useIssues, useVehicle } from "./store";
 import { toast } from "./toast";
 import { Occ } from "./occupancy";
+import { snapshotVehicles, undoMove, undoStatus } from "./undo";
+import { resolveUi, setUiMode, useUiMode } from "./uiMode";
+import { useAppConfig } from "../env";
 import type { Key } from "../i18n";
 import { STATUSES } from "@hagel/shared";
 
+/** how long the "Rückgängig" button stays on screen */
+export const UNDO_MS = 6000;
 export const statusLabel = (s: string) => t(("st." + s) as Key);
 export const HOLD_REASONS = ["Teile", "Freigabe", "Demontage", "Sonstiges"] as const;
 export const holdReasonLabel = (r: string) => tOr("hold." + r, r);
@@ -44,8 +49,10 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
         </div>
       )}
       <button className="pbtn" disabled={!valid} onClick={async () => {
+        // remember what each vehicle was, so the toast can undo the change (a second, logged operation)
+        const prev = await snapshotVehicles(f.db, ids);
         for (const id of ids) await setStatus(f.mut, id, statut, motif || undefined);
-        toast(`${ids.length} → ${statusLabel(statut)}`);
+        toast(`${ids.length} → ${statusLabel(statut)}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoStatus(f.mut, prev, statut); toast(t("v3Undone")); } });
         onDone?.(); onClose();
       }}>{t("apply")}</button>
     </Dialog>
@@ -82,8 +89,9 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
       <Field label={t("moveNote")}><input className="inp" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       <div className="muted" style={{ fontSize: 12 }}>{t("moveHint")}</div>
       <button className="pbtn" disabled={!dest} onClick={async () => {
+        const prev = await snapshotVehicles(f.db, ids);
         for (const id of ids) await moveVehicle(f.mut, id, to, note || undefined);
-        toast(`${ids.length} → ${dest!.name}`);
+        toast(`${ids.length} → ${dest!.name}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoMove(f.mut, prev, to, t("v3Undone")); toast(t("v3Undone")); } });
         onDone?.(); onClose();
       }}>{t("apply")}</button>
     </Dialog>
@@ -147,8 +155,13 @@ export function SettingsDialog({ onClose, onBackup }: { onClose: () => void; onB
   const canSettings = f.can("parametres.gerer");
   const s = f.refs?.settings;
   const [rateDE, setRateDE] = useState(s?.rateDE ?? 83), [rateES, setRateES] = useState(s?.rateES ?? 69), [teiler, setTeiler] = useState<10 | 12>((s?.defaultTeiler as 10 | 12) ?? 10);
+  const cfg = useAppConfig();
+  const ui = useUiMode(cfg?.uiV3Default);
   return (
     <Dialog title={t("settings")} onClose={onClose}>
+      <Field label={t("v3View")}>
+        <Seg value={ui} options={[{ value: "v3" as const, label: t("v3ViewNew") }, { value: "legacy" as const, label: t("v3ViewOld") }]} onChange={(m) => setUiMode(m)} />
+      </Field>
       <Field label={t("language")}>
         <Seg value={getLang()} options={LANG_LIST.map((l) => ({ value: l, label: l.toUpperCase() }))} onChange={(l) => { setLang(l); void api("PUT", "/me/language", { language: l }).catch(() => undefined); }} />
       </Field>

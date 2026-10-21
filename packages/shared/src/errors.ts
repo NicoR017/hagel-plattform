@@ -6,7 +6,7 @@ export const isLang = (x: unknown): x is Lang => (LANGS as readonly unknown[]).i
 /** API error codes with their messages. `{x}` placeholders are filled from `params`. */
 export const ERROR_MESSAGES = {
   role_not_found: { de: "Rolle nicht gefunden", en: "Role not found" },
-  station_not_found: { de: "Werkstatt nicht gefunden", en: "Site not found" },
+  station_not_found: { de: "Station nicht gefunden", en: "Station not found" },
   invitation_not_found: { de: "Einladung nicht gefunden", en: "Invitation not found" },
   assignment_not_found: { de: "Zuweisung nicht gefunden", en: "Assignment not found" },
   user_not_found: { de: "Benutzer nicht gefunden", en: "User not found" },
@@ -29,7 +29,7 @@ export const ERROR_MESSAGES = {
   link_invalid: { de: "Link ungültig oder abgelaufen", en: "Link invalid or expired" },
   invitation_invalid: { de: "Einladung ungültig oder abgelaufen", en: "Invitation invalid or expired" },
   org_header_missing: { de: "X-Org-Id fehlt", en: "X-Org-Id is missing" },
-  station_wrong_org: { de: "Werkstatt gehört nicht zu dieser Organisation", en: "This site does not belong to this organisation" },
+  station_wrong_org: { de: "Station gehört nicht zu dieser Organisation", en: "This station does not belong to this organisation" },
   insurer_required: { de: "Versicherung ist für diese Rolle erforderlich", en: "An insurer is required for this role" },
   insurer_wrong_org: { de: "Versicherung gehört nicht zu dieser Organisation", en: "This insurer does not belong to this organisation" },
   tenant_not_allowed: { de: "Tenant ist für diese Organisation nicht freigegeben", en: "This tenant is not enabled for this organisation" },
@@ -42,7 +42,7 @@ export const ERROR_MESSAGES = {
   field_not_allowed: { de: "Feld nicht erlaubt: {fields}", en: "Field not allowed: {fields}" },
   vehicle_exists: { de: "Fahrzeug existiert bereits", en: "Vehicle already exists" },
   motif_required: { de: "Für den Status „Wartet“ ist ein Grund erforderlich", en: "A reason is required for status “On hold”" },
-  station_unknown: { de: "Unbekannte Werkstatt", en: "Unknown site" },
+  station_unknown: { de: "Unbekannte Station", en: "Unknown station" },
   file_too_large: { de: "Datei zu groß", en: "File too large" },
   file_type: { de: "Dateityp nicht erlaubt", en: "File type not allowed" },
   ocr_unavailable: { de: "Texterkennung nicht verfügbar", en: "Text recognition unavailable" },

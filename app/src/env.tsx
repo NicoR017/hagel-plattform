@@ -26,10 +26,12 @@ export function EnvBanner() {
   const staging = cfg?.appEnv === "staging";
   useEffect(() => {
     if (staging && !document.title.startsWith("STAGING")) document.title = "STAGING · " + document.title;
+    // sticky headers sit below the banner
+    document.documentElement.style.setProperty("--envbar", staging ? "28px" : "0px");
   }, [staging]);
   if (!staging) return null;
   return (
-    <div role="status" style={{ position: "sticky", top: 0, zIndex: 1000, background: "#b42318", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 13, padding: "6px 12px" }}>
+    <div role="status" style={{ position: "sticky", top: 0, zIndex: 1000, background: "#b42318", color: "#fff", textAlign: "center", fontWeight: 700, fontSize: 13, height: 28, lineHeight: "16px", padding: "6px 12px", boxSizing: "border-box", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
       {t("stagingBanner")}
     </div>
   );

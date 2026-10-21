@@ -16,7 +16,7 @@ export const calcSettingsOf = (s: OrgSettings | undefined): Settings => {
 };
 
 export interface Prefs {
-  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null;
+  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null; lastMode?: "kalk" | "rep" | "all";
   techPct?: number; demTechPct?: number; defaultCommission?: number;
 }
 export const getPrefs = async (db: LocalDb): Promise<Prefs> => (await db.getMeta<Prefs>("prefs")) ?? {};
