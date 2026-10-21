@@ -1,3 +1,4 @@
+import { reportSyncState } from "./updateGate";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { Settings } from "@hagel/calc";
@@ -43,7 +44,7 @@ export function FieldProvider({ userId, orgId, children }: { userId: string; org
   const [status, setStatus] = useState<SyncStatus>(engine.status);
   const refs = useLiveQuery(() => db.getMeta<Refs>(refsKey(orgId)), [orgId, db]);
 
-  useEffect(() => engine.subscribe(setStatus), [engine]);
+  useEffect(() => engine.subscribe((st) => { reportSyncState(st); setStatus(st); }), [engine]);
   useEffect(() => {
     engine.onNotice = (n) => {
       if (n.kind === "gone") toast(t("noticeGone"), 6000);

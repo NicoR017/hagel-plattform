@@ -89,3 +89,14 @@ PR `feature/ui-v3` → `main` (liste des migrations 0010+, variables, checklist)
 * **Problème d'interface** : `UI_V3_DEFAULT=false` ou `?ui=legacy`. Pas de redéploiement.
 * **Problème serveur** : « Redeploy » du déploiement précédent. Les migrations sont additives, l'ancien code tourne sur le nouveau schéma. Les clients v3 gardent leurs nouvelles opérations en file (un serveur qui ne les connaît pas répond `409 unsupported_op`, un ancien serveur répond 400 sur les lots v3 : le client les garde aussi).
 * **Corruption de données** (dernier recours) : restaurer le dump `pre-v3` dans une **nouvelle** base et changer `DATABASE_URL` ; les écritures faites après la sauvegarde sont perdues → décision de Nicolas uniquement.
+
+## 6. Mise à jour de l'application sur les téléphones (service worker)
+
+Mode `prompt` : la nouvelle version se télécharge en arrière-plan et **attend**. Elle n'est installée (et la page rechargée) que lorsque la file d'envoi est vide (opérations et fichiers) et que l'utilisateur est sur un écran calme : pas de dialogue ouvert, pas dans une expertise, une étape de réparation, un véhicule ou la Verwaltung. Hors ligne avec des opérations en attente, l'ancienne page reste en place. Les données locales (IndexedDB) ne sont jamais touchées. Règle testée dans `app/test/updateGate.test.ts`.
+
+## 7. Charge
+
+`PERF=1 PERF_N=3000 npx vitest run server/test/perf.test.ts` : jeu synthétique (pull paginé, dashboard, Wochenbericht). Sur 2000 véhicules (base en mémoire) : pull complet ≈ 6 s, dashboard ≈ 0,25 s, Wochenbericht ≈ 0,2 s. À refaire sur la copie de la prod dès que le staging Railway existe.
+
+Checklist complète de mise en production : `docs/GO_LIVE_CHECKLIST.md`.
+

@@ -90,6 +90,10 @@ export function toClient(u: Principal, r: VehicleRow, assigneeIds: string[], nam
   if (!out) return null;
   // users with the full split recompute it locally: do not send the duplicate
   if (effectivePermissions(u, ref).has("repartition_interne.voir")) delete out.shares;
+  // everyone else must not even learn which share fields exist: the per-field timestamps of the split ("s.techPct" ...) stay on the server
+  else if (out.groupAt) out.groupAt = Object.fromEntries(Object.entries(out.groupAt as Record<string, number>).filter(([k]) => !k.startsWith(SHARES_PREFIX)));
+  // same for header fields the role does not receive (e.g. the hourly rate of a technician)
+  if (out.groupAt) out.groupAt = Object.fromEntries(Object.entries(out.groupAt as Record<string, number>).filter(([k]) => !k.startsWith("h.") || k.slice(2) in out));
   return out as ClientVehicle;
 }
 

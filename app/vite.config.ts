@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       injectRegister: false,
       includeAssets: ["pdr-team-logo.jpg", "apple-touch-icon.png"],
       manifest: {
@@ -27,8 +27,6 @@ export default defineConfig({
           { urlPattern: ({ request, url }) => request.mode === "navigate" && !url.pathname.startsWith("/api/"), handler: "NetworkFirst", options: { cacheName: "pages", networkTimeoutSeconds: 4 } },
         ],
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
       },
     }),
   ],
