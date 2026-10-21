@@ -1,4 +1,4 @@
-import type { CalcVehicle, Land } from "@hagel/calc";
+import type { CalcMethodDef, CalcVehicle, Land } from "@hagel/calc";
 
 export type VehicleStatus = "arrive" | "besichtigung" | "attente" | "reparatur" | "fertig" | "rendu";
 export type PhotoPhase = "besichtigung" | "reparatur" | "fertig";
@@ -38,6 +38,12 @@ export interface DocVehicle extends CalcVehicle {
   stationName?: string;
   insurerName?: string;
   claimNumber?: string;
+  /** labels of the parts to replace (no prices): printed in a box on the KVA, in the text KVA and in the photo report header */
+  partsToReplace?: string[];
+  /** name of the calculation method, printed small on the KVA (the caller leaves out brand names the letterhead must not show) */
+  methodName?: string;
+  /** the calculation method frozen on the vehicle (spreadsheet totals use it, like the screen does) */
+  method?: CalcMethodDef | null;
 }
 
 export interface DocPhoto {

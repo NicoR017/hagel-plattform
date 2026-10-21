@@ -1,28 +1,49 @@
 import { t } from "../i18n";
 import { type Route } from "../field/route";
-import { useField } from "../field/store";
+import { useField, useVehicle } from "../field/store";
+import { Expertise } from "./Expertise";
 import { ModeChoice } from "./ModeChoice";
+import { NewExpertise } from "./NewExpertise";
 import { Shell3, type Crumb } from "./Shell3";
 import { Stations } from "./Stations";
+import { VehicleDetail } from "./VehicleDetail";
 import { VehicleList } from "./VehicleList";
 import { modeTitle } from "./listActions";
 import "./v3.css";
 
 interface Me { user: { name: string; email: string }; organizations: { id: string; name: string }[] }
 
-/** The three new screens (stations, station modes, vehicle list). Everything else keeps its own screen and gets "‹ Zurück" from its own header. */
+/** Every screen of the new interface: stations, station modes, vehicle lists, assessment assistant, vehicle detail. */
 export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg: (id: string) => void; route: Route }) {
   const f = useField();
+  const vehicleId = route.page === "vehicle" || route.page === "expertise" ? route.id : "";
+  const vehicle = useVehicle(vehicleId);
   const stationOf = (id: string) => f.refs?.stations.find((s) => s.id === id);
   const home: Crumb = { label: t("v3Stations"), to: { page: "list" } };
+  const plate = String((vehicle as Record<string, unknown> | null | undefined)?.kennzeichen || "") || "…";
+  const trail = (stationId: string, mode: "kalk" | "rep" | "all", last?: Crumb): Crumb[] => [
+    home, { label: stationOf(stationId)?.name ?? "…", to: { page: "mode", stationId } },
+    { label: modeTitle(mode), to: { page: "list", stationId, mode } }, ...(last ? [last] : []),
+  ];
   let crumbs: Crumb[] = [home];
   let body: React.ReactNode = <Stations userName={me.user.name || me.user.email} />;
   if (route.page === "mode") {
     crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…" }];
     body = <ModeChoice stationId={route.stationId} />;
   } else if (route.page === "list" && route.stationId) {
-    crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…", to: { page: "mode", stationId: route.stationId } }, { label: modeTitle(route.mode) }];
+    crumbs = trail(route.stationId, route.mode).slice(0, 3).map((c, i, a) => (i === a.length - 1 ? { label: c.label } : c));
     body = <VehicleList key={route.stationId + route.mode} stationId={route.stationId} mode={route.mode} />;
+  } else if (route.page === "newexp") {
+    crumbs = trail(route.stationId, route.mode, { label: t("v4NewTitle") });
+    body = <NewExpertise stationId={route.stationId} mode={route.mode} />;
+  } else if (route.page === "expertise") {
+    const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "kalk" as const } : undefined);
+    crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: `${t("v4Expertise")} · ${plate}` }) : [home, { label: `${t("v4Expertise")} · ${plate}` }];
+    body = <Expertise id={route.id} step={route.step} ctx={route.ctx} />;
+  } else if (route.page === "vehicle") {
+    const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "all" as const } : undefined);
+    crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: plate }) : [home, { label: plate }];
+    body = <VehicleDetail id={route.id} tab={route.tab} ctx={route.ctx} />;
   }
-  return <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={crumbs}>{body}</Shell3>;
+  return <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={crumbs} vehicleStationId={vehicle?.stationId as string | null | undefined}>{body}</Shell3>;
 }

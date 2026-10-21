@@ -328,6 +328,9 @@ describe("import", () => {
     expect(v.colibriFile).toMatchObject({ name: `${PK}.pdf` });
     expect(v.campaignId).toBeTruthy();
     expect(v.companyId).toBeTruthy();
+    // like every vehicle it is frozen on a calculation method (the system method of Spain, version 1)
+    expect(v.methodId).toBeTruthy();
+    expect(v.methodVersion).toBe(1);
     const scan = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
     expect(scan).toMatchObject({ importStatus: "imported", vehicleId });
   });

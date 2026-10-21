@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { STATUSES } from "@hagel/shared";
 import { buildXlsx, eur, fmtDate, h1, num, xlsxFileName } from "@hagel/documents";
-import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { t } from "../i18n";
 import { applyColibriToVehicle, colibriBadge, readColibriFile } from "../sync/colibriImport";
 import { createVehicle, deleteVehicle, getPrefs } from "../sync/mutations";
@@ -46,7 +45,7 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const dashIds = useMemo(() => (dashF ? new Set(dashF.ids) : null), [dashF]);
   const prices = f.can("prix.voir");
   const split = f.can("repartition_interne.voir");
-  const rows = useMemo(() => all.map((v) => ({ v, c: computeVehicle(v as unknown as CalcVehicle, f.calc) })), [all, f.calc]);
+  const rows = useMemo(() => all.map((v) => ({ v, c: f.calcOf(v) })), [all, f.calcOf]);
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const q = query.toLowerCase();
   const filtered = sorted.filter(({ v }) =>

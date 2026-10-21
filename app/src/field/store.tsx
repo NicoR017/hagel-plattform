@@ -6,6 +6,8 @@ import { t } from "../i18n";
 import { LocalDb, refsKey, type LocalPhoto, type LocalVehicle, type Refs } from "../sync/db";
 import { SyncEngine, type SyncStatus } from "../sync/engine";
 import { calcSettingsOf, type MutCtx } from "../sync/mutations";
+import { calcWith } from "./calc";
+import type { CalcResult } from "@hagel/calc";
 import { toast } from "./toast";
 
 export interface FieldCtx {
@@ -15,6 +17,8 @@ export interface FieldCtx {
   refs: Refs | undefined;
   status: SyncStatus;
   calc: Settings;
+  /** amounts of a vehicle, with the method version frozen on it (same numbers as the server) */
+  calcOf: (v: unknown) => CalcResult;
   mut: MutCtx;
   can: (permission: string) => boolean;
   stationName: (id: string | null | undefined) => string;
@@ -66,8 +70,9 @@ export function FieldProvider({ userId, orgId, children }: { userId: string; org
 
   const value = useMemo<FieldCtx>(() => {
     const perms = new Set(refs?.me.permissions ?? []);
+    const calc = calcSettingsOf(refs?.settings);
     return {
-      db, engine, orgId, refs, status, calc: calcSettingsOf(refs?.settings), mut: { engine, db, orgId },
+      db, engine, orgId, refs, status, calc, calcOf: (v) => calcWith(v, calc, refs), mut: { engine, db, orgId },
       can: (p) => perms.has(p),
       stationName: (id) => (id ? refs?.stations.find((s) => s.id === id)?.name ?? "" : ""),
     };

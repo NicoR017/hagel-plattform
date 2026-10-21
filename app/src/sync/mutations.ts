@@ -5,6 +5,7 @@ import { ES_MATRIX_DEFAULT } from "@hagel/calc";
 import { refsKey, type LocalDb, type LocalPhoto, type Refs } from "./db";
 import type { SyncEngine } from "./engine";
 import { uuid4 } from "./uuid";
+import { defaultMethodFor } from "../field/calc";
 
 export interface MutCtx { engine: SyncEngine; db: LocalDb; orgId: string; now?: () => Date }
 const iso = (c: MutCtx) => (c.now ? c.now() : new Date()).toISOString();
@@ -43,6 +44,11 @@ export async function createVehicle(c: MutCtx, o: { stationId: string; clientSta
     ...(refs?.companies.length ? { companyId: prefs.lastCompanyId && refs.companies.some((x) => x.id === prefs.lastCompanyId) ? prefs.lastCompanyId : (refs.companies.find((x) => x.hasLogo) ?? refs.companies[0]).id } : {}),
     ...o.header,
   };
+  // freeze the calculation method now (only when the server knows methods: an older server would reject the unknown header fields)
+  if (refs?.methods?.length && header.methodId === undefined) {
+    const m = defaultMethodFor(refs, null, land);
+    if (m) { header.methodId = m.id; header.methodVersion = m.version; }
+  }
   await c.engine.enqueue(op(c, "vehicle.create", {
     vehicle: {
       id, stationId: o.stationId, clientStationId: clientId, campaignId: null, insurerId: null, header, panels: {},
@@ -119,3 +125,29 @@ export async function sendReport(c: MutCtx, o: { vehicleId: string; type: "kva" 
   await push(c, op(c, "report.send", { vehicleId: o.vehicleId, report: { id, type: o.type, lang: o.lang } }));
   return id;
 }
+
+// ------------------------------------------------------------------ UI v3 operations (sent in batches of their own)
+
+const pushV = async (c: MutCtx, type: string, f: Record<string, unknown>, vehicleId: string) => { await push(c, op(c, type, f), vehicleId); };
+
+/** "Zu ersetzende Teile": the labels, in order (stored in the vehicle header; they become to-dos when the car enters the repair board). */
+export const setParts = (c: MutCtx, vehicleId: string, parts: string[]) => setHeader(c, vehicleId, { partsToReplace: parts });
+/** Change the calculation method of a vehicle that has not been measured yet (the server refuses it afterwards). */
+export const setMethod = (c: MutCtx, vehicleId: string, methodId: string, methodVersion: number) => setHeader(c, vehicleId, { methodId, methodVersion });
+
+export const setRepairStage = (c: MutCtx, vehicleId: string, stage: string) => pushV(c, "vehicle.repairStage", { vehicleId, stage }, vehicleId);
+export const addTodo = (c: MutCtx, vehicleId: string, text: string) => pushV(c, "repair.todo.add", { vehicleId, todo: { id: uuid4(), text: text.trim() } }, vehicleId);
+export const toggleTodo = (c: MutCtx, vehicleId: string, todoId: string, done: boolean) => pushV(c, "repair.todo.toggle", { todoId, done }, vehicleId);
+export const deleteTodo = (c: MutCtx, vehicleId: string, todoId: string) => pushV(c, "repair.todo.delete", { todoId }, vehicleId);
+export const setCheck = (c: MutCtx, vehicleId: string, key: "pdr" | "teile" | "chef", done: boolean) => pushV(c, "repair.check", { vehicleId, key, done }, vehicleId);
+export const addComment = (c: MutCtx, vehicleId: string, text: string) => pushV(c, "vehicle.comment", { vehicleId, comment: { id: uuid4(), text: text.trim() } }, vehicleId);
+export const tagPhoto = (c: MutCtx, vehicleId: string, photoId: string, repairStage: string | null, role: string | null) => pushV(c, "photo.stage", { photoId, repairStage, role }, vehicleId);
+
+export const addAppointment = (c: MutCtx, vehicleId: string, a: { technicianId: string; date: string; durationMin: number; note?: string }) =>
+  pushV(c, "appointment.add", { vehicleId, appointment: { id: uuid4(), technicianId: a.technicianId, date: a.date, durationMin: a.durationMin, note: a.note ?? "" } }, vehicleId);
+export const deleteAppointment = (c: MutCtx, vehicleId: string, appointmentId: string) => pushV(c, "appointment.delete", { appointmentId }, vehicleId);
+
+export const createBooking = (c: MutCtx, vehicleId: string, b: { date: string; time: string; phone: string; email: string }) =>
+  pushV(c, "booking.create", { vehicleId, booking: { id: uuid4(), ...b } }, vehicleId);
+export const moveBooking = (c: MutCtx, vehicleId: string, bookingId: string, date: string, time: string) => pushV(c, "booking.move", { bookingId, date, time }, vehicleId);
+export const cancelBooking = (c: MutCtx, vehicleId: string, bookingId: string) => pushV(c, "booking.cancel", { bookingId }, vehicleId);

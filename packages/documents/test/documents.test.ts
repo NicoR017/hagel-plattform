@@ -424,3 +424,51 @@ describe("technician worksheet PDF", () => {
     expect(techPdfFileName("2026-10-05", "2026-10-11")).toBe("Technikerabrechnung_2026-10-05_2026-10-11.pdf");
   });
 });
+
+describe("parts to replace and the method name", () => {
+  const parts = ["Zierleiste Dach li", "Antenne", "Clips Verkleidung"];
+  for (const name of ["case2_DE", "case2_ES"]) {
+    it(`${name}: a highlighted box names the parts (no price attached), the plain text lists them, the method name is small`, async () => {
+      const v = mkVehicle(name, { partsToReplace: parts, methodName: "Allianz Spezial" });
+      const c = computeVehicle(v), X = docText(v.land);
+      const txt = await allText(await generateKvaPdf(v, c, { now: NOW, letterhead: { name: "" } }));
+      expect(txt).toContain(X.teile);
+      for (const p of parts) expect(txt).toContain("- " + p);
+      expect(txt).toContain(`${X.methode}: Allianz Spezial`);
+      expect(txt).not.toContain("PDR Team");
+      // nothing but the label follows a part: no euro sign on those lines
+      for (const p of parts) expect(txt.split("\n").find((l) => l.includes("- " + p))).not.toMatch(/€|EUR/);
+      const plain = kvaPlainText(v, c);
+      expect(plain).toContain(X.teile);
+      for (const p of parts) expect(plain).toContain("- " + p);
+    });
+  }
+  it("without parts or method name nothing new appears (the old documents are unchanged)", async () => {
+    const v = mkVehicle("case2_DE"), c = computeVehicle(v), X = docText("DE");
+    const txt = await allText(await generateKvaPdf(v, c, { now: NOW }));
+    expect(txt).not.toContain(X.teile);
+    expect(txt).not.toContain(X.methode);
+    expect(kvaPlainText(v, c)).not.toContain(X.teile);
+    expect(kvaPlainText(mkVehicle("case2_DE", { partsToReplace: ["  ", ""] }), c)).not.toContain(X.teile); // blanks are ignored
+  });
+  it("a long list and a long label wrap and paginate without losing a line", async () => {
+    const many = Array.from({ length: 40 }, (_, i) => `Teil Nummer ${i + 1} ${"lang ".repeat(i % 4 === 0 ? 30 : 1)}`.trim());
+    for (const n of ["case1_DE", "case1_ES"]) {
+      const v = mkVehicle(n, { partsToReplace: many }), c = computeVehicle(v);
+      const bytes = await generateKvaPdf(v, c, { now: NOW });
+      const txt = await allText(bytes);
+      for (const i of [1, 17, 40]) expect(txt).toContain(`Teil Nummer ${i}`);
+      expect(txt).toContain(eur(c.brutto)); // totals still there
+    }
+  });
+  it("the repair photo report names the parts in its header", async () => {
+    const v = mkVehicle("case2_ES", { partsToReplace: parts }), X = docText("ES");
+    const txt = await allText(await generateRepairPhotoReport(v, { photos: photos(2), now: NOW }));
+    expect(txt).toContain(X.teile);
+    expect(txt).toContain("Antenne");
+  });
+  it("the mail text never mentions parts, amounts or the method", () => {
+    const m = mailTexts(mkVehicle("case2_DE", { partsToReplace: parts, methodName: "Allianz Spezial" }));
+    expect(m.subject + m.body).not.toMatch(/Antenne|Allianz Spezial/);
+  });
+});

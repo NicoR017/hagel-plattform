@@ -17,6 +17,7 @@ const DE = {
   fotobericht: "Fotobericht Reparatur", fotoberichtDatei: "Fotobericht",
   phBesichtigung: "Besichtigung", phReparatur: "Während der Reparatur", phFertig: "Nach der Reparatur",
   separat: "separat",
+  teile: "Folgende Teile sind zu ersetzen:", methode: "Berechnungsmethode",
 };
 type TxtTable = typeof DE;
 const ES: TxtTable = {
@@ -32,9 +33,12 @@ const ES: TxtTable = {
   fotobericht: "Informe fotográfico de reparación", fotoberichtDatei: "Informe-fotografico",
   phBesichtigung: "Inspección", phReparatur: "Durante la reparación", phFertig: "Después de la reparación",
   separat: "aparte",
+  teile: "Piezas a sustituir:", methode: "Método de cálculo",
 };
 
 export const TXT: Record<Land, TxtTable> = { DE, ES };
+/** cleaned list of the parts to replace */
+export const partsOf = (v: Pick<DocVehicle, "partsToReplace">): string[] => (v.partsToReplace ?? []).map((p) => String(p).trim()).filter(Boolean);
 export const docText = (land: Land | undefined): TxtTable => TXT[land === "ES" ? "ES" : "DE"];
 const TX = (v: DocVehicle) => docText(v.land);
 
@@ -150,5 +154,7 @@ export function kvaPlainText(v: DocVehicle, c: CalcResult, _shares?: SharesResul
       .concat([X.netto + " " + eur(c.netto) + "   " + X.mwst + "   " + X.brutto + " " + eur(c.brutto)]);
   }
   if ((v.notiz || "").trim()) L.push("", X.notiz + ": " + v.notiz);
+  const parts = partsOf(v);
+  if (parts.length) L.push("", X.teile, ...parts.map((p) => "- " + p));
   return L.join("\n");
 }

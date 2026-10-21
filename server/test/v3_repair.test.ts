@@ -474,3 +474,23 @@ describe("recipients", () => {
     void JPEG; void stations;
   });
 });
+
+describe("the method follows the insurer automatically (no privilege needed), a manual choice still needs one", () => {
+  it("an assessor changes the insurer of an unmeasured vehicle and the insurer's method comes with it; another method is refused", async () => {
+    const alt = (await call(c, "POST", "/admin/methods", { token: c.superToken, org: c.orgES, body: { name: "Matriz Allianz", engine: "matrix", country: "ES", params: { esMatrix: null } } })).body.id as string;
+    await call(c, "PUT", `/admin/insurers/${insurerId}/methods`, { token: c.superToken, org: c.orgES, body: { ES: alt, DE: null } });
+    const id = await newVehicle({ panels: {} }, { kennzeichen: "AUTO 1" });
+    const sysId = (await vrow(id)).methodId;
+    expect(sysId).not.toBe(alt);
+    // the insurer changes and the method that goes with it: allowed for the assessor, because it IS the insurer's method
+    expect((await one(assessor, op("vehicle.header", { vehicleId: id, fields: { insurerId, methodId: alt, methodVersion: 1 } }))).status).toBe("ok");
+    expect(await vrow(id)).toMatchObject({ insurerId, methodId: alt });
+    // back to no insurer: the system method again (automatic as well)
+    expect((await one(assessor, op("vehicle.header", { vehicleId: id, fields: { insurerId: null, methodId: sysId } }))).status).toBe("ok");
+    expect((await vrow(id)).methodId).toBe(sysId);
+    // a hand-picked method that is neither the insurer's nor the system one stays a privilege
+    expect(await one(assessor, op("vehicle.header", { vehicleId: id, fields: { methodId: alt } }))).toMatchObject({ status: "rejected", code: "not_allowed" });
+    expect((await one(chefA, op("vehicle.header", { vehicleId: id, fields: { methodId: alt } }))).status).toBe("ok");
+    await call(c, "PUT", `/admin/insurers/${insurerId}/methods`, { token: c.superToken, org: c.orgES, body: { ES: null, DE: null } });
+  });
+});

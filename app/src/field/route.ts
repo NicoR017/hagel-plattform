@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-export type Tab = "basis" | "erfassung" | "bilder" | "kva";
+/** the four tabs of the old vehicle screen … */
+export type Tab4 = "basis" | "erfassung" | "bilder" | "kva";
+/** … and the sections of the new vehicle detail (basis = "Allgemeine Daten"; the old screen shows any extra one as basis) */
+export type Tab = Tab4 | "termin" | "techniker" | "planung" | "kommunikation" | "gtmotive" | "verlauf";
+export type Step = Tab4;
 /** Kalkulation / Reparatur / Alle Fahrzeuge */
 export type Mode = "kalk" | "rep" | "all";
 export const MODES: Mode[] = ["kalk", "rep", "all"];
@@ -15,10 +19,15 @@ export type Route =
   /** station: choose Kalkulation / Reparatur / Alle Fahrzeuge */
   | { page: "mode"; stationId: string }
   | { page: "dashboard" }
+  /** step 0 of the assessment assistant: pick a scan (or start without one) */
+  | { page: "newexp"; stationId: string; mode: Mode }
+  /** the assessment assistant: Basis · Erfassung · Bilder · KVA */
+  | { page: "expertise"; id: string; step: Step; ctx?: Ctx }
   | { page: "vehicle"; id: string; tab: Tab; ctx?: Ctx }
   | { page: "admin"; tab?: string };
 
-const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva"];
+export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
+const STEPS: Step[] = ["basis", "erfassung", "bilder", "kva"];
 const isMode = (x: string | undefined): x is Mode => x === "kalk" || x === "rep" || x === "all";
 
 /**
@@ -29,11 +38,15 @@ export function parseRoute(hash: string): Route {
   const [path, query = ""] = hash.replace(/^#\/?/, "").split("?");
   const p = path.split("/").filter(Boolean);
   const tabOf = (x: string | undefined): Tab => ((TABS as string[]).includes(x ?? "") ? (x as Tab) : "basis");
+  const stepOf = (x: string | undefined): Step => ((STEPS as string[]).includes(x ?? "") ? (x as Step) : "basis");
   if (p[0] === "dashboard") return { page: "dashboard" };
+  if (p[0] === "expertise" && p[1]) return { page: "expertise", id: p[1], step: stepOf(p[2]) };
   if (p[0] === "v" && p[1]) return { page: "vehicle", id: p[1], tab: tabOf(p[2]) };
   if (p[0] === "admin") return { page: "admin", tab: p[1] };
   if (p[0] === "s" && p[1]) {
     const stationId = p[1];
+    if (isMode(p[2]) && p[3] === "neu") return { page: "newexp", stationId, mode: p[2] };
+    if (isMode(p[2]) && p[3] === "exp" && p[4]) return { page: "expertise", id: p[4], step: stepOf(p[5]), ctx: { stationId, mode: p[2] } };
     if (isMode(p[2]) && p[3] === "v" && p[4]) return { page: "vehicle", id: p[4], tab: tabOf(p[5]), ctx: { stationId, mode: p[2] } };
     if (isMode(p[2])) return { page: "list", stationId, mode: p[2] };
     return { page: "mode", stationId };
@@ -46,13 +59,15 @@ export const hrefOf = (r: Route): string => {
     case "vehicle": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/v/${r.id}/${r.tab}` : `#/v/${r.id}/${r.tab}`;
     case "admin": return `#/admin${r.tab ? "/" + r.tab : ""}`;
     case "dashboard": return "#/dashboard";
+    case "newexp": return `#/s/${r.stationId}/${r.mode}/neu`;
+    case "expertise": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/exp/${r.id}/${r.step}` : `#/expertise/${r.id}/${r.step}`;
     case "mode": return `#/s/${r.stationId}`;
     case "list": return r.stationId ? `#/s/${r.stationId}/${r.mode}` : r.dash ? "#/?f=dash" : "#/";
   }
 };
 export const go = (r: Route) => {
   // switching tab inside a vehicle opened from a list keeps the list it came from
-  if (r.page === "vehicle" && !r.ctx) { const cur = parseRoute(location.hash); if (cur.page === "vehicle" && cur.id === r.id && cur.ctx) r = { ...r, ctx: cur.ctx }; }
+  if ((r.page === "vehicle" || r.page === "expertise") && !r.ctx) { const cur = parseRoute(location.hash); if ((cur.page === "vehicle" || cur.page === "expertise") && cur.id === r.id && cur.ctx) r = { ...r, ctx: cur.ctx }; }
   location.hash = hrefOf(r);
 };
 
@@ -66,6 +81,10 @@ export function parentRoute(r: Route, vehicleStationId?: string | null): Route |
     case "vehicle":
       if (r.ctx) return { page: "list", stationId: r.ctx.stationId, mode: r.ctx.mode };
       return vehicleStationId ? { page: "list", stationId: vehicleStationId, mode: "all" } : { page: "list" };
+    case "expertise":
+      if (r.ctx) return { page: "list", stationId: r.ctx.stationId, mode: r.ctx.mode };
+      return vehicleStationId ? { page: "list", stationId: vehicleStationId, mode: "kalk" } : { page: "list" };
+    case "newexp": return { page: "list", stationId: r.stationId, mode: r.mode };
     case "list": return r.stationId ? { page: "mode", stationId: r.stationId } : r.dash ? { page: "list" } : null;
     case "mode": return { page: "list" };
     case "dashboard":

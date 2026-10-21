@@ -2,7 +2,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFImage, PDFPage } from "pdf-lib";
 import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
-import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, plabel, zustStr } from "./text";
+import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
 import type { DocPhoto, DocVehicle, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
 import { TECH_LABELS, techDate, type TechSheetData } from "./techsheet";
 
@@ -198,6 +198,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     cv.y -= 15;
   }
   cv.T(L, cv.y, X.datum + ": " + fmtDateL(land, v.leistungsdatum) + "     " + X.zustand + ": " + zustStr(v), 10); cv.y -= 26;
+  if ((v.methodName || "").trim()) { cv.y += 8; cv.rgbc(120, 128, 142); cv.T(L, cv.y, X.methode + ": " + v.methodName!.trim(), 8); cv.black(); cv.y -= 18; }
   cv.rgbc(228, 238, 229); cv.rect(L, cv.y - 26, R - L, 30);
   if (c.es) {
     cv.rgbc(94, 140, 99);
@@ -217,6 +218,19 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     cv.black(); cv.y -= 18;
   };
   const brk = () => { if (cv.y < 70) { cv.np(); cv.top(); tableHeader(); } };
+  /** "Folgende Teile sind zu ersetzen": highlighted box under the panel table (no prices) */
+  const partsBox = () => {
+    const parts = partsOf(v);
+    if (!parts.length) return;
+    const lines = parts.flatMap((p) => wrapText("- " + p, 92));
+    const h = 26 + lines.length * 13;
+    if (cv.y - h < 70) { cv.np(); cv.top(); }
+    cv.y -= 8;
+    cv.rgbc(253, 240, 225); cv.rect(L, cv.y - h + 8, R - L, h);
+    cv.rgbc(138, 74, 6); cv.T(L + 8, cv.y - 8, X.teile, 10.5, true);
+    cv.black(); lines.forEach((ln, i) => cv.T(L + 12, cv.y - 22 - i * 13, ln, 10));
+    cv.y -= h + 6;
+  };
   tableHeader();
   const row = (bauteil: string, dellen: string, oe: string, aw: string, euro: string, opt: { fill?: RGB | null; white?: boolean; bold?: boolean } = {}) => {
     brk();
@@ -249,6 +263,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
       subLines(p);
     });
     row("TOTAL  (" + e.small + " + " + e.large + " × 2)", String(c.dents), String(c.avg), String(e.bollos), "", { fill: [22, 35, 63], white: true, bold: true });
+    partsBox();
     cv.y -= 10; if (cv.y < 120) { cv.np(); cv.top(); }
     cv.rgbc(110, 120, 140);
     cv.T(L, cv.y, "Bollos: hasta 30 mm = 1, más de 30 mm = 2.  Categoría " + e.cat.cat + " (" + esRange(e.cat) + " bollos), tope " + h1(e.cat.cap_h) + " = " + eur(e.cap) + ".", 8.5); cv.y -= 12;
@@ -273,6 +288,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     const neb = (l: string, aw: number) => { if (aw > 0) row(l, "", "", num(aw), eur(aw * c.euroPerAW), {}); };
     neb(X.finish, c.finishAW); neb(X.ruest, c.ruestAW); neb(X.greif, c.greifAW); neb(X.hohl, c.hohlAW); neb(X.verbr, c.verbrAW);
     row(X.gesamt.toUpperCase(), String(c.dents), String(c.avg), num(c.totalAW), eur(c.awNetto), { fill: [22, 35, 63], white: true, bold: true });
+    partsBox();
     cv.y -= 14;
     const tot = (l: string, val: string, bold: boolean) => { cv.T(R - 235, cv.y, l, 10, bold); cv.T(R - 95, cv.y, val, 10, bold); cv.y -= 15; };
     tot(X.awnetto, eur(c.awNetto), false);
@@ -329,6 +345,12 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
   if (v.insurerName || v.claimNumber) {
     cv.T(L, cv.y, [v.insurerName ? X.versicherung + ": " + v.insurerName : "", v.claimNumber ? X.schaden + ": " + v.claimNumber : ""].filter(Boolean).join("     "), 10);
     cv.y -= 15;
+  }
+  if (partsOf(v).length) {
+    // the repair photo report names the parts to replace in its header
+    cv.rgbc(138, 74, 6);
+    wrapText(X.teile + " " + partsOf(v).join(", "), 100).forEach((ln) => { cv.T(L, cv.y, ln, 9.5); cv.y -= 13; });
+    cv.black();
   }
   cv.y -= 14;
   const emb = await embedPhotos(cv, opts.photos || []);

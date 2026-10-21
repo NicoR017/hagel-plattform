@@ -4,6 +4,7 @@ import { applyColibri, colibriPages, parseColibri, scanCheck, titleCase } from "
 import { audit } from "./audit";
 import type { AzureSource } from "./azure";
 import { loadMappingContext, mapScan, tenantsOfOrg, type ScanMapping } from "./azure_sync";
+import { methodForInsurer } from "./methods";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, type Principal } from "./permissions";
@@ -176,11 +177,14 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
     await d.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(7001)`);
       const seq = await nextSeq(tx);
+      // an imported vehicle is frozen on a calculation method like every other: its insurer's, else the system method of its country
+      const method = await methodForInsurer(tx, m.orgId!, m.insurerId, (header as { land?: string }).land === "ES" ? "ES" : "DE");
       await tx.insert(vehicles).values({
         id: vehicleId, orgId: m.orgId!, stationId: m.stationId, clientStationId: m.clientStationId, campaignId: campaign?.id ?? null, insurerId: m.insurerId,
         statut: "besichtigung", statutDepuis: now, header: header as never, panels: applied.panels as never,
         panelsAt: Object.fromEntries(Object.keys(applied.panels).map((p) => [p, ts])), shares: shares as never, groupAt: stamps, colibri: colibriMeta as never,
         colibriFile: colibriFile as never, colibriScanKey: `${scan.partitionKey}|${scan.rowKey}`, seq, createdBy: u.id, updatedBy: u.id,
+        methodId: method?.id ?? null, methodVersion: method?.version ?? null,
       });
       await tx.insert(vehicleStatusHistory).values({ vehicleId, statut: "besichtigung", userId: u.id });
       for (const r of photoRows) {

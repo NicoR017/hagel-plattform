@@ -1,7 +1,12 @@
-import type { ClientVehicle, Op } from "@hagel/shared";
+import type { ClientRepair, ClientVehicle, Op } from "@hagel/shared";
 import type { LocalVehicle } from "./db";
 
 const LINKS = ["clientStationId", "insurerId", "campaignId"] as const;
+
+const EMPTY_REPAIR: ClientRepair = { todos: [], checks: {}, finishBlockers: [], comments: [], appointments: [], booking: null };
+function withRepair(v: LocalVehicle, at: string, f: (r: ClientRepair) => ClientRepair): LocalVehicle {
+  return { ...v, repair: f({ ...EMPTY_REPAIR, ...((v.repair as ClientRepair | undefined) ?? {}) }), updatedAt: at };
+}
 
 /**
  * Pure replay of one operation on a local vehicle (used both for the optimistic update when the user edits
@@ -53,6 +58,19 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
     }
     case "vehicle.move": return v ? { ...v, stationId: op.toStationId, updatedAt: at } : v;
     case "vehicle.delete": return null;
+    case "vehicle.repairStage": {
+      if (!v) return v;
+      const n: LocalVehicle = { ...v, repairStage: op.stage, updatedAt: at };
+      if (op.stage === "finish") { n.statut = "fertig"; n.statutDepuis = at; }
+      else if (v.statut === "fertig") { n.statut = "reparatur"; n.statutDepuis = at; }
+      else if (v.statut !== "reparatur" && v.statut !== "attente") { n.statut = "reparatur"; n.statutDepuis = at; n.repAt = (v.repAt as string | null) ?? at; }
+      return n;
+    }
+    case "repair.todo.add": return v ? withRepair(v, at, (r) => ({ ...r, todos: [...r.todos, { id: op.todo.id, text: op.todo.text, source: "manual", done: false, doneBy: null, doneAt: null, createdBy: null, createdAt: at, sort: r.todos.length }] })) : v;
+    case "repair.todo.toggle": return v ? withRepair(v, at, (r) => ({ ...r, todos: r.todos.map((x) => (x.id === op.todoId ? { ...x, done: op.done, doneAt: op.done ? at : null, doneBy: op.done ? "…" : null } : x)) })) : v;
+    case "repair.todo.delete": return v ? withRepair(v, at, (r) => ({ ...r, todos: r.todos.filter((x) => x.id !== op.todoId) })) : v;
+    case "repair.check": return v ? withRepair(v, at, (r) => ({ ...r, checks: { ...r.checks, [op.key]: op.done ? { by: "…", at } : null } })) : v;
+    case "vehicle.comment": return v ? withRepair(v, at, (r) => ({ ...r, comments: [...r.comments, { id: op.comment.id, userId: null, userName: "…", at, text: op.comment.text.trim() }] })) : v;
     case "vehicle.assign": return v ? { ...v, assigneeIds: op.userIds, updatedAt: at } : v;
     case "vehicle.colibri": return v ? { ...v, colibri: op.colibri, colibriFile: op.file ? { name: op.file.name, size: op.file.size } : v.colibriFile, updatedAt: at } : v;
     default: return v;

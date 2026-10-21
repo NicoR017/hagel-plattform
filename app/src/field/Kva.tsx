@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { computeShares, computeVehicle, type CalcResult, type CalcVehicle } from "@hagel/calc";
+import { computeShares, type CalcResult, type CalcVehicle } from "@hagel/calc";
 import { dentBreak, docText, eur, esFormula, esLines, fmtDateL, h1, kvaFileName, kvaPlainText, mailTexts, num, plabel, zustStr } from "@hagel/documents";
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
@@ -20,7 +20,7 @@ function Thumb({ p, land }: { p: LocalPhoto; land: "DE" | "ES" }) {
 }
 
 /** Internal split (technician / commission). Never part of the customer document. */
-function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
+export function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
   const f = useField();
   const a = computeShares(v as never, c);
   const x = v as Record<string, any>;
@@ -77,11 +77,11 @@ function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
   );
 }
 
-export function Kva({ v }: { v: LocalVehicle }) {
+export function Kva({ v, beforeActions }: { v: LocalVehicle; beforeActions?: React.ReactNode }) {
   const f = useField();
   const photos = usePhotos(v.id);
   const cv = v as unknown as CalcVehicle;
-  const c = useMemo(() => computeVehicle(cv, f.calc), [v, f.calc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useMemo(() => f.calcOf(cv), [v, f.calcOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const x = v as Record<string, any>;
   const land: "DE" | "ES" = x.land === "ES" ? "ES" : "DE";
   const X = docText(land);
@@ -194,6 +194,7 @@ export function Kva({ v }: { v: LocalVehicle }) {
         </div>
       )}
 
+      {beforeActions}
       {prices && f.can("kva.envoyer") && (
         <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("kva")}>✉️ {t("sendByServer")}
           {v.colibriFile ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>📎 {t("kvaPlusScan")}</span> : null}</button>

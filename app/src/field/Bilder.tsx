@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { PhotoPhase } from "@hagel/shared";
 import { t, tOr } from "../i18n";
 import type { LocalPhoto, LocalVehicle } from "../sync/db";
@@ -7,6 +7,7 @@ import { downscale } from "./images";
 import { usePhotos, usePhotoUrl, useField } from "./store";
 import { toast } from "./toast";
 import { confirmDialog } from "./ui";
+import { Lightbox } from "./Lightbox";
 
 /** Stored labels stay German (the documents translate them for Spanish output); the UI shows them in the UI language. */
 export const IMG_LABELS = ["Vorderansicht", "Heckansicht", "Seite links", "Seite rechts", "Dach", "Detail / Delle", "Sonstiges"] as const;
@@ -14,14 +15,14 @@ const REQUIRED = ["Vorderansicht", "Heckansicht", "Seite links", "Seite rechts",
 const PHASES: PhotoPhase[] = ["besichtigung", "reparatur", "fertig"];
 export const imgLabelText = (l: string) => tOr("img." + l, l);
 
-function PhotoCard({ p, canEdit, canDelete }: { p: LocalPhoto; canEdit: boolean; canDelete: boolean }) {
+function PhotoCard({ p, canEdit, canDelete, onOpen }: { p: LocalPhoto; canEdit: boolean; canDelete: boolean; onOpen: () => void }) {
   const f = useField();
   const url = usePhotoUrl(p);
   const opts = (IMG_LABELS as readonly string[]).includes(p.label) ? IMG_LABELS : [...IMG_LABELS, p.label as never];
   return (
     <div className="imgcard">
       <div className="ph">
-        {url ? <img src={url} alt={imgLabelText(p.label)} /> : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--greyDk)" }}>🖼</div>}
+        {url ? <img src={url} alt={imgLabelText(p.label)} role="button" tabIndex={0} style={{ cursor: "zoom-in" }} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }} /> : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--greyDk)" }}>🖼</div>}
         {canDelete && <button className="delbtn" aria-label={t("delete")} onClick={() => { if (confirmDialog(t("deletePhotoQ"))) void deletePhoto(f.mut, p.id); }}>✕</button>}
         {p._pending && <span className="badge" style={{ position: "absolute", left: 6, top: 6, background: "#9a7b1f" }}>⏳</span>}
         {p.source === "colibri" && <span className="badge" style={{ position: "absolute", left: 6, bottom: 6 }}>Colibri</span>}
@@ -47,6 +48,7 @@ export function Bilder({ v }: { v: LocalVehicle }) {
   const photos = usePhotos(v.id);
   const cam = useRef<HTMLInputElement>(null), gal = useRef<HTMLInputElement>(null);
   const canAdd = f.can("photos.ajouter");
+  const [open, setOpen] = useState<number | null>(null);
   const add = async (files: FileList | null) => {
     if (!files) return;
     for (const file of [...files]) {
@@ -55,6 +57,8 @@ export function Bilder({ v }: { v: LocalVehicle }) {
       catch { toast(t("photoFailed")); }
     }
   };
+  // the lightbox walks through the photos in the order they are shown (grouped by phase)
+  const ordered = PHASES.flatMap((ph) => photos.filter((p) => p.phase === ph));
   const have = new Set(photos.map((p) => p.label));
   const done = REQUIRED.filter((r) => have.has(r)).length;
   return (
@@ -84,11 +88,12 @@ export function Bilder({ v }: { v: LocalVehicle }) {
           <div key={ph} style={{ marginTop: 16 }}>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>{t(("ph." + ph) as never)} ({list.length})</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {list.map((p) => <PhotoCard key={p.id} p={p} canEdit={canAdd} canDelete={f.can("photos.supprimer")} />)}
+              {list.map((p) => <PhotoCard key={p.id} p={p} canEdit={canAdd} canDelete={f.can("photos.supprimer")} onOpen={() => setOpen(ordered.findIndex((q) => q.id === p.id))} />)}
             </div>
           </div>
         );
       })}
+    {open !== null && <Lightbox photos={ordered} index={Math.min(open, ordered.length - 1)} onIndex={setOpen} onClose={() => setOpen(null)} canEdit={canAdd} canDelete={f.can("photos.supprimer")} />}
     </div>
   );
 }

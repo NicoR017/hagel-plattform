@@ -3,12 +3,12 @@ import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
 import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
-import { FieldProvider, useField, useVehicle } from "./field/store";
+import { FieldProvider, useField } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
 import { Dashboard } from "./field/Dashboard";
 import { Toasts } from "./field/toast";
-import { parentRoute, useRoute } from "./field/route";
+import { useRoute } from "./field/route";
 import { useUiMode } from "./field/uiMode";
 import { V3Routes } from "./v3/Routes3";
 import { EnvBanner, useAppConfig } from "./env";
@@ -195,12 +195,7 @@ function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) =
   const f = useField();
   const cfg = useAppConfig();
   const ui = useUiMode(cfg?.uiV3Default);
-  const vehicle = useVehicle(route.page === "vehicle" ? route.id : "");
-  if (route.page === "vehicle") {
-    // "‹ Zurück": one level up (new interface: the list the vehicle was opened from; old interface: the flat list)
-    const back = ui === "legacy" ? { page: "list" as const } : parentRoute(route, vehicle?.stationId as string | null | undefined) ?? { page: "list" as const };
-    return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={back} />;
-  }
+  if (route.page === "vehicle" && ui === "legacy") return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={{ page: "list" }} />;
   if (route.page === "dashboard") return <Dashboard />;
   if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
   // the old flat list stays reachable: in the old interface, and for the filtered list opened from the dashboard

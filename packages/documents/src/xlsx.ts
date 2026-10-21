@@ -124,7 +124,7 @@ export function buildXlsx(rows: ExportVehicle[], title: string, columns: XlsxCol
     if (k === "pdr") t.pdr += e; else { t.dem += e; t.nDem++; }
   };
   const data = rows.map((v) => {
-    const c = computeVehicle(v, s);
+    const c = computeVehicle(v, s, v.method);
     const a = computeShares(v, c);
     if (columns.internalSplit) {
       if (a.techEur > 0) { add(a.techName, "pdr", a.techEur); pay[a.techName || "(ohne Namen)"].fz.add(v.id); }

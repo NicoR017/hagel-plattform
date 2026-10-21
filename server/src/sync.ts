@@ -210,11 +210,13 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const extraApplied: string[] = [];
       if (Object.keys(methodF).length) {
         // changing the calculation method is a privilege, and impossible once the vehicle has been measured: a new calculation = a new expertise
-        if (!perms.has("commission.modifier") && !perms.has("methoden.gerer")) throw new Reject("not_allowed");
         if (Object.keys(row.panels as object).length) throw new Reject("method_locked");
         const land = ((h.next as Record<string, unknown>).land as "DE" | "ES" | undefined) ?? "DE";
         const resolved = await resolveMethodChoice(tx, row.orgId, land, methodF.methodId as string | null | undefined, methodF.methodVersion as number | null | undefined);
         if (!resolved) throw new Reject("invalid_input");
+        // choosing a method by hand is a privilege; following the insurer (or the system method of the country) is automatic and open to everyone who may edit
+        const automatic = await methodForInsurer(tx, row.orgId, (l.next.insurerId as string | null) ?? null, land);
+        if (!(automatic && automatic.id === resolved.id) && !perms.has("commission.modifier") && !perms.has("methoden.gerer")) throw new Reject("not_allowed");
         if ((h.nextStamps["method"] ?? 0) <= at) { set.methodId = resolved.id; set.methodVersion = resolved.version; h.nextStamps["method"] = at; extraApplied.push("method"); }
         set.groupAt = h.nextStamps;
       }

@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { computeShares, computeVehicle, vehicleSettings, type CalcVehicle, type Panel } from "@hagel/calc";
+import { computeShares, vehicleSettings, type CalcVehicle, type Panel } from "@hagel/calc";
 import { eur, esFormula, esRange, h1, hA, num } from "@hagel/documents";
 import { t } from "../i18n";
 import type { LocalVehicle } from "../sync/db";
 import { setHeader, setPanel } from "../sync/mutations";
 import { CarSvg } from "./CarSvg";
 import { GlassDialog, PanelDialog, panelName } from "./Panel";
+import { PartsBox } from "./PartsBox";
 import { useField } from "./store";
 
 export function Erfassung({ v }: { v: LocalVehicle }) {
@@ -13,7 +14,7 @@ export function Erfassung({ v }: { v: LocalVehicle }) {
   const [panel, setPanelKey] = useState<string | null>(null);
   const [glass, setGlass] = useState<"ws" | "rs" | null>(null);
   const cv = v as unknown as CalcVehicle & { glass?: Record<string, { on?: boolean; eur?: number }> };
-  const c = useMemo(() => computeVehicle(cv, f.calc), [v, f.calc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useMemo(() => f.calcOf(cv), [v, f.calcOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const vs = vehicleSettings(cv, f.calc);
   const prices = f.can("prix.voir"), split = f.can("repartition_interne.voir");
   const e = c.es;
@@ -57,6 +58,7 @@ export function Erfassung({ v }: { v: LocalVehicle }) {
           </div>
         </div>
       ))}
+      <PartsBox v={v} />
       {panel && (
         <PanelDialog panelKey={panel} panel={pmap[panel]} land={cv.land === "ES" ? "ES" : "DE"} teiler={vs.teiler} rate={vs.stundensatz} canPrice={prices}
           onSave={(p) => void setPanel(f.mut, v.id, panel, p as Record<string, unknown> | null)} onClose={() => setPanelKey(null)} />

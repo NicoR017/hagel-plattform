@@ -1,4 +1,5 @@
 import { computeVehicle, type CalcResult } from "@hagel/calc";
+import { methodDefOf, methodOfVehicle, printableMethodName } from "./calc";
 import { appendScanPdf, generateKvaPdf, generateRepairPhotoReport, kvaFileName, mailTexts, type DocPhoto, type DocVehicle, type Letterhead } from "@hagel/documents";
 import type { LocalDb, LocalPhoto, LocalVehicle, Refs } from "../sync/db";
 import type { SyncEngine } from "../sync/engine";
@@ -10,6 +11,8 @@ export function toDoc(v: LocalVehicle, refs: Refs | undefined): DocVehicle {
     ...x, id: v.id, land: x.land === "ES" ? "ES" : "DE", status: v.statut,
     stationName: refs?.stations.find((s) => s.id === v.stationId)?.name ?? "", colibriFile: v.colibriFile,
     insurerName: refs?.insurers.find((i) => i.id === v.insurerId)?.name ?? "",
+    partsToReplace: Array.isArray(x.partsToReplace) ? (x.partsToReplace as string[]) : [],
+    method: methodDefOf(refs, v), methodName: printableMethodName(methodOfVehicle(refs, v)),
   } as DocVehicle;
 }
 

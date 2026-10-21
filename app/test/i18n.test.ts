@@ -17,7 +17,7 @@ describe("UI dictionaries", () => {
   it("English strings are really English (not copies of the German ones, except names)", () => {
     const same = de.filter((k) => dictionaries.en[k as never] === dictionaries.de[k as never]);
     // identical in both languages only for proper names / words that are the same in German and English
-    expect(same.sort()).toEqual(["appName", "basis", "dashboard", "e.org_tenants", "e.organization", "e.station", "finish", "name", "offline", "online", "org", "photoPhase", "r.freelance", "scanOk", "site", "status", "syncStatus", "tenant", "v3Dashboard", "v3StationWord", "v3Tenant"]);
+    expect(same.sort()).toEqual(["appName", "basis", "dashboard", "e.org_tenants", "e.organization", "e.station", "finish", "name", "offline", "online", "org", "photoPhase", "r.freelance", "scanOk", "site", "status", "syncStatus", "tenant", "v3Dashboard", "v3StationWord", "v3Tenant", "v4StepKvaEs"]);
   });
   it("switching the language changes every string at once", () => {
     setLang("de");

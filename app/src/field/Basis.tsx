@@ -6,6 +6,8 @@ import { t } from "../i18n";
 import { applyColibriToVehicle, readColibriFile } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
 import { setHeader, setPrefs } from "../sync/mutations";
+import { defaultMethodFor, methodOfVehicle } from "./calc";
+import { MethodField } from "./MethodField";
 import { CustomerPicker, MoveDialog, StatusDialog, holdReasonLabel, statusLabel } from "./Dialogs";
 import { OcrDialog } from "./Ocr";
 import { go } from "./route";
@@ -71,16 +73,28 @@ export function Basis({ v }: { v: LocalVehicle }) {
 
       <Field label={t("basisLand")} hint={land === "ES" ? t("landHintES") : t("landHintDE")}>
         <Seg value={land} options={[{ value: "DE", label: "🇩🇪 Deutschland · BVAT" }, { value: "ES", label: "🇪🇸 España · IVA 21 %" }]}
-          onChange={(l) => { set({ land: l, stundensatz: prices ? (l === "ES" ? f.calc.rateES : f.calc.rateDE) : undefined } as HeaderFields); void setPrefs(f.db, { land: l }); }} />
+          onChange={(l) => {
+            // another country needs another engine: while nothing is measured yet the method follows (insurer's, else the system one)
+            const m = f.refs?.methods?.length && !Object.keys((v.panels ?? {}) as object).length ? defaultMethodFor(f.refs, v.insurerId, l) : null;
+            set({ land: l, stundensatz: prices ? (l === "ES" ? f.calc.rateES : f.calc.rateDE) : undefined, ...(m ? { methodId: m.id, methodVersion: m.version } : {}) } as HeaderFields);
+            void setPrefs(f.db, { land: l });
+          }} />
       </Field>
       {(f.refs?.insurers.length ?? 0) > 0 && (
         <Field label={t("insurer")}>
-          <select className="sel" disabled={!edit} value={v.insurerId ?? ""} onChange={(e) => set({ insurerId: e.target.value || null })}>
+          <select className="sel" disabled={!edit} value={v.insurerId ?? ""} onChange={(e) => {
+            // the method follows the insurer as long as nothing is measured and nobody chose one by hand
+            const cur = methodOfVehicle(f.refs, v), mapped = f.refs?.insurerMethods?.find((i) => i.insurerId === v.insurerId && i.country === land);
+            const auto = !cur || cur.isSystem || mapped?.methodId === cur.id;
+            const m = auto && edit && !Object.keys((v.panels ?? {}) as object).length ? defaultMethodFor(f.refs, e.target.value || null, land) : null;
+            set({ insurerId: e.target.value || null, ...(m && m.id !== cur?.id ? { methodId: m.id, methodVersion: m.version } : {}) });
+          }}>
             <option value="">—</option>
             {insurerOptions.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </Field>
       )}
+      <MethodField v={v} />
       {(f.refs?.campaigns.length ?? 0) > 0 && (
         <Field label={t("campaign")}>
           <select className="sel" disabled={!edit} value={v.campaignId ?? ""} onChange={(e) => set({ campaignId: e.target.value || null })}>

@@ -1,9 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { eur, fmtDate, h1, num } from "@hagel/documents";
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
-import { createVehicle, deleteVehicle, setPrefs } from "../sync/mutations";
+import { deleteVehicle, setPrefs } from "../sync/mutations";
 import type { LocalVehicle } from "../sync/db";
 import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, statusLabel } from "../field/Dialogs";
 import { ScansDialog } from "../field/Scans";
@@ -33,7 +32,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
   const prices = f.can("prix.voir");
 
   const here = useMemo(() => all.filter((v) => v.stationId === stationId && inMode(v, mode)), [all, stationId, mode]);
-  const rows = useMemo(() => here.map((v) => ({ v, c: computeVehicle(v as unknown as CalcVehicle, f.calc) })), [here, f.calc]);
+  const rows = useMemo(() => here.map((v) => ({ v, c: f.calcOf(v) })), [here, f.calcOf]);
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const needle = q.trim().toLowerCase();
   const shown = sorted.filter(({ v }) => matchesChip(v, mode, chip) && `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.modell ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(needle));
@@ -41,16 +40,12 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
   const insurerName = (id: unknown) => f.refs?.insurers.find((i) => i.id === id)?.name ?? "";
   const ctx = { stationId, mode };
 
-  const open = (id: string, tab: "basis" | "erfassung" = "erfassung") => go({ page: "vehicle", id, tab, ctx });
+  const open = (id: string, tab: "basis" | "erfassung" = "basis") => go({ page: "vehicle", id, tab, ctx });
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const ask = (d: Exclude<Dlg, null>, ids: string[]) => { setTarget(ids); setDlg(d); };
   const selected = [...sel].filter((id) => shown.some((r) => r.v.id === id));
 
-  const newExpertise = async () => {
-    void setPrefs(f.db, { lastStationId: stationId, lastMode: mode });
-    const id = await createVehicle(f.mut, { stationId });
-    go({ page: "vehicle", id, tab: "basis", ctx });
-  };
+  const newExpertise = () => { void setPrefs(f.db, { lastStationId: stationId, lastMode: mode }); go({ page: "newexp", stationId, mode }); };
   const exportXlsx = async () => {
     const list: LocalVehicle[] = selected.length ? shown.filter((r) => sel.has(r.v.id)).map((r) => r.v) : shown.map((r) => r.v);
     if (!(await exportVehiclesXlsx(f, list, `${st?.name ?? ""} ${modeTitle(mode)}`.trim()))) toast(t("nothingToExport"));
@@ -70,7 +65,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
               {t("v3ColibriScans")}{scans.known ? ` (${scans.byStation.get(st?.name ?? "") ?? 0})` : ""}
             </button>
           )}
-          {mode !== "rep" && f.can("vehicules.creer") && <button className="btn primary" onClick={() => void newExpertise()}>{t("v3NewExpertise")}</button>}
+          {mode !== "rep" && f.can("vehicules.creer") && <button className="btn primary" onClick={newExpertise}>{t("v3NewExpertise")}</button>}
           <details style={{ position: "relative" }}>
             <summary className="btn" style={{ listStyle: "none" }}>⋯ {t("v3MoreActions")}</summary>
             <div className="menu" style={{ position: "absolute", right: 0, top: 48, minWidth: 260, background: "#fff", borderRadius: 12, boxShadow: "0 12px 32px rgba(10,18,35,.25)", padding: 6, zIndex: 15, display: "flex", flexDirection: "column" }}>
@@ -123,7 +118,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
                 <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{plate} {t("v3SelectRow")}</span>
                 <input type="checkbox" checked={on} onChange={() => toggle(v.id)} />
               </label>
-              <button className="open" onClick={() => open(v.id, v.kennzeichen ? "erfassung" : "basis")}>
+              <button className="open" onClick={() => open(v.id)}>
                 <span className="c" style={{ flex: "1 1 200px" }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{plate}{v._pending ? " ⏳" : ""}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{String(v.modell || v.fin || t("noFin"))} · {fmtDate(v.leistungsdatum as string)}</span>
