@@ -6,6 +6,7 @@
   "workspaces": ["packages/*", "server", "app"],
   "scripts": {
     "test": "vitest run",
+    "integrity": "npm run integrity -w @hagel/server --",
     "typecheck": "tsc -b packages/calc packages/colibri"
   },
   "devDependencies": {

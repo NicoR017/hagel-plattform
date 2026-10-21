@@ -84,7 +84,10 @@ describe("create + pull", () => {
   });
   it("invalid payloads are rejected with 400", async () => {
     expect((await push(c, assessor, [{ ...createOp(uuid()), vehicle: { id: "nope" } }])).status).toBe(400);
-    expect((await push(c, assessor, [{ opId: uuid(), at: tick(), type: "vehicle.explode" }])).status).toBe(400);
+    // an unknown op TYPE is no longer a malformed batch: 409 unsupported_op, the client keeps it queued (PROMPT_v3 §8.4); see safety.test.ts
+    const unknown = await push(c, assessor, [{ opId: uuid(), at: tick(), type: "vehicle.explode" }]);
+    expect(unknown.status).toBe(409);
+    expect(unknown.body.code).toBe("unsupported_op");
     expect((await call(c, "POST", "/sync/push", { body: { ops: [] } })).status).toBe(401);
   });
 });

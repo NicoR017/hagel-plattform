@@ -11,6 +11,8 @@ const backupEnv = (): BackupEnv | null =>
     : null;
 
 async function backup() {
+  // staging is rebuilt from production whenever needed: it never writes backups (and never into the production bucket)
+  if (env.APP_ENV === "staging") return console.log("[backup] skipped: APP_ENV=staging");
   const e = backupEnv();
   if (!e) return console.warn("[backup] skipped: DATABASE_URL / S3_* not set");
   try { console.log("[backup] done", await runBackup(e)); } catch (err) { console.error("[backup] FAILED", err); }

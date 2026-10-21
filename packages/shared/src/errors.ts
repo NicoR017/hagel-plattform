@@ -57,6 +57,7 @@ export const ERROR_MESSAGES = {
   azure_unavailable: { de: "Azure-Anbindung nicht konfiguriert", en: "Azure connection is not configured" },
   azure_failed: { de: "Azure-Abgleich fehlgeschlagen", en: "Azure sync failed" },
   azure_link_unknown: { de: "Unbekannter Colibri-Kunde", en: "Unknown Colibri customer" },
+  unsupported_op: { de: "Diese Server-Version kennt die Änderung noch nicht – sie bleibt gespeichert", en: "This server version does not know the change yet – it stays queued" },
   invalid_input: { de: "Ungültige Eingabe", en: "Invalid input" },
   internal: { de: "Interner Fehler", en: "Internal error" },
 } as const;

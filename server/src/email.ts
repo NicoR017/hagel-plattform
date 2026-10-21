@@ -42,3 +42,24 @@ export class ResendMailer implements Mailer {
     if (!res.ok) throw new Error(`E-mail provider error ${res.status}`);
   }
 }
+
+/**
+ * Mail safety switch (MAIL_MODE). `off` only logs, `redirect` sends everything to one address with the original
+ * recipients in the subject and at the top of the body, `live` passes the mail through unchanged.
+ */
+export class ModeMailer implements Mailer {
+  constructor(private inner: Mailer, private mode: "off" | "redirect" | "live", private redirectTo: string | null) {}
+  async send(m: Mail) {
+    if (this.mode === "live") return this.inner.send(m);
+    const orig = (Array.isArray(m.to) ? m.to : [m.to]).join(", ");
+    if (this.mode === "off") { console.log(`[mail:off] not sent: to=${orig} subject=${m.subject}`); return; }
+    if (!this.redirectTo) throw new Error("MAIL_REDIRECT_TO missing");
+    return this.inner.send({
+      ...m, to: this.redirectTo, subject: `[STAGING → ${orig}] ${m.subject}`,
+      text: `[STAGING] Original recipients: ${orig}
+
+${m.text}`,
+      html: m.html ? `<p><b>[STAGING] Original recipients: ${orig.replace(/</g, "&lt;")}</b></p>${m.html}` : undefined,
+    });
+  }
+}

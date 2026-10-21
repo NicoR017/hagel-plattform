@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
 import { createDb } from "./db";
-import { ConsoleMailer, ResendMailer } from "./email";
+import { ConsoleMailer, ModeMailer, ResendMailer } from "./email";
 import { seed } from "./seed";
 import { storageFromEnv } from "./storage";
 import { azureFromEnv } from "./azure";
@@ -15,7 +15,8 @@ import { azureFromEnv } from "./azure";
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
 const storage = storageFromEnv();
-const mailer = cfg.emailApiKey ? new ResendMailer(cfg.emailApiKey, cfg.emailFrom) : new ConsoleMailer();
+const mailer = new ModeMailer(cfg.emailApiKey ? new ResendMailer(cfg.emailApiKey, cfg.emailFrom) : new ConsoleMailer(), cfg.mailMode, cfg.mailRedirectTo);
+console.log(`env=${cfg.appEnv} mail=${cfg.mailMode}${cfg.mailRedirectTo ? " -> " + cfg.mailRedirectTo : ""}`);
 if (process.env.SEED_SUPERADMIN_EMAIL) await seed(h.db, { superadminEmail: process.env.SEED_SUPERADMIN_EMAIL, testSites: process.env.SEED_TEST_SITES === "1", storage });
 
 const api = createApp({

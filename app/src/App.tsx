@@ -9,6 +9,7 @@ import { VehicleScreen } from "./field/VehicleScreen";
 import { Dashboard } from "./field/Dashboard";
 import { Toasts } from "./field/toast";
 import { useRoute } from "./field/route";
+import { EnvBanner } from "./env";
 import "./field/field.css";
 
 interface Me {
@@ -26,7 +27,7 @@ export function App() {
   if (path === "/login" && params.get("token")) page = <VerifyLogin token={params.get("token")!} />;
   else if (path === "/invite" && params.get("token")) page = <AcceptInvite token={params.get("token")!} />;
   else page = getAuth() ? <Shell /> : <LoginPage />;
-  return <div key={lang}>{page}</div>;
+  return <div key={lang}><EnvBanner />{page}</div>;
 }
 
 /** DE | EN switch. When signed in, the choice is also saved on the account (used for e-mails). */

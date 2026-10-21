@@ -80,7 +80,7 @@ export const deField = {
   unmappedLocations: "Unbekannte Standorte", unmappedLocationsHint: "Diese Location-Texte kommen in Scans vor und gehören noch zu keiner Halle / keinem Platz.",
   "w.no_link": "Kunde in Colibri unbekannt", "w.no_site": "Keine Carrosserie für diesen Kunden", "w.tenant_mismatch": "Carrosserie gehört zu einem anderen Tenant", "w.location_unmapped": "Standort nicht zugeordnet",
   "w.no_insurer": "Versicherung nicht verknüpft", "w.scan_failed": "Scan fehlgeschlagen",
-  exportBackup: "Sicherung exportieren (altes Format)", appUpdated: "App aktualisiert – alle Daten sind erhalten", commissionWord: "Provision",
+  exportBackup: "Sicherung exportieren (altes Format)", appUpdated: "App aktualisiert – alle Daten sind erhalten", stagingBanner: "STAGING – Testumgebung: keine echten E-Mails, Daten können jederzeit zurückgesetzt werden", commissionWord: "Provision",
   "ps.haube": "Haube", "ps.dach": "Dach", "ps.dachholm_l": "Holm", "ps.dachholm_r": "Holm", "ps.heck": "Heck", "ps.heck_u": "Heck u.", "ps.kfl_vl": "Kotfl.", "ps.kfl_vr": "Kotfl.",
   "ps.tuer_vl": "Tür v.", "ps.tuer_vr": "Tür v.", "ps.tuer_hl": "Tür h.", "ps.tuer_hr": "Tür h.", "ps.sw_hl": "Seite", "ps.sw_hr": "Seite",
   // statuses, hold reasons, photo phases, conditions, image labels, panels
@@ -121,7 +121,7 @@ export const enField: Record<FieldKey, string> = {
   unmappedLocations: "Unknown locations", unmappedLocationsHint: "These location texts appear in scans and do not belong to any hall / yard yet.",
   "w.no_link": "Customer unknown in Colibri", "w.no_site": "No body shop for this customer", "w.tenant_mismatch": "Body shop belongs to another tenant", "w.location_unmapped": "Location not assigned",
   "w.no_insurer": "Insurer not linked", "w.scan_failed": "Scan failed",
-  exportBackup: "Export backup (old format)", appUpdated: "App updated – all your data is kept", commissionWord: "Commission",
+  exportBackup: "Export backup (old format)", appUpdated: "App updated – all your data is kept", stagingBanner: "STAGING – test environment: no real e-mails, data can be reset at any time", commissionWord: "Commission",
   "ps.haube": "Hood", "ps.dach": "Roof", "ps.dachholm_l": "Rail", "ps.dachholm_r": "Rail", "ps.heck": "Tailgate", "ps.heck_u": "Tail low", "ps.kfl_vl": "Fender", "ps.kfl_vr": "Fender",
   "ps.tuer_vl": "Door F", "ps.tuer_vr": "Door F", "ps.tuer_hl": "Door R", "ps.tuer_hr": "Door R", "ps.sw_hl": "Side", "ps.sw_hr": "Side",
   accept: "Use", admin: "Administration", aiUnavailable: "AI unreachable – simple recognition used, please check.",

@@ -76,6 +76,9 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     return c.json({ ok: true });
   });
 
+  /** Public: which environment this is (banner) and whether the new UI is the default. No secrets. */
+  app.get("/config", (c) => c.json({ appEnv: cfg.appEnv, uiV3Default: cfg.uiV3Default }));
+
   // ---------- auth (public) ----------
   const auth = new Hono<Env>();
   auth.post("/request-link", rateLimit(L.requestLink, 15 * 60_000, ip), zValidator("json", loginRequestInput, validationHook), async (c) => {

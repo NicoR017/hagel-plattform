@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { ocrInput, pushInput, type PushResponse } from "@hagel/shared";
+import { KNOWN_OP_TYPES, errorMessage, ocrInput, pickLang, pushInput, type PushResponse } from "@hagel/shared";
 import { HttpError } from "./auth";
 import type { Db } from "./db";
 import type { Env } from "./env";
@@ -31,8 +31,14 @@ const MAX_PDF = 15 * 1024 * 1024;
 export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }: Deps) {
   const r = new Hono<Env>();
 
-  r.post("/sync/push", needAuth, zValidator("json", pushInput, validationHook), async (c) => {
-    const { results, touched } = await processPush({ db, hub, storage }, c.get("principal"), c.req.valid("json").ops);
+  r.post("/sync/push", needAuth, async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as { ops?: unknown } | null;
+    // an op type this version does not know (client newer than server): refuse the batch BEFORE applying anything, the client keeps it queued
+    const unknown = Array.isArray(raw?.ops) ? (raw!.ops as { type?: unknown }[]).find((o) => typeof o?.type === "string" && !KNOWN_OP_TYPES.includes(o.type)) : undefined;
+    if (unknown) return c.json({ error: errorMessage("unsupported_op", pickLang(c.req.header("x-lang"), c.req.header("accept-language"))), code: "unsupported_op", opType: unknown.type }, 409);
+    const parsed = pushInput.safeParse(raw);
+    if (!parsed.success) return validationHook({ success: false }, c) as Response;
+    const { results, touched } = await processPush({ db, hub, storage }, c.get("principal"), parsed.data.ops);
     for (const [orgId, seq] of touched) hub.publish(orgId, seq);
     return c.json({ results } satisfies PushResponse);
   });

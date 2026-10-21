@@ -119,6 +119,15 @@ export const opSchema = z.discriminatedUnion("type", [
 ]);
 export type Op = z.infer<typeof opSchema>;
 
+/** Every op type this version understands. The server answers 409 `unsupported_op` (nothing applied) for any other type. */
+export const KNOWN_OP_TYPES: readonly string[] = opSchema.options.map((o) => o.shape.type.value);
+/**
+ * Op types added after the first release (UI v3). A client sends them in batches of their own, never mixed with the older
+ * types, and keeps them queued (instead of dropping them) when the server does not know them yet (rollback, partial deploy).
+ */
+export const V3_OP_TYPES: readonly string[] = [];
+export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
+
 export const pushInput = z.object({ ops: z.array(opSchema).min(1).max(200) });
 export type PushInput = z.infer<typeof pushInput>;
 

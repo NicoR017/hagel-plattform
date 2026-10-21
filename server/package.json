@@ -9,6 +9,8 @@
     "start": "tsx src/index.ts",
     "worker": "tsx src/worker.ts",
     "migrate": "tsx src/migrate.ts",
+    "integrity": "tsx src/scripts/integrity.ts",
+    "seed:staging": "tsx src/scripts/seed_staging.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
