@@ -12,7 +12,7 @@ import { shareOrDownload } from "../field/docs";
 import { hrefOf, type Route } from "../field/route";
 import { toast } from "../field/toast";
 import { confirmDialog } from "../field/ui";
-import { fmtDateTime, getLang, t, tOr, type Key } from "../i18n";
+import { fmtDateTime, getLang, locale, t, tOr, type Key } from "../i18n";
 import { Shell3 } from "./Shell3";
 
 interface Me {
@@ -232,7 +232,7 @@ function TestCalc({ engine, country, params }: { engine: "aw" | "matrix"; countr
   return (
     <div className="testcalc">
       <b>{t("v6MTest")}</b><div className="muted">{t("v6MTestHint")}</div>
-      {r ? <div className="row" style={{ gap: 24, marginTop: 6 }}><span>{t("v6MTestAw")}: <b>{(r.es?.totH ?? r.totalAW)?.toLocaleString(getLang() === "de" ? "de-DE" : "en-GB")}</b></span><span>{t("v6MTestNet")}: <b>{eur(r.netto)}</b></span></div> : <span className="muted">—</span>}
+      {r ? <div className="row" style={{ gap: 24, marginTop: 6 }}><span>{t("v6MTestAw")}: <b>{(r.es?.totH ?? r.totalAW)?.toLocaleString(locale())}</b></span><span>{t("v6MTestNet")}: <b>{eur(r.netto)}</b></span></div> : <span className="muted">—</span>}
     </div>
   );
 }
@@ -319,7 +319,7 @@ function WeeklyPage() {
   const sheets = (d.data?.sheets ?? []).filter((s) => !who || s.technician === who);
   const person = d.data?.people.find((p) => p.name.toLowerCase() === who.toLowerCase());
   const grand = sheets.reduce((a, s) => a + s.totals.eur, 0);
-  const lang = getLang() === "de" ? "de" : "en";
+  const lang = getLang();
   const money = (n: number) => eur(n);
   const names = [...new Set([...(d.data?.sheets ?? []).map((s) => s.technician), ...(d.data?.people ?? []).filter((p) => p.active).map((p) => p.name)])].sort((a, b) => a.localeCompare(b, "de"));
   useEffect(() => { setTo(person?.email ?? ""); }, [who, d.data]); // eslint-disable-line react-hooks/exhaustive-deps

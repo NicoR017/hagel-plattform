@@ -4,8 +4,18 @@ import { dictionaries, getLang, setLang, t, tOr } from "../src/i18n";
 
 describe("UI dictionaries", () => {
   const de = Object.keys(dictionaries.de).sort();
-  it("de and en have exactly the same keys", () => {
-    expect(Object.keys(dictionaries.en).sort()).toEqual(de);
+  it("de, en, fr and es have exactly the same keys", () => {
+    for (const l of ["en", "fr", "es"] as const) expect(Object.keys(dictionaries[l]).sort(), l).toEqual(de);
+  });
+  it("French and Spanish are really translated (few strings identical to German: names and shared words only)", () => {
+    for (const l of ["fr", "es"] as const) {
+      const same = de.filter((k) => dictionaries[l][k as never] === dictionaries.de[k as never]);
+      expect(same.length, `${l}: ${same.join(", ")}`).toBeLessThan(60);
+    }
+  });
+  it("placeholders survive translation", () => {
+    const ph = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join();
+    for (const l of ["en", "fr", "es"] as const) for (const k of de) expect(ph(dictionaries[l][k as never]), `${l}:${k}`).toBe(ph(dictionaries.de[k as never]));
   });
   it("no empty strings", () => {
     for (const l of LANGS) for (const [k, v] of Object.entries(dictionaries[l])) expect(v.trim(), `${l}:${k}`).not.toBe("");
@@ -45,7 +55,22 @@ describe("API error messages", () => {
   it("picks the language from X-Lang, then Accept-Language, else German", () => {
     expect(pickLang("en", "de")).toBe("en");
     expect(pickLang(undefined, "en-GB,en;q=0.9")).toBe("en");
-    expect(pickLang(null, "fr-FR")).toBe("de");
+    expect(pickLang(null, "fr-FR")).toBe("fr");
+    expect(pickLang("es", "de")).toBe("es");
+    expect(pickLang(null, "it-IT")).toBe("de");
     expect(pickLang("xx", undefined)).toBe("de");
   });
 });
+
+describe("French and Spanish API messages and e-mails", () => {
+  it("every error code has a French and a Spanish message with the same placeholders", () => {
+    for (const code of Object.keys(ERROR_MESSAGES) as (keyof typeof ERROR_MESSAGES)[]) {
+      for (const l of ["fr", "es"] as const) {
+        const m = errorMessage(code, l, { missing: "X", fields: "X", reasons: "X" });
+        expect(m.length, `${l}:${code}`).toBeGreaterThan(3);
+        expect(m, `${l}:${code}`).not.toBe(errorMessage(code, "de", { missing: "X", fields: "X", reasons: "X" }));
+      }
+    }
+  });
+});
+

@@ -7,4 +7,4 @@ export {
 export type { EsLine } from "./text";
 export { generateTechnicianWorksheets, generateKvaPdf, appendScanPdf, generateRepairPhotoReport, winAnsi, wrapText } from "./pdf";
 export { buildXlsx, xlsxFileName, xlsxColumnHeaders } from "./xlsx";
-export { buildTechnicianWorkbook, techWorkbookFileName, techPdfFileName, type TechSheetData } from "./techsheet";
+export { buildTechnicianWorkbook, techWorkbookFileName, techPdfFileName, type TechSheetData, type TechLang } from "./techsheet";

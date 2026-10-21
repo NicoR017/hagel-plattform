@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, setAuth } from "../api";
-import { t } from "../i18n";
+import { LANG_LIST, setLang, t, useLang } from "../i18n";
 import { BackupImport } from "../field/BackupImport";
 import { SettingsDialog } from "../field/Dialogs";
 import { go, hrefOf, parentRoute, type Route } from "../field/route";
@@ -21,6 +21,7 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
   route: Route; crumbs: Crumb[]; vehicleStationId?: string | null; children: ReactNode;
 }) {
   const f = useField();
+  const lang = useLang();
   const [menu, setMenu] = useState(false);
   const [dlg, setDlg] = useState<null | "settings" | "backup">(null);
   const box = useRef<HTMLDivElement>(null);
@@ -74,6 +75,16 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
           {menu && (
             <div className="menu" role="menu">
               <div style={{ padding: "8px 14px", fontSize: 12, color: "#5B6576" }}>{t("v3SignedInAs")}<br /><b style={{ color: "#1A2433", fontSize: 14 }}>{name}</b></div>
+              <hr />
+              <div className="langrow" role="group" aria-label={t("language")}>
+                <span>🌐 {t("language")}</span>
+                <span className="opts">
+                  {LANG_LIST.map((l) => (
+                    <button key={l} role="menuitemradio" aria-checked={l === lang} className={l === lang ? "on" : ""}
+                      onClick={() => { setLang(l); void api("PUT", "/me/language", { language: l }).catch(() => undefined); }}>{l.toUpperCase()}</button>
+                  ))}
+                </span>
+              </div>
               <hr />
               {f.can("dashboard.voir") && <a role="menuitem" href={hrefOf({ page: "dashboard" })} onClick={() => setMenu(false)}>📊 {t("v3Dashboard")}</a>}
               <button role="menuitem" onClick={() => { setMenu(false); setDlg("settings"); }}>⚙ {t("v3Settings")}</button>

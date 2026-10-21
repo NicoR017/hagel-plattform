@@ -52,7 +52,7 @@ export function weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }: 
   });
 
   /** Build the PDF of one person's week and e-mail it (to the person's address; `email` overrides). Logged in the audit trail. */
-  r.post("/weekly-report/send", needAuth, needOrg, may, zValidator("json", z.object({ week: weekInput, technician: z.string().trim().min(1).max(120), email: emailSchema.optional(), lang: z.enum(["de", "en"]).default("de") }), validationHook), async (c) => {
+  r.post("/weekly-report/send", needAuth, needOrg, may, zValidator("json", z.object({ week: weekInput, technician: z.string().trim().min(1).max(120), email: emailSchema.optional(), lang: z.enum(["de", "en", "fr", "es"]).default("de") }), validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId"), u = c.get("principal");
     const { from, to, sheets } = await sheetsOf(c, b.week, b.technician);
     const sheet: TechSheet | undefined = sheets[0];
@@ -64,13 +64,16 @@ export function weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }: 
     const data: TechSheetData[] = [{ technician: sheet.technician, sites: sheet.sites, vehicles: sheet.vehicles, totals: sheet.totals }];
     const pdf = await generateTechnicianWorksheets({ from, to, sheets: data }, b.lang);
     const [me] = await db.select().from(users).where(eq(users.id, u.id));
-    const de = b.lang === "de";
+    const sig = me?.name ? "\n" + me.name : "";
+    const n = sheet.totals.n, who = sheet.technician;
+    const mail = {
+      de: { subject: `Wochenbericht ${b.week} – ${who}`, text: `Hallo ${who},\n\nanbei dein Wochenbericht für ${b.week} (${from} bis ${to}): ${n} Fahrzeuge.\n\nViele Grüße${sig}` },
+      en: { subject: `Weekly report ${b.week} – ${who}`, text: `Hello ${who},\n\nattached is your weekly report for ${b.week} (${from} to ${to}): ${n} vehicles.\n\nBest regards${sig}` },
+      fr: { subject: `Rapport hebdomadaire ${b.week} – ${who}`, text: `Bonjour ${who},\n\nvous trouverez ci-joint votre rapport hebdomadaire pour ${b.week} (du ${from} au ${to}) : ${n} véhicules.\n\nCordialement${sig}` },
+      es: { subject: `Informe semanal ${b.week} – ${who}`, text: `Hola ${who}:\n\nadjunto su informe semanal de ${b.week} (del ${from} al ${to}): ${n} vehículos.\n\nUn saludo${sig}` },
+    }[b.lang];
     await mailer.send({
-      to: to_, replyTo: me?.email,
-      subject: de ? `Wochenbericht ${b.week} – ${sheet.technician}` : `Weekly report ${b.week} – ${sheet.technician}`,
-      text: de
-        ? `Hallo ${sheet.technician},\n\nanbei dein Wochenbericht für ${b.week} (${from} bis ${to}): ${sheet.totals.n} Fahrzeuge.\n\nViele Grüße${me?.name ? "\n" + me.name : ""}`
-        : `Hello ${sheet.technician},\n\nattached is your weekly report for ${b.week} (${from} to ${to}): ${sheet.totals.n} vehicles.\n\nBest regards${me?.name ? "\n" + me.name : ""}`,
+      to: to_, replyTo: me?.email, subject: mail.subject, text: mail.text,
       attachments: [{ filename: techPdfFileName(from, to, b.lang), content: pdf, contentType: "application/pdf" }],
     });
     await audit(db, { orgId, userId: u.id, action: "send_weekly_report", entity: "technician", entityId: tech?.t.id ?? null, after: { week: b.week, technician: sheet.technician, to: to_, vehicles: sheet.totals.n, eur: sheet.totals.eur } });

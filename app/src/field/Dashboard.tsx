@@ -134,7 +134,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
     try {
       const d = await api<{ from: string | null; to: string | null; sheets: TechSheetData[] }>("GET", `/dashboard/technician-sheets${query()}`);
       if (!d.sheets.length) { toast(t("exportEmpty")); return; }
-      const lang = getLang() === "en" ? "en" : "de";
+      const lang = getLang();
       if (kind === "pdf") await shareOrDownload(await generateTechnicianWorksheets(d, lang), techPdfFileName(d.from, d.to, lang), "application/pdf");
       else await shareOrDownload(buildTechnicianWorkbook(d, lang), techWorkbookFileName(d.from, d.to, lang), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     } catch (e) { toast((e as Error).message); } finally { setBusy(false); }

@@ -4,7 +4,7 @@ import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
 import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
 import type { DocPhoto, DocVehicle, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
-import { TECH_LABELS, techDate, type TechSheetData } from "./techsheet";
+import { TECH_LABELS, techDate, type TechLang, type TechSheetData } from "./techsheet";
 
 const W = 595.28, H = 841.89, L = 42, R = 553;
 
@@ -387,11 +387,13 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
  * "PDR Technician Worksheet" like the paper one: technician, site, period, table of the cars finished in the period with the amount,
  * summary and two signature lines. One section per technician (it flows to further pages when the table is long). Internal document.
  */
-export async function generateTechnicianWorksheets(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: "de" | "en" = "de", now: Date = new Date()): Promise<Uint8Array> {
+export async function generateTechnicianWorksheets(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: TechLang = "de", now: Date = new Date()): Promise<Uint8Array> {
   const l = TECH_LABELS[lang];
   const cv = await Canvas.create(now);
-  const money = (n: number) => `${n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-  const aw = (n: number) => n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // French uses a narrow no-break space (U+202F) as thousands separator: the PDF font (WinAnsi) cannot draw it
+  const num = (n: number) => n.toLocaleString(({ de: "de-DE", en: "en-GB", fr: "fr-FR", es: "es-ES" })[lang], { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[  ]/g, " ");
+  const money = (n: number) => `${num(n)} €`;
+  const aw = num;
   const period = `${data.from ? techDate(data.from) : "…"} – ${data.to ? techDate(data.to) : "…"}`;
   // columns: start, end, plate, model, AW (right), amount (right)
   const X = [L, L + 78, L + 156, L + 246, L + 420, R];

@@ -438,7 +438,15 @@ describe("languages (DE / EN)", () => {
     await login("english@example.test");
     expect(mailer.last().subject).toBe("Anmeldung PDR Hagel");
     expect(mailer.last().text).toContain("nur einmal verwendbar");
-    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "fr" } })).status).toBe(400);
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "fr" } })).status).toBe(200);
+    await login("english@example.test");
+    expect(mailer.last().subject).toBe("Connexion à PDR Hagel");
+    expect(mailer.last().text).toContain("usage unique");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "es" } })).status).toBe(200);
+    await login("english@example.test");
+    expect(mailer.last().subject).toBe("Acceso a PDR Hagel");
+    expect(mailer.last().text).toContain("un solo uso");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "it" } })).status).toBe(400);
     expect((await call("PUT", "/me/language", { body: { language: "en" } })).status).toBe(401);
   });
   it("existing user granted access gets the notification in their language", async () => {

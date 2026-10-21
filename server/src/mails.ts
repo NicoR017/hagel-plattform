@@ -2,34 +2,65 @@ import type { Lang } from "@hagel/shared";
 
 export interface MailBody { subject: string; text: string }
 
+/** Account e-mails in the four UI languages (de default). */
 export function loginMail(lang: Lang, name: string, link: string, minutes: number): MailBody {
-  return lang === "en"
-    ? {
-        subject: "Sign in to PDR Hagel",
-        text: `Hello ${name || ""},\n\nHere is your sign-in link (valid for ${minutes} minutes, single use):\n${link}\n\nIf you did not request this, you can ignore this e-mail.`,
-      }
-    : {
-        subject: "Anmeldung PDR Hagel",
-        text: `Hallo ${name || ""},\n\nHier ist Ihr Anmelde-Link (${minutes} Minuten gültig, nur einmal verwendbar):\n${link}\n\nWenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.`,
-      };
+  const n = name || "";
+  switch (lang) {
+    case "en": return { subject: "Sign in to PDR Hagel", text: `Hello ${n},
+
+Here is your sign-in link (valid for ${minutes} minutes, single use):
+${link}
+
+If you did not request this, you can ignore this e-mail.` };
+    case "fr": return { subject: "Connexion à PDR Hagel", text: `Bonjour ${n},
+
+Voici votre lien de connexion (valable ${minutes} minutes, à usage unique) :
+${link}
+
+Si vous n'en êtes pas à l'origine, vous pouvez ignorer cet e-mail.` };
+    case "es": return { subject: "Acceso a PDR Hagel", text: `Hola ${n}:
+
+Este es su enlace de acceso (válido durante ${minutes} minutos, de un solo uso):
+${link}
+
+Si no lo ha solicitado, puede ignorar este correo.` };
+    default: return { subject: "Anmeldung PDR Hagel", text: `Hallo ${n},
+
+Hier ist Ihr Anmelde-Link (${minutes} Minuten gültig, nur einmal verwendbar):
+${link}
+
+Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.` };
+  }
 }
 
 export function inviteMail(lang: Lang, orgName: string, link: string, hours: number): MailBody {
-  return lang === "en"
-    ? {
-        subject: `Invitation to PDR Hagel (${orgName})`,
-        text: `You have been invited to ${orgName}.\nCreate your account (valid for ${hours} hours, single use):\n${link}`,
-      }
-    : {
-        subject: `Einladung zu PDR Hagel (${orgName})`,
-        text: `Sie wurden zu ${orgName} eingeladen.\nKonto erstellen (${hours} Stunden gültig, nur einmal verwendbar):\n${link}`,
-      };
+  switch (lang) {
+    case "en": return { subject: `Invitation to PDR Hagel (${orgName})`, text: `You have been invited to ${orgName}.
+Create your account (valid for ${hours} hours, single use):
+${link}` };
+    case "fr": return { subject: `Invitation à PDR Hagel (${orgName})`, text: `Vous avez été invité(e) à rejoindre ${orgName}.
+Créez votre compte (valable ${hours} heures, à usage unique) :
+${link}` };
+    case "es": return { subject: `Invitación a PDR Hagel (${orgName})`, text: `Le han invitado a ${orgName}.
+Cree su cuenta (válido durante ${hours} horas, de un solo uso):
+${link}` };
+    default: return { subject: `Einladung zu PDR Hagel (${orgName})`, text: `Sie wurden zu ${orgName} eingeladen.
+Konto erstellen (${hours} Stunden gültig, nur einmal verwendbar):
+${link}` };
+  }
 }
 
 export function accessMail(lang: Lang, orgName: string, link: string): MailBody {
-  return lang === "en"
-    ? { subject: `New access: ${orgName}`, text: `You have been given access to ${orgName}.\nSign in: ${link}` }
-    : { subject: `Neuer Zugriff: ${orgName}`, text: `Sie haben Zugriff auf ${orgName} erhalten.\nAnmelden: ${link}` };
+  switch (lang) {
+    case "en": return { subject: `New access: ${orgName}`, text: `You have been given access to ${orgName}.
+Sign in: ${link}` };
+    case "fr": return { subject: `Nouvel accès : ${orgName}`, text: `Un accès à ${orgName} vous a été accordé.
+Se connecter : ${link}` };
+    case "es": return { subject: `Nuevo acceso: ${orgName}`, text: `Se le ha concedido acceso a ${orgName}.
+Acceder: ${link}` };
+    default: return { subject: `Neuer Zugriff: ${orgName}`, text: `Sie haben Zugriff auf ${orgName} erhalten.
+Anmelden: ${link}` };
+  }
 }
 
 export interface ReportMailInfo { plate: string; model: string; vin: string; hasScan: boolean; senderName: string }

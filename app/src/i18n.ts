@@ -1,7 +1,6 @@
 /**
- * One i18n file. UI languages: German (default) and English. The whole UI is always in ONE language:
- * every visible string goes through t(); a test checks that both dictionaries have the same keys.
- * Spanish can be added later as a third dictionary.
+ * One i18n file. UI languages: German (default), English, French and Spanish. The whole UI is always in ONE language:
+ * every visible string goes through t(); a test checks that all four dictionaries have the same keys.
  */
 import { useSyncExternalStore } from "react";
 import { DEFAULT_LANG, LANGS, isLang, type Lang } from "@hagel/shared";
@@ -10,6 +9,12 @@ import { deV3, enV3 } from "./i18n_v3";
 import { deV4, enV4 } from "./i18n_v4";
 import { deV5, enV5 } from "./i18n_v5";
 import { deV6, enV6 } from "./i18n_v6";
+import { frBase } from "./i18n_fr_base";
+import { frField } from "./i18n_fr_field";
+import { frV } from "./i18n_fr_v";
+import { esBase } from "./i18n_es_base";
+import { esField } from "./i18n_es_field";
+import { esV } from "./i18n_es_v";
 
 const deBase = {
   appName: "PDR Hagel",
@@ -147,7 +152,10 @@ const enBase: Record<keyof typeof deBase, string> = {
 
 const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6 };
 
-export const dictionaries: Record<Lang, Record<Key, string>> = { de, en };
+const fr = { ...frBase, ...frField, ...frV } as Record<Key, string>;
+const es = { ...esBase, ...esField, ...esV } as Record<Key, string>;
+
+export const dictionaries: Record<Lang, Record<Key, string>> = { de, en, fr, es };
 
 // ---- current language (module state, subscribable) ----
 const STORE = "hagel.lang";
@@ -156,7 +164,9 @@ function initial(): Lang {
     const s = localStorage.getItem(STORE);
     if (isLang(s)) return s;
   } catch { /* storage unavailable */ }
-  return typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("en") ? "en" : DEFAULT_LANG;
+  // first visit: the browser language when it is one of ours, else German
+  const nav = typeof navigator !== "undefined" ? (navigator.language ?? "").slice(0, 2).toLowerCase() : "";
+  return isLang(nav) ? nav : DEFAULT_LANG;
 }
 let current: Lang = initial();
 const listeners = new Set<() => void>();
@@ -177,12 +187,12 @@ export function useLang(): Lang {
   return useSyncExternalStore((cb) => { listeners.add(cb); return () => listeners.delete(cb); }, getLang, getLang);
 }
 
-export const t = (k: Key): string => dictionaries[current][k];
+export const t = (k: Key): string => dictionaries[current][k] ?? dictionaries.de[k];
 /** Translated label if the key exists, otherwise the fallback (e.g. a custom, admin-defined name). */
 export function tOr(k: string, fallback: string): string {
   const d = dictionaries[current] as Record<string, string>;
   return d[k] ?? fallback;
 }
-export const locale = () => (current === "en" ? "en-GB" : "de-DE");
+export const locale = () => ({ de: "de-DE", en: "en-GB", fr: "fr-FR", es: "es-ES" })[current];
 export const fmtDateTime = (iso: string) => new Date(iso).toLocaleString(locale());
 if (typeof document !== "undefined") document.documentElement.lang = current;

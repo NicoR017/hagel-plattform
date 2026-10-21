@@ -9,6 +9,7 @@ export interface TechSheetData {
   totals: { n: number; aw: number; pdrEur: number; demEur: number; eur: number };
 }
 
+export type TechLang = "de" | "en" | "fr" | "es";
 export const TECH_LABELS = {
   de: {
     overview: "Übersicht", title: "PDR Technician Worksheet", tech: "Techniker", site: "Standort", period: "Zeitraum", start: "Arbeitsbeginn", end: "Arbeitsende", plate: "Kennzeichen", model: "Modell",
@@ -21,6 +22,18 @@ export const TECH_LABELS = {
     aw: "AW", pdr: "PDR pay", dem: "De-/re-mounting pay", pay: "Amount", summary: "Summary", cars: "Vehicles repaired", totalAw: "Total AW",
     totalPdr: "Total PDR pay", totalDem: "Total de-/re-mounting pay", total: "Total pay", date: "Date", signSite: "Signature of the site manager", signTech: "Signature of the technician",
     ovCars: "Vehicles", ovPdr: "PDR €", ovDem: "De-/re-mounting €", ovTotal: "Total €", sum: "Total", none: "No vehicles in this period.",
+  },
+  fr: {
+    overview: "Aperçu", title: "PDR Technician Worksheet", tech: "Technicien", site: "Site", period: "Période", start: "Début des travaux", end: "Fin des travaux", plate: "Immatriculation", model: "Modèle",
+    aw: "AW", pdr: "Rémunération PDR", dem: "Rémunération démontage", pay: "Montant", summary: "Récapitulatif", cars: "Véhicules réparés", totalAw: "Total AW",
+    totalPdr: "Total rémunération PDR", totalDem: "Total rémunération démontage", total: "Total rémunération", date: "Date", signSite: "Signature du responsable de site", signTech: "Signature du technicien",
+    ovCars: "Véhicules", ovPdr: "PDR €", ovDem: "Démontage €", ovTotal: "Total €", sum: "Total", none: "Aucun véhicule sur cette période.",
+  },
+  es: {
+    overview: "Resumen", title: "PDR Technician Worksheet", tech: "Técnico", site: "Sede", period: "Periodo", start: "Inicio del trabajo", end: "Fin del trabajo", plate: "Matrícula", model: "Modelo",
+    aw: "AW", pdr: "Pago PDR", dem: "Pago desmontaje", pay: "Importe", summary: "Resumen", cars: "Vehículos reparados", totalAw: "Total AW",
+    totalPdr: "Total pago PDR", totalDem: "Total pago desmontaje", total: "Total a pagar", date: "Fecha", signSite: "Firma del responsable de la sede", signTech: "Firma del técnico",
+    ovCars: "Vehículos", ovPdr: "PDR €", ovDem: "Desmontaje €", ovTotal: "Total €", sum: "Total", none: "Ningún vehículo en este periodo.",
   },
 } as const;
 const L = TECH_LABELS;
@@ -96,15 +109,16 @@ const sheetName = (s: string, used: Set<string>) => {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** `Abrechnung_<from>_<to>.xlsx` style name for the download. */
-export function techWorkbookFileName(from: string | null, to: string | null, lang: "de" | "en" = "de"): string {
-  return `${lang === "de" ? "Technikerabrechnung" : "Technician_pay"}_${from ?? "alle"}_${to ?? "alle"}.xlsx`;
+export function techWorkbookFileName(from: string | null, to: string | null, lang: TechLang = "de"): string {
+  const base = { de: "Technikerabrechnung", en: "Technician_pay", fr: "Paie_techniciens", es: "Pago_tecnicos" }[lang];
+  return `${base}_${from ?? "alle"}_${to ?? "alle"}.xlsx`;
 }
 
 /**
  * Workbook: one overview sheet (cars and pay per technician) and one worksheet per technician laid out like the paper "PDR Technician
  * Worksheet": header, table of finished cars, summary, signature lines.
  */
-export function buildTechnicianWorkbook(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: "de" | "en" = "de"): Uint8Array {
+export function buildTechnicianWorkbook(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: TechLang = "de"): Uint8Array {
   const l = L[lang];
   const period = [data.from ? fmtDate(data.from) : "…", data.to ? fmtDate(data.to) : "…"].join(" – ");
   const used = new Set<string>([l.overview.toLowerCase()]);
@@ -166,6 +180,6 @@ export function buildTechnicianWorkbook(data: { from: string | null; to: string 
 }
 
 export const techDate = fmtDate;
-export function techPdfFileName(from: string | null, to: string | null, lang: "de" | "en" = "de"): string {
+export function techPdfFileName(from: string | null, to: string | null, lang: TechLang = "de"): string {
   return techWorkbookFileName(from, to, lang).replace(/\.xlsx$/, ".pdf");
 }

@@ -1,4 +1,7 @@
-export const LANGS = ["de", "en"] as const;
+import { ERRORS_ES, ERRORS_FR } from "./errors_fr_es";
+
+/** UI / e-mail languages: German (default), English, French, Spanish */
+export const LANGS = ["de", "en", "fr", "es"] as const;
 export type Lang = (typeof LANGS)[number];
 export const DEFAULT_LANG: Lang = "de";
 export const isLang = (x: unknown): x is Lang => (LANGS as readonly unknown[]).includes(x);
@@ -86,7 +89,8 @@ export const ERROR_MESSAGES = {
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
 
 export function errorMessage(code: ErrorCode, lang: Lang = DEFAULT_LANG, params: Record<string, string> = {}): string {
-  const m = ERROR_MESSAGES[code][lang];
+  const e = ERROR_MESSAGES[code];
+  const m = lang === "fr" ? ERRORS_FR[code] ?? e.en : lang === "es" ? ERRORS_ES[code] ?? e.en : e[lang];
   return m.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? "");
 }
 
