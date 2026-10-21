@@ -7,6 +7,7 @@ import { NewExpertise } from "./NewExpertise";
 import { Shell3, type Crumb } from "./Shell3";
 import { Stations } from "./Stations";
 import { VehicleDetail } from "./VehicleDetail";
+import { RepairDetail } from "./RepairDetail";
 import { VehicleList } from "./VehicleList";
 import { modeTitle } from "./listActions";
 import "./v3.css";
@@ -16,7 +17,7 @@ interface Me { user: { name: string; email: string }; organizations: { id: strin
 /** Every screen of the new interface: stations, station modes, vehicle lists, assessment assistant, vehicle detail. */
 export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg: (id: string) => void; route: Route }) {
   const f = useField();
-  const vehicleId = route.page === "vehicle" || route.page === "expertise" ? route.id : "";
+  const vehicleId = route.page === "vehicle" || route.page === "expertise" || route.page === "repair" ? route.id : "";
   const vehicle = useVehicle(vehicleId);
   const stationOf = (id: string) => f.refs?.stations.find((s) => s.id === id);
   const home: Crumb = { label: t("v3Stations"), to: { page: "list" } };
@@ -40,6 +41,9 @@ export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg
     const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "kalk" as const } : undefined);
     crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: `${t("v4Expertise")} · ${plate}` }) : [home, { label: `${t("v4Expertise")} · ${plate}` }];
     body = <Expertise id={route.id} step={route.step} ctx={route.ctx} />;
+  } else if (route.page === "repair") {
+    crumbs = trail(route.stationId, "rep", { label: plate });
+    body = <RepairDetail id={route.id} tab={route.tab} stationId={route.stationId} />;
   } else if (route.page === "vehicle") {
     const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "all" as const } : undefined);
     crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: plate }) : [home, { label: plate }];

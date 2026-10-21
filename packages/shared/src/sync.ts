@@ -220,6 +220,10 @@ export interface ClientRepair {
   comments: { id: string; userId: string | null; userName: string; at: string; text: string }[];
   appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[];
   booking: { id: string; date: string; time: string; status: string; phone: string; email: string; createdBy: string | null; createdAt: string } | null;
+  /** day of the repair booking that moved this car into "Bereit" by itself (card badge "Termin heute") */
+  autoStartedOn?: string | null;
+  /** the last repair report sent for this vehicle (automatic or re-sent) */
+  lastReport?: { status: string; at: string; auto: boolean } | null;
 }
 
 export interface ClientMethod {
@@ -233,7 +237,7 @@ export interface ClientPhoto {
   takenAt: string; takenBy: string | null; sort: number; hasFile: boolean;
   colibriPosition: string | null; colibriIndex: number | null; deleted: boolean; seq: number;
   /** repair stage the photo belongs to and the role of the person who took it (UI v3) */
-  repairStage?: string | null; role?: string | null;
+  repairStage?: string | null; role?: string | null; takenByName?: string | null;
 }
 
 export interface ClientStation {

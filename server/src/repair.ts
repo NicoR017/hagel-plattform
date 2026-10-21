@@ -9,6 +9,8 @@ import type { Mailer } from "./email";
 import { bookingMail } from "./mails";
 import { effectivePermissions, type Principal, type VehicleRef } from "./permissions";
 import { loadMethodMap, methodOf } from "./methods";
+import { autoRepairReport } from "./repair_report";
+import type { Storage } from "./storage";
 import { recipientsForStation } from "./reports";
 import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
@@ -126,7 +128,7 @@ type RepairOp = Extract<Op, { type: "vehicle.repairStage" | "photo.stage" | "rep
 export const isRepairOp = (op: Op): op is RepairOp =>
   /^(repair\.|appointment\.|booking\.)/.test(op.type) || op.type === "vehicle.repairStage" || op.type === "photo.stage" || op.type === "vehicle.comment";
 
-export async function applyRepairOp(deps: { db: Db; mailer?: Mailer }, tx: Tx, u: Principal, op: RepairOp, at: number): Promise<OpOutcome> {
+export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: Storage }, tx: Tx, u: Principal, op: RepairOp, at: number): Promise<OpOutcome> {
   const db = tx as unknown as Db;
   switch (op.type) {
     case "vehicle.repairStage": {
@@ -167,7 +169,10 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer }, tx: Tx, u
         await event(tx, row.id, u.id, "stage", { from, to: op.stage });
       }
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: row.id, before: { stage: from }, after: { stage: op.stage } });
-      return touchVehicle(tx, u, row, set);
+      const out = await touchVehicle(tx, u, row, set);
+      // "Finish": the repair report goes out by itself (once per vehicle), after the change is saved; a failure never undoes the Finish
+      if (op.stage === "finish" && deps.mailer && deps.storage) { const rd = { db: deps.db, storage: deps.storage, mailer: deps.mailer }; return { ...out, after: () => autoRepairReport(rd, row.id) }; }
+      return out;
     }
 
     case "photo.stage": {
@@ -344,12 +349,14 @@ export async function repairDataFor(db: Pick<Db, "select">, u: Principal, items:
   const eligible = items.filter(({ ref }) => { const p = effectivePermissions(u, ref); return p.has("reparatur.board") || p.has("kommentare.schreiben") || p.has("termine.buchen"); });
   if (!eligible.length) return out;
   const ids = eligible.map((x) => x.row.id);
-  const [todos, checks, comments, appts, bookings] = await Promise.all([
+  const [todos, checks, comments, appts, bookings, started, reports] = await Promise.all([
     db.select().from(repairTodos).where(and(inArray(repairTodos.vehicleId, ids), isNull(repairTodos.deletedAt))).orderBy(asc(repairTodos.sort), asc(repairTodos.createdAt)),
     db.select().from(repairChecks).where(inArray(repairChecks.vehicleId, ids)),
     db.select().from(vehicleComments).where(and(inArray(vehicleComments.vehicleId, ids), isNull(vehicleComments.deletedAt))).orderBy(asc(vehicleComments.at)),
     db.select().from(repairAppointments).where(and(inArray(repairAppointments.vehicleId, ids), isNull(repairAppointments.deletedAt))).orderBy(asc(repairAppointments.date)),
     db.select().from(repairBookings).where(and(inArray(repairBookings.vehicleId, ids), eq(repairBookings.status, "booked"))),
+    db.select().from(repairBookings).where(and(inArray(repairBookings.vehicleId, ids), eq(repairBookings.status, "started"))).orderBy(asc(repairBookings.date)),
+    db.select().from(reportSends).where(and(inArray(reportSends.vehicleId, ids), eq(reportSends.type, "reparation"))).orderBy(asc(reportSends.createdAt)),
   ]);
   const uids = [...new Set([...todos.flatMap((t) => [t.doneBy, t.createdBy]), ...checks.map((c) => c.doneBy), ...comments.map((c) => c.userId), ...bookings.map((b) => b.createdBy)].filter((x): x is string => !!x))];
   const names = new Map<string, string>();
@@ -368,6 +375,8 @@ export async function repairDataFor(db: Pick<Db, "select">, u: Principal, items:
       finishBlockers: blockers,
       comments: p.has("kommentare.schreiben") ? comments.filter((c) => c.vehicleId === row.id).map((c) => ({ id: c.id, userId: c.userId, userName: c.userId ? names.get(c.userId) ?? "" : "", at: c.at.toISOString(), text: c.text })) : [],
       appointments: board ? appts.filter((a) => a.vehicleId === row.id).map((a) => ({ id: a.id, technicianId: a.technicianId, date: a.date, durationMin: a.durationMin, note: a.note })) : [],
+      autoStartedOn: board ? ([...started].reverse().find((s) => s.vehicleId === row.id)?.date ?? null) : null,
+      lastReport: board ? (() => { const r = [...reports].reverse().find((x) => x.vehicleId === row.id); return r ? { status: r.status, at: (r.sentAt ?? r.createdAt).toISOString(), auto: r.sentBy == null } : null; })() : null,
       booking: bk ? { id: bk.id, date: bk.date, time: bk.time, status: bk.status, phone: bk.customerPhone, email: bk.customerEmail, createdBy: bk.createdBy ? names.get(bk.createdBy) ?? null : null, createdAt: bk.createdAt.toISOString() } : null,
     });
   }

@@ -527,7 +527,8 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   const sent = new Set(outVehicles.map((x) => x.id));
   const repair = await repairDataFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
   for (const cv of outVehicles) { const x = repair.get(cv.id); if (x) cv.repair = x; }
-  const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map(photoToClient);
+  const photoNames = await userNames(db, ps.map((p) => p.takenBy));
+  const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map((p) => photoToClient(p, photoNames));
 
   const cursor = Math.max(since, ...vs.map((r) => r.seq), ...ps.map((p) => p.seq));
   return {
@@ -536,10 +537,10 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   };
 }
 
-export const photoToClient = (p: PhotoRow): ClientPhoto => ({
+export const photoToClient = (p: PhotoRow, names?: Map<string, string>): ClientPhoto => ({
   id: p.id, vehicleId: p.vehicleId, label: p.label, phase: p.phase as ClientPhoto["phase"], source: p.source, inPdf: p.inPdf,
   takenAt: p.takenAt.toISOString(), takenBy: p.takenBy, sort: p.sort, hasFile: !!p.fileKey, colibriPosition: p.colibriPosition,
-  colibriIndex: p.colibriIndex, deleted: !!p.deletedAt, seq: p.seq, repairStage: p.repairStage, role: p.role,
+  colibriIndex: p.colibriIndex, deleted: !!p.deletedAt, seq: p.seq, repairStage: p.repairStage, role: p.role, takenByName: p.takenBy ? names?.get(p.takenBy) ?? null : null,
 });
 
 /**

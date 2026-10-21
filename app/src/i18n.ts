@@ -8,6 +8,7 @@ import { DEFAULT_LANG, LANGS, isLang, type Lang } from "@hagel/shared";
 import { deField, enField } from "./i18n_field";
 import { deV3, enV3 } from "./i18n_v3";
 import { deV4, enV4 } from "./i18n_v4";
+import { deV5, enV5 } from "./i18n_v5";
 
 const deBase = {
   appName: "PDR Hagel",
@@ -76,7 +77,7 @@ const deBase = {
   "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
-const de = { ...deBase, ...deField, ...deV3, ...deV4 };
+const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5 };
 export type Key = keyof typeof de;
 
 const enBase: Record<keyof typeof deBase, string> = {
@@ -143,7 +144,7 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
-const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4 };
+const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5 };
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en };
 

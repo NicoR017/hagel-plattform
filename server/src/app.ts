@@ -218,7 +218,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
-  app.route("/", repairRoutes({ db, needAuth, needOrg }));
+  app.route("/", repairRoutes({ db, storage, mailer, needAuth, needOrg }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
 

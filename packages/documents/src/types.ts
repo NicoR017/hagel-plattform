@@ -77,6 +77,8 @@ export interface KvaOptions {
 export interface RepairReportOptions {
   letterhead?: Letterhead | null;
   photos: DocPhoto[];
+  /** the estimate's amounts (net, VAT, gross), printed under the header: for insurers and body shops. Never the internal split. */
+  amounts?: { netto: number; mwst: number; brutto: number };
   now?: Date;
   /** IANA zone used to render `takenAt`; default Europe/Madrid (ES) / Europe/Berlin (DE) */
   timeZone?: string;

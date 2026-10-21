@@ -13,6 +13,7 @@ import { confirmDialog } from "../field/ui";
 import { bulkColibri, exportVehiclesXlsx, holdLabel, modeTitle } from "./listActions";
 import { MODE_STATUSES, STATUS_STYLE, inMode, matchesChip } from "./modes";
 import { useNewScans } from "./useScans";
+import { RepairBoard } from "./RepairBoard";
 import { dayLabel, todayIn, tzOfCountry } from "../field/calendar";
 
 /** the open repair booking of a vehicle (badge "Termin Mo 26.10.") */
@@ -32,6 +33,8 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
   const [dlg, setDlg] = useState<Dlg>(null);
   const [target, setTarget] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
+  // Reparatur: the Kanban board is the default view, the list stays one tap away (multi-select, status, move)
+  const [asList, setAsList] = useState(false);
   const bulkRef = useRef<HTMLInputElement>(null);
   const prices = f.can("prix.voir");
 
@@ -86,8 +89,15 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
         </div>
       </div>
 
-      {mode === "rep" && <p className="note">{t("v3RepNote")}</p>}
+      {mode === "rep" && (
+        <div role="group" aria-label={t("v3View")} style={{ display: "flex", gap: 6 }}>
+          <button className={"chip" + (!asList ? " on" : "")} aria-pressed={!asList} onClick={() => setAsList(false)}>{t("v5ViewBoard")}</button>
+          <button className={"chip" + (asList ? " on" : "")} aria-pressed={asList} onClick={() => setAsList(true)}>{t("v5ViewList")}</button>
+        </div>
+      )}
+      {mode === "rep" && !asList && <RepairBoard stationId={stationId} />}
 
+      {!(mode === "rep" && !asList) && (<>
       <div className="toolbar">
         <label style={{ flex: "1 1 260px", display: "flex" }}>
           <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{t("v3Search")}</span>
@@ -155,6 +165,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
         })}
         {!shown.length && <p className="empty">{f.refs ? t("v3EmptyFilter") : t("loading")}</p>}
       </div>
+      </>)}
 
       {dlg === "status" && <StatusDialog ids={target} current={target.length === 1 ? all.find((v) => v.id === target[0])?.statut : undefined} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}
       {dlg === "move" && <MoveDialog ids={target} from={stationId} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}

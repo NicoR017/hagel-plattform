@@ -9,7 +9,7 @@ import { hashPassword } from "../crypto";
 import { seed } from "../seed";
 import { systemMethodFor } from "../methods";
 import { nextSeq } from "../sync";
-import { memberships, organizations, roleAssignments, roles, stations, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
+import { memberships, organizations, roleAssignments, roles, stations, technicians, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
 
 const PEOPLE = [
   { key: "chef", email: "chef@staging.test", name: "Test Chef", role: "chef_site" },
@@ -48,6 +48,11 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
       if (role) await db.insert(roleAssignments).values({ userId: u.id, orgId: org.id, stationId: site.id, roleId: role.id });
       people[p.key] = u.id;
     }
+    // one PDR technician (with his account) and one headliner (without account), with default shares
+    await db.insert(technicians).values([
+      { orgId: org.id, name: "Test Techniker", userId: people.tech, kind: "pdr", defaultPctPdr: "50", defaultPctDemontage: "100" },
+      { orgId: org.id, name: "Test Headliner", userId: null, kind: "headliner", defaultPctPdr: "50", defaultPctDemontage: "80" },
+    ]);
     const method = await systemMethodFor(db, org.id, country);
     for (let i = 0; i < 16; i++) {
       const statut = STATUSES[i % STATUSES.length];

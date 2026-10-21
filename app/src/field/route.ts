@@ -5,6 +5,9 @@ export type Tab4 = "basis" | "erfassung" | "bilder" | "kva";
 /** … and the sections of the new vehicle detail (basis = "Allgemeine Daten"; the old screen shows any extra one as basis) */
 export type Tab = Tab4 | "termin" | "techniker" | "planung" | "kommunikation" | "gtmotive" | "verlauf";
 export type Step = Tab4;
+/** tabs of the repair detail (the card of the Kanban board) */
+export type RTab = "uebersicht" | "fotos" | "abschluss" | "verlauf";
+export const RTABS: RTab[] = ["uebersicht", "fotos", "abschluss", "verlauf"];
 /** Kalkulation / Reparatur / Alle Fahrzeuge */
 export type Mode = "kalk" | "rep" | "all";
 export const MODES: Mode[] = ["kalk", "rep", "all"];
@@ -24,6 +27,8 @@ export type Route =
   /** the assessment assistant: Basis · Erfassung · Bilder · KVA */
   | { page: "expertise"; id: string; step: Step; ctx?: Ctx }
   | { page: "vehicle"; id: string; tab: Tab; ctx?: Ctx }
+  /** repair detail: #/s/:station/rep/r/:id/:tab */
+  | { page: "repair"; id: string; tab: RTab; stationId: string }
   | { page: "admin"; tab?: string };
 
 export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
@@ -45,6 +50,7 @@ export function parseRoute(hash: string): Route {
   if (p[0] === "admin") return { page: "admin", tab: p[1] };
   if (p[0] === "s" && p[1]) {
     const stationId = p[1];
+    if (p[2] === "rep" && p[3] === "r" && p[4]) return { page: "repair", id: p[4], tab: (RTABS as string[]).includes(p[5] ?? "") ? (p[5] as RTab) : "uebersicht", stationId };
     if (isMode(p[2]) && p[3] === "neu") return { page: "newexp", stationId, mode: p[2] };
     if (isMode(p[2]) && p[3] === "exp" && p[4]) return { page: "expertise", id: p[4], step: stepOf(p[5]), ctx: { stationId, mode: p[2] } };
     if (isMode(p[2]) && p[3] === "v" && p[4]) return { page: "vehicle", id: p[4], tab: tabOf(p[5]), ctx: { stationId, mode: p[2] } };
@@ -60,6 +66,7 @@ export const hrefOf = (r: Route): string => {
     case "admin": return `#/admin${r.tab ? "/" + r.tab : ""}`;
     case "dashboard": return "#/dashboard";
     case "newexp": return `#/s/${r.stationId}/${r.mode}/neu`;
+    case "repair": return `#/s/${r.stationId}/rep/r/${r.id}/${r.tab}`;
     case "expertise": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/exp/${r.id}/${r.step}` : `#/expertise/${r.id}/${r.step}`;
     case "mode": return `#/s/${r.stationId}`;
     case "list": return r.stationId ? `#/s/${r.stationId}/${r.mode}` : r.dash ? "#/?f=dash" : "#/";
@@ -85,6 +92,7 @@ export function parentRoute(r: Route, vehicleStationId?: string | null): Route |
       if (r.ctx) return { page: "list", stationId: r.ctx.stationId, mode: r.ctx.mode };
       return vehicleStationId ? { page: "list", stationId: vehicleStationId, mode: "kalk" } : { page: "list" };
     case "newexp": return { page: "list", stationId: r.stationId, mode: r.mode };
+    case "repair": return { page: "list", stationId: r.stationId, mode: "rep" };
     case "list": return r.stationId ? { page: "mode", stationId: r.stationId } : r.dash ? { page: "list" } : null;
     case "mode": return { page: "list" };
     case "dashboard":

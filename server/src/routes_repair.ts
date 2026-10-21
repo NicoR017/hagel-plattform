@@ -6,15 +6,18 @@ import { z } from "zod";
 import { HttpError } from "./auth";
 import type { Db } from "./db";
 import type { Env } from "./env";
+import type { Mailer } from "./email";
+import type { Storage } from "./storage";
+import { sendRepairReport } from "./repair_report";
 import { canOrg, effectivePermissions } from "./permissions";
 import { repairBookings, repairEvents, reportSends, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
 import { refOf } from "./sync";
 
-interface Deps { db: Db; needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env> }
+interface Deps { db: Db; storage: Storage; mailer: Mailer; needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env> }
 
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export function repairRoutes({ db, needAuth, needOrg }: Deps) {
+export function repairRoutes({ db, storage, mailer, needAuth, needOrg }: Deps) {
   const r = new Hono<Env>();
 
   /**
@@ -38,6 +41,23 @@ export function repairRoutes({ db, needAuth, needOrg }: Deps) {
     }
     for (const d of Object.values(days)) d.bookings?.sort((a, b) => a.time.localeCompare(b.time));
     return c.json({ stationId: st.id, repairsPerDay: st.repairsPerDay, country: st.country, from, to, days });
+  });
+
+  /**
+   * Send the repair report again (the station manager, e.g. after a provider outage or a corrected recipient list). Only for a finished vehicle.
+   * Recipients are computed by the server as for the automatic send; the answer says what happened.
+   */
+  r.post("/vehicles/:id/repair-report", needAuth, needOrg, async (c) => {
+    const u = c.get("principal"), orgId = c.get("orgId");
+    const [v] = await db.select().from(vehicles).where(and(eq(vehicles.id, c.req.param("id") ?? ""), eq(vehicles.orgId, orgId)));
+    if (!v || v.deletedAt) throw new HttpError(404, "vehicle_not_found");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    const perms = effectivePermissions(u, refOf(v, as.map((a) => a.userId)));
+    if (!perms.has("vehicules.voir")) throw new HttpError(404, "vehicle_not_found");
+    if (!perms.has("reparatur.endabnahme") && !perms.has("rapport_reparation.envoyer")) throw new HttpError(403, "forbidden");
+    if (v.statut !== "fertig" && v.statut !== "rendu") throw new HttpError(409, "not_allowed");
+    const res = await sendRepairReport({ db, storage, mailer }, v.id, u.id);
+    return c.json(res, res.status === "failed" ? 502 : 200);
   });
 
   /** Verlauf: status changes, moves, e-mails sent and repair events of one vehicle, newest first. */

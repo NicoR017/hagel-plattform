@@ -387,6 +387,7 @@ describe("repair calendar: bookings", () => {
     const v = await pulled(chefA, id);
     expect(v.repair.todos.map((t: any) => t.text)).toEqual(["Emblem"]);
     expect(v.repair.booking).toBeNull();
+    expect(v.repair.autoStartedOn).toBe(day); // the card says "Termin heute" on that day
     const ev = await c.h.db.select().from(repairEvents).where(eq(repairEvents.vehicleId, id));
     expect(ev.find((e) => e.type === "booking_started")).toMatchObject({ userId: null });
     // idempotent

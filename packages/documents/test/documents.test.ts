@@ -472,3 +472,21 @@ describe("parts to replace and the method name", () => {
     expect(m.subject + m.body).not.toMatch(/Antenne|Allianz Spezial/);
   });
 });
+
+describe("repair photo report with the estimate's amounts", () => {
+  it("prints net / VAT / gross under the header when asked; never the internal split; absent otherwise", async () => {
+    for (const n of ["case1_DE", "case1_ES"]) {
+      const v = mkVehicle(n, { techName: "Hans Geheim", techPct: 37, werkPct: 13, werkMode: "pct", demTechName: "Dem Techniker", demTechPct: 90, demontage: true, demontageEur: 150 });
+      const c = computeVehicle(v), a = computeShares(v, c), X = docText(v.land);
+      const amounts = { netto: c.netto, mwst: c.brutto - c.netto, brutto: c.brutto };
+      const txt = await allText(await generateRepairPhotoReport(v, { photos: photos(1), now: NOW, amounts }));
+      expect(txt).toContain(`${X.netto}: ${eur(c.netto)}`);
+      expect(txt).toContain(`${X.brutto}: ${eur(c.brutto)}`);
+      expect(txt).not.toContain("Hans Geheim");
+      for (const s of [eur(a.techEur), eur(a.werkEur), eur(a.rest), eur(a.demTechEur)]) expect(txt).not.toContain(s);
+      expect(txt).not.toMatch(/Provision|comisi|Techniker|Bleibt/i);
+      const without = await allText(await generateRepairPhotoReport(v, { photos: photos(1), now: NOW }));
+      expect(without).not.toContain(X.netto + ":");
+    }
+  });
+});

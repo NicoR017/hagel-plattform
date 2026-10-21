@@ -158,7 +158,7 @@ function evText(e: Ev): string {
   return map[k] ?? k;
 }
 
-function Verlauf({ id }: { id: string }) {
+export function Verlauf({ id }: { id: string }) {
   const f = useField();
   const [list, setList] = useState<Ev[] | null>(null);
   const stamp = f.status.lastSyncAt ?? 0;

@@ -346,6 +346,13 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
     cv.T(L, cv.y, [v.insurerName ? X.versicherung + ": " + v.insurerName : "", v.claimNumber ? X.schaden + ": " + v.claimNumber : ""].filter(Boolean).join("     "), 10);
     cv.y -= 15;
   }
+  if (opts.amounts) {
+    // amounts of the estimate (net / VAT / gross); the internal split is never part of this document
+    cv.rgbc(228, 238, 229); cv.rect(L, cv.y - 8, R - L, 24);
+    cv.rgbc(47, 85, 53);
+    cv.T(L + 8, cv.y, X.netto + ": " + eur(opts.amounts.netto) + "     " + X.mwst + ": " + eur(opts.amounts.mwst) + "     " + X.brutto + ": " + eur(opts.amounts.brutto), 10, true);
+    cv.black(); cv.y -= 26;
+  }
   if (partsOf(v).length) {
     // the repair photo report names the parts to replace in its header
     cv.rgbc(138, 74, 6);
