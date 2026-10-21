@@ -41,6 +41,15 @@ Crée 2 organisations (DE, ES), des stations, 16 véhicules par organisation dan
 
 Copie de la production (plus tard, si tu le décides) : `infra/scripts/staging_refresh.sh`. La production n'est **lue** (`pg_dump`), jamais modifiée ; le script refuse de tourner si la cible = la source, si la cible est la production connue, ou si la base cible n'est pas marquée « staging ».
 
+### Staging local (sans Railway)
+
+```bash
+npm run build -w @hagel/app          # une fois
+node infra/scripts/local_staging.mjs  # http://localhost:3100, base en mémoire, données fictives, MAIL_MODE=off, sans Azure ni bucket
+```
+
+Comptes : `de.chef@`, `de.assessor@`, `de.tech@` (et `es.`) `staging.test`, mot de passe `staging-local-test-1` (ou `STAGING_TEST_PASSWORD`). Tout disparaît à l'arrêt.
+
 ## 4. Contrôle d'intégrité
 
 ```bash
