@@ -50,7 +50,7 @@ function LangSwitch({ signedIn }: { signedIn?: boolean }) {
 }
 
 function Center({ children }: { children: ReactNode }) {
-  return <div className="center"><div className="card"><div className="row"><h2 className="grow" style={{ margin: 0 }}>{t("appName")}</h2><LangSwitch /></div>{children}</div></div>;
+  return <div className="center"><div className="card"><div className="row"><div className="grow"><img src="/pdr-logo-white.png" alt={t("appName")} style={{ display: "block", height: 34, width: "auto", background: "#16233f", padding: "8px 14px", borderRadius: 10 }} /></div><LangSwitch /></div>{children}</div></div>;
 }
 
 function LoginPage() {

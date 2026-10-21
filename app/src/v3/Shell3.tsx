@@ -49,7 +49,7 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
           </button>
         )}
         <button className="logo" onClick={() => go({ page: "list" })}>
-          <i>PT</i><span><b>Hagel-Kalk</b><small>PDR Team</small></span>
+          <img src="/pdr-logo-white.png" alt="PDR Team · Hagel-Kalk" />
         </button>
         <nav aria-label={t("v3Breadcrumbs")}>
           {crumbs.map((c, i) => (

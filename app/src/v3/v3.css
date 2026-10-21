@@ -224,3 +224,5 @@
 .v3 .dashv3 .dashtitle h1{font-size:24px;line-height:1.2;}
 .v3 .dashv3 .dashtitle .sub{color:var(--sub);font-size:13px;margin-top:2px;}
 .v3 .dashv3 .sheet{margin:0;padding:0;background:transparent;border-radius:0;}
+
+.v3 .hd .logo img{height:28px;width:auto;display:block;}
