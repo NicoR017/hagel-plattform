@@ -9,7 +9,7 @@
  * restricted fields removed, plus ids of vehicles that left the user's scope (`gone`).
  */
 import { z } from "zod";
-import { STATUSES } from "./permissions";
+import { REPAIR_STAGES, STATUSES } from "./permissions";
 
 export const uuidStr = z.string().uuid();
 const iso = z.string().datetime();
@@ -37,12 +37,17 @@ export const headerFields = z.object({
   demontageEur: z.number().min(0).max(100000),
   glass: z.record(z.string(), z.object({ on: z.boolean().optional(), eur: z.number().min(0).max(100000).optional() })),
   claimNumber: z.string().max(80),
+  /** labels of parts to replace (printed on the KVA, no price) */
+  partsToReplace: z.array(z.string().trim().min(1).max(80)).max(40),
   companyId: z.string().max(80).nullable(),
   logo: z.enum(["pdr", "none"]),
   // links (stored as columns)
   clientStationId: uuidStr.nullable(),
   insurerId: uuidStr.nullable(),
   campaignId: uuidStr.nullable(),
+  /** calculation method frozen on the vehicle (stored as columns; both together) */
+  methodId: uuidStr.nullable(),
+  methodVersion: z.number().int().min(1).nullable(),
 }).partial().strict();
 export type HeaderFields = z.infer<typeof headerFields>;
 /** Header fields only users with `prix.voir` may write. */
@@ -87,6 +92,19 @@ export const photoInput = z.object({
   colibriPosition: z.string().max(40).nullable().default(null), colibriIndex: z.number().int().nullable().default(null),
 }).strict();
 
+export const REPAIR_CHECKS = ["pdr", "teile", "chef"] as const;
+export type RepairCheck = (typeof REPAIR_CHECKS)[number];
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const appointmentInput = z.object({
+  id: uuidStr, technicianId: uuidStr, date: ymd, durationMin: z.number().int().min(5).max(1440), note: z.string().max(300).default(""),
+}).strict();
+const bookingInput = z.object({
+  id: uuidStr, date: ymd, time: hhmm,
+  phone: z.string().trim().min(6).max(40).regex(/^[+\d][\d\s().\/-]{4,}$/),
+  email: z.string().trim().max(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
+}).strict();
+
 export const opSchema = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("vehicle.create"),
@@ -115,6 +133,20 @@ export const opSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...base, type: z.literal("photo.delete"), photoId: uuidStr }),
   /** Ask the server to e-mail a report (the PDF is uploaded separately to /files/report/:id). */
+  // ---- UI v3 (see V3_OP_TYPES)
+  z.object({ ...base, type: z.literal("vehicle.repairStage"), vehicleId: uuidStr, stage: z.enum(REPAIR_STAGES) }),
+  z.object({ ...base, type: z.literal("repair.todo.add"), vehicleId: uuidStr, todo: z.object({ id: uuidStr, text: z.string().trim().min(1).max(200) }).strict() }),
+  z.object({ ...base, type: z.literal("repair.todo.toggle"), todoId: uuidStr, done: z.boolean() }),
+  z.object({ ...base, type: z.literal("repair.todo.delete"), todoId: uuidStr }),
+  z.object({ ...base, type: z.literal("photo.stage"), photoId: uuidStr, repairStage: z.enum(REPAIR_STAGES).nullable(), role: z.string().trim().max(40).nullable() }),
+  z.object({ ...base, type: z.literal("repair.check"), vehicleId: uuidStr, key: z.enum(REPAIR_CHECKS), done: z.boolean() }),
+  z.object({ ...base, type: z.literal("vehicle.comment"), vehicleId: uuidStr, comment: z.object({ id: uuidStr, text: z.string().max(2000) }).strict() }),
+  z.object({ ...base, type: z.literal("appointment.add"), vehicleId: uuidStr, appointment: appointmentInput }),
+  z.object({ ...base, type: z.literal("appointment.update"), appointmentId: uuidStr, fields: appointmentInput.omit({ id: true }).partial().strict() }),
+  z.object({ ...base, type: z.literal("appointment.delete"), appointmentId: uuidStr }),
+  z.object({ ...base, type: z.literal("booking.create"), vehicleId: uuidStr, booking: bookingInput }),
+  z.object({ ...base, type: z.literal("booking.move"), bookingId: uuidStr, date: ymd, time: hhmm }),
+  z.object({ ...base, type: z.literal("booking.cancel"), bookingId: uuidStr }),
   z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]) }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
@@ -125,7 +157,10 @@ export const KNOWN_OP_TYPES: readonly string[] = opSchema.options.map((o) => o.s
  * Op types added after the first release (UI v3). A client sends them in batches of their own, never mixed with the older
  * types, and keeps them queued (instead of dropping them) when the server does not know them yet (rollback, partial deploy).
  */
-export const V3_OP_TYPES: readonly string[] = [];
+export const V3_OP_TYPES: readonly string[] = [
+  "vehicle.repairStage", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
+  "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
+];
 export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
 
 export const pushInput = z.object({ ops: z.array(opSchema).min(1).max(200) });
@@ -161,6 +196,13 @@ export interface ClientVehicle extends Record<string, unknown> {
   colibri: unknown | null;
   colibriFile: { name: string; size: number } | null;
   assigneeIds: string[];
+  /** repair board column (null = not in the repair flow) */
+  repairStage?: string | null;
+  /** frozen calculation method (null = historical behaviour) */
+  methodId?: string | null;
+  methodVersion?: number | null;
+  /** repair data, only for users who may see it (see ClientRepair) */
+  repair?: ClientRepair;
   updatedAt: string;
   updatedBy: string | null;
   seq: number;
@@ -169,10 +211,29 @@ export interface ClientVehicle extends Record<string, unknown> {
   panelsAt: Record<string, number>;
 }
 
+export interface ClientRepair {
+  todos: { id: string; text: string; source: "manual" | "part"; done: boolean; doneBy: string | null; doneAt: string | null; createdBy: string | null; createdAt: string; sort: number }[];
+  /** manual checks: who confirmed and when (null = open) */
+  checks: Record<string, { by: string | null; at: string } | null>;
+  /** why "Finish" is refused right now (empty = allowed): todos_open, check:pdr, check:teile, check:chef, photos:<stage>, no_technician */
+  finishBlockers: string[];
+  comments: { id: string; userId: string | null; userName: string; at: string; text: string }[];
+  appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[];
+  booking: { id: string; date: string; time: string; status: string; phone: string; email: string; createdBy: string | null; createdAt: string } | null;
+}
+
+export interface ClientMethod {
+  id: string; name: string; engine: "aw" | "matrix"; country: "DE" | "ES"; isSystem: boolean; currentVersion: number; archived: boolean;
+  /** every version's parameters ("1" -> params): a vehicle keeps computing with the version it was frozen on */
+  versions: Record<string, unknown>;
+}
+
 export interface ClientPhoto {
   id: string; vehicleId: string; label: string; phase: PhotoPhase; source: string; inPdf: boolean;
   takenAt: string; takenBy: string | null; sort: number; hasFile: boolean;
   colibriPosition: string | null; colibriIndex: number | null; deleted: boolean; seq: number;
+  /** repair stage the photo belongs to and the role of the person who took it (UI v3) */
+  repairStage?: string | null; role?: string | null;
 }
 
 export interface ClientStation {
@@ -180,6 +241,8 @@ export interface ClientStation {
   /** Colibri tenant of the site: moving a car to a site of another tenant shows a warning */
   azureTenant?: string | null;
   commissionMode?: string; commissionPct?: number; active: boolean;
+  /** repair places per day (repair calendar) */
+  repairsPerDay?: number;
 }
 export interface OrgSettings {
   rateDE: number; rateES: number; defaultTeiler: number;
@@ -194,7 +257,7 @@ export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defau
 export interface ClientInsurer { id: string; name: string }
 export interface ClientCampaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
 export interface ClientCompany { id: string; name: string; address: string; taxId: string; email: string; footer: string; hasLogo: boolean; logo: { kind: "jpg" | "png"; width: number; height: number } | null }
-export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number }
+export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number; kind?: "pdr" | "headliner" }
 
 export interface PullResponse {
   /** identifies the user's grants; when it changed since the last pull the client must replace its local set */
@@ -221,6 +284,9 @@ export interface PullResponse {
     companies: ClientCompany[];
     /** only for users who may see the internal split */
     technicians: ClientTechnician[];
+    /** calculation methods (all versions) and which insurer uses which; absent for old servers */
+    methods?: ClientMethod[];
+    insurerMethods?: { insurerId: string; country: string; methodId: string }[];
   };
 }
 

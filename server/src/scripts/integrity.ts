@@ -11,6 +11,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { createDb } from "../db";
 import { organizations, stations, vehicles } from "../schema";
+import { loadMethodMap, methodOf } from "../methods";
 import { calcSettings, flatten, loadOrgSettings } from "../sync";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -30,6 +31,7 @@ export async function buildReport(db: Awaited<ReturnType<typeof createDb>>["db"]
   for (const o of orgs.sort((a, b) => a.name.localeCompare(b.name))) {
     const rows = await db.select().from(vehicles).where(eq(vehicles.orgId, o.id));
     const settings = calcSettings(await loadOrgSettings(db, o.id));
+    const methods = await loadMethodMap(db, o.id);
     const byStation: Record<string, number> = {}, byStatus: Record<string, number> = {};
     let live = 0, deleted = 0, net = 0, gross = 0, withShares = 0;
     for (const r of [...rows].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -39,7 +41,7 @@ export async function buildReport(db: Awaited<ReturnType<typeof createDb>>["db"]
       byStation[st] = (byStation[st] ?? 0) + 1;
       byStatus[r.statut] = (byStatus[r.statut] ?? 0) + 1;
       if (r.shares && Object.keys(r.shares as object).length) withShares++;
-      const c = computeVehicle(flatten(r, [], null) as unknown as CalcVehicle, settings);
+      const c = computeVehicle(flatten(r, [], null) as unknown as CalcVehicle, settings, methodOf(methods, r));
       net = r2(net + c.netto); gross = r2(gross + c.brutto);
       digest.update(`${r.id}:${c.netto.toFixed(2)}\n`);
     }

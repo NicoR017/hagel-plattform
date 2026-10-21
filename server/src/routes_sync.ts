@@ -38,7 +38,7 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     if (unknown) return c.json({ error: errorMessage("unsupported_op", pickLang(c.req.header("x-lang"), c.req.header("accept-language"))), code: "unsupported_op", opType: unknown.type }, 409);
     const parsed = pushInput.safeParse(raw);
     if (!parsed.success) return validationHook({ success: false }, c) as Response;
-    const { results, touched } = await processPush({ db, hub, storage }, c.get("principal"), parsed.data.ops);
+    const { results, touched } = await processPush({ db, hub, storage, mailer }, c.get("principal"), parsed.data.ops);
     for (const [orgId, seq] of touched) hub.publish(orgId, seq);
     return c.json({ results } satisfies PushResponse);
   });

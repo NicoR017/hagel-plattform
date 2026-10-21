@@ -8,11 +8,17 @@ export const PERMISSIONS = [
   "colibri.importer", "export.excel",
   "assurances.gerer", "campagnes.gerer", "stations.gerer", "parametres.gerer",
   "utilisateurs.gerer", "roles.gerer", "audit.voir", "dashboard.voir",
+  // UI v3
+  "reparatur.board", "reparatur.endabnahme", "termine.buchen", "methoden.gerer", "wochenbericht.voir", "kommentare.schreiben",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const SCOPES = ["assigne", "station", "campagne", "client", "assurance"] as const;
 export type Scope = (typeof SCOPES)[number];
+
+/** Repair board columns (vehicles.repair_stage). */
+export const REPAIR_STAGES = ["bereit", "demontage", "pdr", "remontage", "bodyshop", "finish"] as const;
+export type RepairStage = (typeof REPAIR_STAGES)[number];
 
 export const STATION_TYPES = ["carrosserie", "hall", "parc"] as const;
 export type StationType = (typeof STATION_TYPES)[number];
@@ -38,8 +44,8 @@ export const SYSTEM_ROLES: SystemRole[] = [
     permissions: ALL,
   },
   {
-    key: "chef_site", name: "Chef de site (Werkstattleiter)", description: "Gère les véhicules et l'équipe d'un site", scope: "station",
-    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir"),
+    key: "chef_site", name: "Chef de station (Stationsleiter)", description: "Gère les véhicules et l'équipe d'un site", scope: "station",
+    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir", "methoden.gerer", "wochenbericht.voir"),
   },
   {
     key: "aufnehmer", name: "Aufnehmer / Expert", description: "Crée et chiffre les véhicules", scope: "station",
@@ -47,15 +53,16 @@ export const SYSTEM_ROLES: SystemRole[] = [
       "vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.assigner", "vehicules.changer_statut",
       "prix.voir", "repartition_interne.voir", "kva.envoyer", "rapport_reparation.envoyer",
       "photos.ajouter", "photos.supprimer", "colibri.importer", "export.excel", "dashboard.voir",
+      "reparatur.board", "termine.buchen", "kommentare.schreiben",
     ],
   },
   {
     key: "technicien", name: "Technicien", description: "Ses véhicules assignés, sans prix", scope: "assigne",
-    permissions: ["vehicules.voir", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter"],
+    permissions: ["vehicules.voir", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben"],
   },
   {
     key: "freelance", name: "Freelance", description: "Véhicules d'une campagne, accès à durée limitée", scope: "campagne",
-    permissions: ["vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter"],
+    permissions: ["vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben"],
   },
   {
     key: "carrosserie", name: "Carrosserie", description: "Compte externe : ses véhicules, où qu'ils soient", scope: "client",

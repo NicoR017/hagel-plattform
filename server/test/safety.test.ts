@@ -1,7 +1,7 @@
 // Phase 1 safety net: MAIL_MODE, APP_ENV, public /config, integrity report, sync backward compatibility.
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { KNOWN_OP_TYPES, isV3Op, opSchema } from "@hagel/shared";
+import { KNOWN_OP_TYPES, V3_OP_TYPES, isV3Op, opSchema } from "@hagel/shared";
 import { loadConfig } from "../src/config";
 import { MemoryMailer, ModeMailer } from "../src/email";
 import { buildReport } from "../src/scripts/integrity";
@@ -86,8 +86,9 @@ describe("old op shapes and the public config", () => {
       "photo.delete": { photoId: ph },
       "report.send": { vehicleId: id, report: { id: uuid(), type: "kva", lang: "de" } },
     };
-    // the fixture list must cover every type known today: adding a type without a fixture fails here
-    expect(Object.keys(fixtures).sort()).toEqual([...KNOWN_OP_TYPES].sort());
+    // the fixture list must cover every type of the FIRST release; types added later are listed in V3_OP_TYPES
+    expect(Object.keys(fixtures).sort()).toEqual(KNOWN_OP_TYPES.filter((t) => !V3_OP_TYPES.includes(t)).sort());
+    for (const t of V3_OP_TYPES) expect(KNOWN_OP_TYPES).toContain(t);
     for (const [type, body] of Object.entries(fixtures)) {
       const r = opSchema.safeParse({ ...base, type, ...(body as object) });
       expect(r.success, `${type}: ${JSON.stringify(r.success ? "" : r.error.issues)}`).toBe(true);
@@ -97,10 +98,10 @@ describe("old op shapes and the public config", () => {
   it("an op type this server does not know: 409 unsupported_op, NOTHING of the batch is applied (the client keeps it queued)", async () => {
     const id = uuid();
     const known = op("vehicle.create", { vehicle: { id, stationId: st, clientStationId: st, header: { land: "ES", kennzeichen: "9999 ZZZ" }, panels: {}, shares: {} } });
-    const future = op("repair.todo.add", { vehicleId: id, text: "later" });
+    const future = op("vehicle.teleport", { vehicleId: id, to: "mars" });
     const r = await push(c, assessor, [known, future]);
     expect(r.status).toBe(409);
-    expect(r.body).toMatchObject({ code: "unsupported_op", opType: "repair.todo.add" });
+    expect(r.body).toMatchObject({ code: "unsupported_op", opType: "vehicle.teleport" });
     expect((await c.h.db.select().from(vehicles)).find((v) => v.id === id)).toBeUndefined();
     // the same batch without the unknown op still works: nothing was poisoned
     expect((await push(c, assessor, [known])).body.results[0].status).toBe("ok");

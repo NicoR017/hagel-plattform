@@ -133,3 +133,22 @@ export interface SharesResult {
   techName: string; techPct: number; techEur: number;
   demTechName: string; demTechPct: number; demTechEur: number; rest: number;
 }
+
+/** Parameters of the `aw` (BVAT) engine. */
+export interface AwParams {
+  vat: number;
+  /** multipliers applied to the panel AW: aluminium, Klebetechnik, Push-to-Paint */
+  aluFactor: number;
+  kleberFactor: number;
+  ptpFactor: number;
+  /** fixed extras per Teiler (key "10" / "12") */
+  extras: Record<string, { ruest: number; greif: number; finishPer: number; finishCap: number; hohl: number; verbr: number }>;
+  /** Kleber material lump sum by number of glued panels (1-2, 3-5, more) */
+  kleberMaterial: { upTo2: number; upTo5: number; more: number };
+  hohlraumMaterial: number;
+}
+
+/** A calculation method (one version of it): engine + parameters. Nothing else is programmable. */
+export type CalcMethodDef =
+  | { engine: "aw"; params: AwParams }
+  | { engine: "matrix"; params: { esMatrix: EsMatrix | null } };

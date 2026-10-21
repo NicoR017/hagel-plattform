@@ -61,3 +61,25 @@ export function reportMail(lang: "de" | "es", type: "kva" | "reparation", i: Rep
         text: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie den Fotobericht zur Reparatur des Fahrzeugs${veh ? " " + veh : ""}${i.vin ? ` (FIN ${i.vin})` : ""}.\n\nFür Rückfragen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen${i.senderName ? "\n" + i.senderName : ""}`,
       };
 }
+
+export interface BookingMailInfo { date: string; time: string; station: string; address: string; plate: string; model: string; claim: string }
+
+/** Repair-calendar e-mail for the customer and the carrosserie: confirmation, new date, or cancellation (DE or ES). */
+export function bookingMail(lang: "de" | "es", kind: "created" | "moved" | "cancelled", i: BookingMailInfo): MailBody {
+  const [y, m, d] = i.date.split("-");
+  const date = lang === "es" ? `${d}/${m}/${y}` : `${d}.${m}.${y}`;
+  const veh = [i.model, i.plate].filter(Boolean).join(" · ");
+  const place = [i.station, i.address].filter(Boolean).join(", ");
+  if (lang === "es") {
+    const head = { created: "Cita de reparación confirmada", moved: "Cita de reparación modificada", cancelled: "Cita de reparación cancelada" }[kind];
+    const body = kind === "cancelled"
+      ? `La cita de reparación del ${date} a las ${i.time} h ha sido cancelada.`
+      : `${kind === "moved" ? "La cita se ha trasladado." : "Su cita de reparación está confirmada."}\n\nFecha: ${date}\nHora: ${i.time} h\nTaller: ${place}`;
+    return { subject: `${head}${veh ? " – " + veh : ""}`, text: `Estimados señores:\n\n${body}\n\nVehículo: ${veh}${i.claim ? `\nN.º de siniestro: ${i.claim}` : ""}\n\nUn saludo cordial` };
+  }
+  const head = { created: "Reparaturtermin bestätigt", moved: "Reparaturtermin geändert", cancelled: "Reparaturtermin storniert" }[kind];
+  const body = kind === "cancelled"
+    ? `Der Reparaturtermin am ${date} um ${i.time} Uhr wurde storniert.`
+    : `${kind === "moved" ? "Der Termin wurde verschoben." : "Ihr Reparaturtermin ist bestätigt."}\n\nDatum: ${date}\nUhrzeit: ${i.time} Uhr\nStation: ${place}`;
+  return { subject: `${head}${veh ? " – " + veh : ""}`, text: `Sehr geehrte Damen und Herren,\n\n${body}\n\nFahrzeug: ${veh}${i.claim ? `\nSchadennummer: ${i.claim}` : ""}\n\nMit freundlichen Grüßen` };
+}

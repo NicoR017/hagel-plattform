@@ -71,6 +71,20 @@
       "when": 1792488727822,
       "tag": "0009_station_bcs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792592406004,
+      "tag": "0010_v3_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792592427329,
+      "tag": "0011_v3_backfill",
+      "breakpoints": true
     }
   ]
 }

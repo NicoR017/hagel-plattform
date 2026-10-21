@@ -17,6 +17,8 @@ import type { Env } from "./env";
 import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
 import { syncRoutes } from "./routes_sync";
+import { repairRoutes } from "./routes_repair";
+import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./routes_master";
 import { azureRoutes } from "./routes_azure";
 import type { AzureSource } from "./azure";
@@ -216,6 +218,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
+  app.route("/", repairRoutes({ db, needAuth, needOrg }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
 
@@ -229,6 +232,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const b = c.req.valid("json");
     const [o] = await db.insert(organizations).values(b).returning();
     await seedRoles(db, o.id);
+    await seedMethods(db, o.id);
     await seedCompanies(db, storage, o.id);
     await audit(db, { orgId: o.id, userId: c.get("principal").id, action: "create", entity: "organization", entityId: o.id, after: o });
     return c.json(o, 201);
@@ -417,6 +421,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
       azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? bcIdsOf(b)[0] ?? null : null, azureBcIds: b.type === "carrosserie" ? bcIdsOf(b) : [],
       azureLinkIds: b.type === "carrosserie" ? b.azure_link_ids : [],
       reportEmails: b.type === "carrosserie" ? b.report_emails : [], commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
+      repairsPerDay: b.repairs_per_day, excludedInsurerEmails: b.excluded_insurer_emails,
     }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "station", entityId: s.id, after: s });
     return c.json(s, 201);
@@ -442,6 +447,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.report_emails !== undefined) set.reportEmails = b.report_emails;
     if (b.commission_mode !== undefined) set.commissionMode = b.commission_mode;
     if (b.commission_pct !== undefined) set.commissionPct = String(b.commission_pct);
+    if (b.repairs_per_day !== undefined) set.repairsPerDay = b.repairs_per_day;
+    if (b.excluded_insurer_emails !== undefined) set.excludedInsurerEmails = b.excluded_insurer_emails;
     const [s] = await db.update(stations).set(set).where(eq(stations.id, before.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "station", entityId: s.id, before, after: s });
     return c.json(s);
@@ -471,6 +478,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const next: Record<string, unknown> = { ...before, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) };
     if (b.esMatrix === null) delete next.esMatrix;
     await db.insert(orgSettings).values({ orgId, settings: next as never }).onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: next as never, updatedAt: new Date() } });
+    // an edited Spain matrix becomes a NEW version of the system method: vehicles already frozen on an older version keep their amounts
+    if (b.esMatrix !== undefined) await bumpSystemMatrix(db, orgId, (b.esMatrix as never) ?? null, c.get("principal").id);
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "settings", before, after: next });
     hub.publish(orgId, 0);
     return c.json(next);

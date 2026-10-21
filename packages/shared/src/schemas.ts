@@ -26,6 +26,10 @@ export const stationInput = z.object({
   report_emails: z.array(emailSchema).default([]),
   commission_mode: z.enum(["pct", "staffel"]).default("pct"),
   commission_pct: z.number().min(0).max(100).default(0),
+  /** repair places per working day (repair calendar) */
+  repairs_per_day: z.number().int().min(0).max(100).default(3),
+  /** automatic insurer addresses removed for this station */
+  excluded_insurer_emails: z.array(emailSchema).max(100).default([]),
 });
 
 export const inviteInput = z.object({
@@ -94,5 +98,7 @@ export const technicianInput = z.object({
   user_id: uuid.nullable().default(null),
   default_pct_pdr: z.number().min(0).max(100).default(50),
   default_pct_demontage: z.number().min(0).max(100).default(100),
+  /** pdr | headliner */
+  kind: z.enum(["pdr", "headliner"]).default("pdr"),
   active: z.boolean().default(true),
 });

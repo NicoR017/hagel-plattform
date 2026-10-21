@@ -4,6 +4,7 @@ import { STATUSES } from "@hagel/shared";
 import type { Db } from "./db";
 import { effectivePermissions, type Principal } from "./permissions";
 import { insurers, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
+import { loadMethodMap, methodOf } from "./methods";
 import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "./sync";
 
 export interface DashboardFilters { sites?: string[]; campaign?: string; client?: string; insurer?: string; from?: string; to?: string }
@@ -149,6 +150,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
 
   // ---- 4. revenue (only vehicles whose prices this user may see)
   const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
   type Agg = { net: number; ids: string[] };
   const bump = (m: Map<string, Agg>, key: string, net: number, id: string) => { const a = m.get(key) ?? { net: 0, ids: [] }; a.net = round2(a.net + net); a.ids.push(id); m.set(key, a); };
   const bySite = new Map<string, Agg>(), byClient = new Map<string, Agg>(), byInsurer = new Map<string, Agg>(), byMonth = new Map<string, Agg>();
@@ -162,7 +164,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     const d = dateOf(r);
     if (!inPeriod(d)) continue;
     const flat = flatten(r, assignees.get(r.id) ?? [], null);
-    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     if (!calc.netto) continue;
     seen++; total = round2(total + calc.netto); revIds.push(r.id);
     bump(bySite, r.stationId ?? "", calc.netto, r.id); bump(byClient, r.clientStationId ?? "", calc.netto, r.id);
@@ -221,6 +223,7 @@ export interface TechSheet { technician: string; sites: string[]; vehicles: Tech
 export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; sheets: TechSheet[] }> {
   const settings = await loadOrgSettings(db, orgId);
   const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
   const allRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt)));
   const assign = await db.select().from(vehicleAssignments).where(inArray(vehicleAssignments.vehicleId, db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.orgId, orgId))));
   const assignees = new Map<string, string[]>();
@@ -252,7 +255,7 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
     if ((f.from && endDay < f.from) || (f.to && endDay > f.to)) continue;
     const start = h.find((x) => x.statut === "reparatur");
     const flat = flatten(r, assignees.get(r.id) ?? [], null);
-    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     const sh = computeShares(flat as never, calc);
     const firstAssignee = (assignees.get(r.id) ?? []).map(personName).find(Boolean) ?? "";
     const pdrName = (sh.techName || firstAssignee || "—").trim();

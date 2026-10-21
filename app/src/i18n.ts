@@ -58,9 +58,9 @@ const deBase = {
   "e.organization": "Organisation", "e.org_tenants": "Tenants", "e.invitation": "Einladung", "e.user": "Benutzer", "e.role_assignment": "Rollenzuweisung",
   "e.role": "Rolle", "e.station": "Werkstatt",
   // system roles
-  "r.org_admin": "Admin der Organisation", "r.chef_site": "Werkstattleiter", "r.aufnehmer": "Aufnehmer / Gutachter", "r.technicien": "Techniker",
+  "r.org_admin": "Admin der Organisation", "r.chef_site": "Stationsleiter", "r.aufnehmer": "Aufnehmer / Gutachter", "r.technicien": "Techniker",
   "r.freelance": "Freelancer", "r.carrosserie": "Carrosserie", "r.assureur": "Versicherer",
-  "rd.org_admin": "Alles innerhalb der Organisation", "rd.chef_site": "Verwaltet Fahrzeuge und Team einer Werkstatt", "rd.aufnehmer": "Erfasst und kalkuliert Fahrzeuge",
+  "rd.org_admin": "Alles innerhalb der Organisation", "rd.chef_site": "Verwaltet Fahrzeuge und Team einer Station", "rd.aufnehmer": "Erfasst und kalkuliert Fahrzeuge",
   "rd.technicien": "Seine zugewiesenen Fahrzeuge, ohne Preise", "rd.freelance": "Fahrzeuge einer Kampagne, zeitlich begrenzter Zugriff",
   "rd.carrosserie": "Externes Konto: seine Fahrzeuge, wo auch immer sie stehen", "rd.assureur": "Externes Konto: Akten seiner Versicherung, ohne interne Aufteilung",
   // permissions
@@ -71,6 +71,7 @@ const deBase = {
   "p.photos.ajouter": "Fotos hinzufügen", "p.photos.supprimer": "Fotos löschen", "p.colibri.importer": "Colibri importieren", "p.export.excel": "Excel-Export",
   "p.assurances.gerer": "Versicherungen verwalten", "p.campagnes.gerer": "Kampagnen verwalten", "p.stations.gerer": "Werkstätten verwalten", "p.parametres.gerer": "Einstellungen verwalten",
   "p.utilisateurs.gerer": "Benutzer verwalten", "p.roles.gerer": "Rollen verwalten", "p.audit.voir": "Protokoll ansehen", "p.dashboard.voir": "Dashboard ansehen",
+  "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
 const de = { ...deBase, ...deField };
@@ -125,9 +126,9 @@ const enBase: Record<keyof typeof deBase, string> = {
   "a.revoke_sessions": "Sessions ended", "a.assign_role": "Role assigned", "a.unassign_role": "Role removed",
   "e.organization": "Organisation", "e.org_tenants": "Tenants", "e.invitation": "Invitation", "e.user": "User", "e.role_assignment": "Role assignment",
   "e.role": "Role", "e.station": "Site",
-  "r.org_admin": "Organisation admin", "r.chef_site": "Site manager", "r.aufnehmer": "Assessor / expert", "r.technicien": "Technician",
+  "r.org_admin": "Organisation admin", "r.chef_site": "Station manager", "r.aufnehmer": "Assessor / expert", "r.technicien": "Technician",
   "r.freelance": "Freelancer", "r.carrosserie": "Body shop", "r.assureur": "Insurer",
-  "rd.org_admin": "Everything within the organisation", "rd.chef_site": "Manages the vehicles and team of one site", "rd.aufnehmer": "Records and prices vehicles",
+  "rd.org_admin": "Everything within the organisation", "rd.chef_site": "Manages the vehicles and team of one station", "rd.aufnehmer": "Records and prices vehicles",
   "rd.technicien": "Only their assigned vehicles, no prices", "rd.freelance": "Vehicles of one campaign, time-limited access",
   "rd.carrosserie": "External account: its vehicles, wherever they are", "rd.assureur": "External account: its insurer's files, without the internal split",
   "p.vehicules.voir": "View vehicles", "p.vehicules.creer": "Create vehicles", "p.vehicules.modifier": "Edit vehicles", "p.vehicules.supprimer": "Delete vehicles",
@@ -137,6 +138,7 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.photos.ajouter": "Add photos", "p.photos.supprimer": "Delete photos", "p.colibri.importer": "Import Colibri", "p.export.excel": "Excel export",
   "p.assurances.gerer": "Manage insurers", "p.campagnes.gerer": "Manage campaigns", "p.stations.gerer": "Manage sites", "p.parametres.gerer": "Manage settings",
   "p.utilisateurs.gerer": "Manage users", "p.roles.gerer": "Manage roles", "p.audit.voir": "View audit log", "p.dashboard.voir": "View dashboard",
+  "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
 const en: Record<Key, string> = { ...enBase, ...enField };

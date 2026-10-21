@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uuid,
+  bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
@@ -68,6 +68,10 @@ export const stations = pgTable("stations", {
   commissionMode: text("commission_mode").notNull().default("pct"),
   commissionPct: numeric("commission_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   active: boolean("active").notNull().default(true),
+  /** repair places per working day (repair calendar) */
+  repairsPerDay: integer("repairs_per_day").notNull().default(3),
+  /** automatic insurer report e-mails the admin removed for this station */
+  excludedInsurerEmails: text("excluded_insurer_emails").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => ({ byOrg: index("stations_org_idx").on(t.orgId) }));
@@ -185,6 +189,11 @@ export const vehicles = pgTable("vehicles", {
   colibriFile: jsonb("colibri_file"),
   /** PartitionKey|RowKey of the Azure scan this vehicle was imported from (unique: a scan is imported once) */
   colibriScanKey: text("colibri_scan_key").unique(),
+  /** repair board column: bereit | demontage | pdr | remontage | bodyshop | finish (null = not in the repair flow) */
+  repairStage: text("repair_stage"),
+  /** calculation method + version frozen on the vehicle (null = historical behaviour) */
+  methodId: uuid("method_id").references((): AnyPgColumn => calcMethods.id),
+  methodVersion: integer("method_version"),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdBy: uuid("created_by").references(() => users.id),
@@ -207,6 +216,9 @@ export const photos = pgTable("photos", {
   colibriPosition: text("colibri_position"),
   colibriIndex: integer("colibri_index"),
   inPdf: boolean("in_pdf").notNull().default(true),
+  /** repair board stage the photo was taken in, and the role of the person (Techniker, Headliner, ...) */
+  repairStage: text("repair_stage"),
+  role: text("role"),
   takenAt: timestamp("taken_at", { withTimezone: true }).notNull().defaultNow(),
   takenBy: uuid("taken_by").references(() => users.id),
   sort: integer("sort").notNull().default(0),
@@ -291,6 +303,8 @@ export const technicians = pgTable("technicians", {
   name: text("name").notNull(),
   defaultPctPdr: numeric("default_pct_pdr", { precision: 5, scale: 2 }).notNull().default("50"),
   defaultPctDemontage: numeric("default_pct_demontage", { precision: 5, scale: 2 }).notNull().default("100"),
+  /** pdr | headliner */
+  kind: text("kind").notNull().default("pdr"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -390,3 +404,113 @@ export const azureSyncState = pgTable("azure_sync_state", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
 });
+
+// ---------------------------------------------------------------- UI v3: calculation methods
+export const calcMethods = pgTable("calc_methods", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  /** aw | matrix */
+  engine: text("engine").notNull(),
+  country: text("country").notNull(),
+  baseMethodId: uuid("base_method_id"),
+  isSystem: boolean("is_system").notNull().default(false),
+  currentVersion: integer("current_version").notNull().default(1),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => ({ byOrg: index("calc_methods_org_idx").on(t.orgId) }));
+
+/** Every change of a method is a new version; vehicles keep computing with the version they were frozen on. */
+export const calcMethodVersions = pgTable("calc_method_versions", {
+  methodId: uuid("method_id").notNull().references(() => calcMethods.id),
+  version: integer("version").notNull(),
+  params: jsonb("params").notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => ({ pk: primaryKey({ columns: [t.methodId, t.version] }) }));
+
+export const insurerMethods = pgTable("insurer_methods", {
+  insurerId: uuid("insurer_id").notNull().references(() => insurers.id),
+  country: text("country").notNull(),
+  methodId: uuid("method_id").notNull().references(() => calcMethods.id),
+}, (t) => ({ pk: primaryKey({ columns: [t.insurerId, t.country] }) }));
+
+// ---------------------------------------------------------------- UI v3: repair
+export const repairTodos = pgTable("repair_todos", {
+  id: uuid("id").primaryKey(), // chosen by the client
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  text: text("text").notNull(),
+  /** manual | part (from "Zu ersetzende Teile") */
+  source: text("source").notNull().default("manual"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  doneBy: uuid("done_by").references(() => users.id),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  sort: integer("sort").notNull().default(0),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byVehicle: index("repair_todos_vehicle_idx").on(t.vehicleId) }));
+
+/** Manual quality checks (pdr, teile, chef). A row with done_at null = open. */
+export const repairChecks = pgTable("repair_checks", {
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  key: text("key").notNull(),
+  doneBy: uuid("done_by").references(() => users.id),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+}, (t) => ({ pk: primaryKey({ columns: [t.vehicleId, t.key] }) }));
+
+export const repairEvents = pgTable("repair_events", {
+  id: id(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  /** null = the system (daily job, automatic report) */
+  userId: uuid("user_id").references(() => users.id),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  type: text("type").notNull(),
+  payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+}, (t) => ({ byVehicle: index("repair_events_vehicle_idx").on(t.vehicleId, t.at) }));
+
+/** Weekly planning per technician ("Technikerplanung"). */
+export const repairAppointments = pgTable("repair_appointments", {
+  id: uuid("id").primaryKey(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  technicianId: uuid("technician_id").notNull().references(() => technicians.id),
+  date: text("date").notNull(),
+  durationMin: integer("duration_min").notNull().default(60),
+  note: text("note").notNull().default(""),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byVehicle: index("repair_appointments_vehicle_idx").on(t.vehicleId) }));
+
+/** Repair calendar: one booking per vehicle (while booked), counted against stations.repairs_per_day. */
+export const repairBookings = pgTable("repair_bookings", {
+  id: uuid("id").primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  stationId: uuid("station_id").notNull().references(() => stations.id),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  date: text("date").notNull(),
+  /** booked | cancelled | started */
+  status: text("status").notNull().default("booked"),
+  time: text("time").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  cancelledBy: uuid("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelReason: text("cancel_reason"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+}, (t) => ({
+  byDay: index("repair_bookings_day_idx").on(t.stationId, t.date),
+  oneBooked: uniqueIndex("repair_bookings_one_booked_idx").on(t.vehicleId).where(sql`status = 'booked'`),
+}));
+
+export const vehicleComments = pgTable("vehicle_comments", {
+  id: uuid("id").primaryKey(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  userId: uuid("user_id").references(() => users.id),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  text: text("text").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byVehicle: index("vehicle_comments_vehicle_idx").on(t.vehicleId) }));

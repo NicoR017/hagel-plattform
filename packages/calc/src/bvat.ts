@@ -1,5 +1,5 @@
-import { BVAT_TABLE, PANEL_MAP, SIZES } from "./config";
-import type { Dents, Orientation, Panel, PanelBollos, PanelStats } from "./types";
+import { BVAT_TABLE, DEFAULT_AW_PARAMS, PANEL_MAP, SIZES } from "./config";
+import type { AwParams, Dents, Orientation, Panel, PanelBollos, PanelStats } from "./types";
 
 export function getDents(p: Panel | undefined): Dents {
   return p && p.dents ? p.dents : {};
@@ -46,12 +46,12 @@ export function panelBaseAW(p: Panel, teiler: number): number {
   return lookupAW(teiler, PANEL_MAP[p.key].orientation, st.total, st.avgClass);
 }
 
-export function panelRepairAW(p: Panel, teiler: number): number {
+export function panelRepairAW(p: Panel, teiler: number, aw_: AwParams = DEFAULT_AW_PARAMS): number {
   const st = panelStats(p);
   if (!st.total || p.method === "erneuern") return 0;
   let aw = panelBaseAW(p, teiler);
-  if (p.alu) aw *= 1.25;
-  if (p.kleber) aw *= 1.3;
-  if (p.method === "ptp") aw *= 0.6;
+  if (p.alu) aw *= aw_.aluFactor;
+  if (p.kleber) aw *= aw_.kleberFactor;
+  if (p.method === "ptp") aw *= aw_.ptpFactor;
   return Math.round(aw * 100) / 100;
 }

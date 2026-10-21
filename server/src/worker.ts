@@ -3,6 +3,7 @@ import { azureFromEnv } from "./azure";
 import { syncAzure } from "./azure_sync";
 import { runBackup, type BackupEnv } from "./backup";
 import { createDb } from "./db";
+import { runDueBookings } from "./repair";
 
 const env = process.env;
 const backupEnv = (): BackupEnv | null =>
@@ -46,4 +47,19 @@ else if (env.DATABASE_URL) {
   };
   void tick();
   setInterval(() => void tick(), minutes * 60_000);
+}
+
+// Repair calendar: bookings whose day has come move into "Bereit" (also catches up after a downtime). Idempotent, never fatal.
+if (env.DATABASE_URL) {
+  const h = await createDb(env.DATABASE_URL, { migrate: false }); // the API owns the migrations
+  let busy = false;
+  const dueTick = async () => {
+    if (busy) return;
+    busy = true;
+    try { const r = await runDueBookings(h.db); if (r.started || r.cancelled) console.log("[bookings] due", JSON.stringify(r)); }
+    catch (e) { console.error("[bookings] FAILED", (e as Error).message); }
+    finally { busy = false; }
+  };
+  void dueTick();
+  setInterval(() => void dueTick(), 5 * 60_000);
 }
