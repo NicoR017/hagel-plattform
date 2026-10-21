@@ -89,7 +89,7 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     }
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(colibriScans);
     return c.json({
-      configured: !!az, tenants, lastRuns: runs.map((x) => ({ at: x.startedAt, finishedAt: x.finishedAt, ok: x.ok, error: x.error, stats: x.stats })),
+      configured: !!az, sasExpiresAt: az?.expiresAt?.()?.toISOString() ?? null, tenants, lastRuns: runs.map((x) => ({ at: x.startedAt, finishedAt: x.finishedAt, ok: x.ok, error: x.error, stats: x.stats })),
       scansMirrored: n, waiting: { importable, blocked }, unmappedCustomers: [...unmappedCustomers.values()].filter((e) => e.name), unmappedLocations: [...unmappedLocations.values()],
     });
   });

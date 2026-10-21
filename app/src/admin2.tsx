@@ -240,7 +240,7 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
 
 // ---------------------------------------------------------------- Azure / Colibri
 interface AzStatus {
-  configured: boolean; tenants: string[]; scansMirrored: number; waiting: { importable: number; blocked: number };
+  configured: boolean; sasExpiresAt?: string | null; tenants: string[]; scansMirrored: number; waiting: { importable: number; blocked: number };
   lastRuns: { at: string; finishedAt: string | null; ok: boolean | null; error: string | null; stats: Record<string, number> | null }[];
   unmappedCustomers: { name: string; tenant: string; scans: number }[]; unmappedLocations: { location: string; tenant: string; scans: number }[];
 }
@@ -259,6 +259,11 @@ export function AzurePage() {
         {d && (
           <>
             <p>{d.configured ? <span className="ok">✓ {t("azureConfigured")}</span> : <span className="err">{t("azureNotConfigured")}</span>}</p>
+            {d.configured && d.sasExpiresAt && (() => {
+              const days = Math.floor((new Date(d.sasExpiresAt).getTime() - Date.now()) / 86_400_000);
+              const text = `${t("sasExpires")}: ${fmtDateTime(d.sasExpiresAt)}`;
+              return days < 0 ? <p className="err">⚠ {t("sasExpired")} ({text})</p> : days < 14 ? <p style={{ color: "var(--brick)" }}>⚠ {text} ({days} {t("daysShort")})</p> : <p className="muted">{text}</p>;
+            })()}
             <p style={{ margin: "4px 0" }}>{t("tenant")}: {d.tenants.length ? d.tenants.map((x) => <span key={x} className="pill">{x}</span>) : <span className="muted">{t("noTenants")}</span>}</p>
             <p style={{ margin: "4px 0" }}>{d.scansMirrored} {t("scansMirrored")} · {d.waiting.importable} {t("scansImportable")} · {d.waiting.blocked} {t("scansBlocked")}</p>
             <table>

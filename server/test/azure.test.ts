@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import sharp from "sharp";
-import { AzureRest, odataString } from "../src/azure";
+import { AzureRest, odataString, sasExpiry } from "../src/azure";
 import { parsePhotoName, pdfBlobName, photoStems, positionLabel } from "../src/azure_import";
 import { mapScan, normalizeName, scanFromRow, syncAzure, type MappingContext } from "../src/azure_sync";
 import { campaignStations, campaigns, colibriScans, photos, stationInsurers, stations, vehicles } from "../src/schema";
@@ -124,6 +124,16 @@ describe("REST client (SAS, OData, paging, XML)", () => {
     const az2 = mk((url) => { seen = url; return resp({}, { bytes }); });
     expect([...(await az2.getBlob("allscans", "a b/c#d.pdf"))!]).toEqual([1, 2, 3]);
     expect(seen).toContain("/allscans/a%20b/c%23d.pdf?");
+  });
+  it("a 403 says why: expired SAS (with its date) or refused token; the expiry is exposed", async () => {
+    const denied = (sas: string) => new AzureRest({ account: "acct", sas, fetch: async () => resp({}, { status: 403 }) as never });
+    const past = "?sv=2020&se=2020-01-02T03%3A04%3A05Z&sig=abc", future = `?sv=2020&se=${encodeURIComponent(new Date(Date.now() + 86_400_000 * 30).toISOString())}&sig=abc`;
+    await expect(denied(past).queryTable("Tenants").next()).rejects.toThrow(/403 \(SAS expired on 2020-01-02T03:04Z/);
+    await expect(denied(future).queryTable("Tenants").next()).rejects.toThrow(/403 \(SAS refused/);
+    await expect(denied("?sv=2020&sig=abc").listBlobs("c", "p")).rejects.toThrow(/403 \(SAS refused/);
+    expect(denied(past).expiresAt()?.toISOString()).toBe("2020-01-02T03:04:05.000Z");
+    expect(denied("?sv=2020&sig=abc").expiresAt()).toBeNull();
+    expect(sasExpiry("sv=1&se=garbage")).toBeNull();
   });
   it("escapes quotes in OData strings", () => expect(odataString("O'Neil")).toBe("'O''Neil'"));
 });

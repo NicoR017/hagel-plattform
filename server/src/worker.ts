@@ -31,6 +31,7 @@ if (env.BACKUP_ON_START === "1") void backup();
 const az = azureFromEnv();
 if (!az) console.warn("[azure] AZURE_STORAGE_SAS not set: Colibri import from Azure is disabled");
 else if (env.DATABASE_URL) {
+  console.log("[azure] SAS expires:", az.expiresAt?.()?.toISOString() ?? "unknown");
   const minutes = Math.max(1, Number(env.AZURE_SYNC_MINUTES ?? 3));
   const h = await createDb(env.DATABASE_URL, { migrate: false }); // the API owns the migrations
   let running = false;

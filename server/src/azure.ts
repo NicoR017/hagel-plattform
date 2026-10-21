@@ -9,6 +9,16 @@ export interface AzureSource {
   queryTable(table: string, opts?: { filter?: string }): AsyncGenerator<TableRow>;
   listBlobs(container: string, prefix: string): Promise<string[]>;
   getBlob(container: string, name: string): Promise<Uint8Array | null>;
+  /** When the SAS token stops working (its `se` parameter), if known. */
+  expiresAt?(): Date | null;
+}
+
+/** Expiry (`se=`) of a SAS token; null when it has none or cannot be read. */
+export function sasExpiry(sas: string): Date | null {
+  const m = /(?:^|[?&])se=([^&]+)/.exec(sas);
+  if (!m) return null;
+  const d = new Date(decodeURIComponent(m[1]));
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 type FetchFn = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; headers: { get(n: string): string | null }; json(): Promise<unknown>; text(): Promise<string>; arrayBuffer(): Promise<ArrayBuffer> }>;
@@ -28,6 +38,13 @@ export class AzureRest implements AzureSource {
   private sas: string;
   private table: string;
   private blob: string;
+  expiresAt(): Date | null { return sasExpiry(this.sas); }
+  /** "HTTP 403" alone does not say why; an expired token is by far the most common reason. */
+  private why(status: number): string {
+    if (status !== 403 && status !== 401) return `HTTP ${status}`;
+    const e = this.expiresAt();
+    return e && e.getTime() < Date.now() ? `HTTP ${status} (SAS expired on ${e.toISOString().slice(0, 16)}Z: create a new one)` : `HTTP ${status} (SAS refused: expired, wrong permissions or wrong account)`;
+  }
   constructor(c: AzureConfig) {
     this.f = c.fetch ?? ((url, init) => fetch(url, init) as never);
     this.sas = c.sas.replace(/^\?/, "");
@@ -44,7 +61,7 @@ export class AzureRest implements AzureSource {
       const url = `${this.table}/${encodeURIComponent(table)}()?${q.toString().replace(/\+/g, "%20")}${q.size ? "&" : ""}${this.sas}`;
       const res = await this.f(url, { headers: { Accept: "application/json;odata=nometadata", "x-ms-version": "2020-12-06", DataServiceVersion: "3.0;NetFx", MaxDataServiceVersion: "3.0;NetFx" } });
       if (res.status === 404) return; // table does not exist (yet)
-      if (!res.ok) throw new AzureError(res.status, `Azure table ${table}: HTTP ${res.status}`);
+      if (!res.ok) throw new AzureError(res.status, `Azure table ${table}: ${this.why(res.status)}`);
       const body = (await res.json()) as { value?: TableRow[] };
       for (const r of body.value ?? []) yield r;
       const npk = res.headers.get("x-ms-continuation-NextPartitionKey");
@@ -61,7 +78,7 @@ export class AzureRest implements AzureSource {
       if (marker) q.set("marker", marker);
       const res = await this.f(`${this.blob}/${encodeURIComponent(container)}?${q.toString().replace(/\+/g, "%20")}&${this.sas}`, { headers: { "x-ms-version": "2020-12-06" } });
       if (res.status === 404) return names;
-      if (!res.ok) throw new AzureError(res.status, `Azure list ${container}: HTTP ${res.status}`);
+      if (!res.ok) throw new AzureError(res.status, `Azure list ${container}: ${this.why(res.status)}`);
       const xml = await res.text();
       for (const m of xml.matchAll(/<Blob>\s*<Name>([\s\S]*?)<\/Name>/g)) names.push(xmlDecode(m[1]));
       marker = /<NextMarker>([\s\S]*?)<\/NextMarker>/.exec(xml)?.[1] ?? "";
@@ -74,7 +91,7 @@ export class AzureRest implements AzureSource {
     const path = name.split("/").map(encodeURIComponent).join("/");
     const res = await this.f(`${this.blob}/${encodeURIComponent(container)}/${path}?${this.sas}`, { headers: { "x-ms-version": "2020-12-06" } });
     if (res.status === 404) return null;
-    if (!res.ok) throw new AzureError(res.status, `Azure blob ${container}/${name}: HTTP ${res.status}`);
+    if (!res.ok) throw new AzureError(res.status, `Azure blob ${container}/${name}: ${this.why(res.status)}`);
     return new Uint8Array(await res.arrayBuffer());
   }
 }
