@@ -48,7 +48,7 @@ npm run build -w @hagel/app          # une fois
 node infra/scripts/local_staging.mjs  # http://localhost:3100, base en mémoire, données fictives, MAIL_MODE=off, sans Azure ni bucket
 ```
 
-Comptes : `de.chef@`, `de.assessor@`, `de.tech@` (et `es.`) `staging.test`, mot de passe `staging-local-test-1` (ou `STAGING_TEST_PASSWORD`). Tout disparaît à l'arrêt.
+Super-admin : `nicolas.rasteiro@pdr-team.de` (même mot de passe). Autres comptes : `de.chef@`, `de.assessor@`, `de.tech@` (et `es.`) `staging.test`, mot de passe `staging-local-test-1` (ou `STAGING_TEST_PASSWORD`). Tout disparaît à l'arrêt.
 
 ## 4. Contrôle d'intégrité
 

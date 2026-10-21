@@ -20,8 +20,10 @@ const STATUSES = ["arrive", "besichtigung", "besichtigung", "attente", "reparatu
 const PANELS = ["haube", "dach", "tuer_vl", "kfl_vr", "heck"];
 
 export async function seedStaging(db: Db, o: { password: string; superadminEmail: string }) {
-  const { orgs } = await seed(db, { superadminEmail: o.superadminEmail, testSites: true });
+  const { orgs, superadmin } = await seed(db, { superadminEmail: o.superadminEmail, testSites: true });
   const pwHash = await hashPassword(o.password);
+  // the super-admin can sign in with the test password too (staging has no real mail to send a magic link)
+  if (!superadmin.passwordHash) await db.update(users).set({ passwordHash: pwHash }).where(eq(users.id, superadmin.id));
   const summary: Record<string, number> = {};
   for (const org of orgs) {
     const country = org.country as "DE" | "ES";

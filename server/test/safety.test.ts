@@ -1,4 +1,5 @@
 // Phase 1 safety net: MAIL_MODE, APP_ENV, public /config, integrity report, sync backward compatibility.
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { KNOWN_OP_TYPES, isV3Op, opSchema } from "@hagel/shared";
 import { loadConfig } from "../src/config";
@@ -142,6 +143,7 @@ describe("staging fake data", () => {
       expect(Object.values(a)).toEqual([16, 16]);
       const b = await seedStaging(h.db, { password: "a-test-password-1", superadminEmail: "boss@staging.test" });
       expect(Object.values(b)).toEqual([0, 0]);
+      expect((await h.db.select().from(users).where(eq(users.email, "boss@staging.test")))[0].passwordHash).toBeTruthy();
       const rep = await buildReport(h.db);
       expect(rep.vehiclesLiveTotal).toBe(32);
       expect((await h.db.select().from(users)).length).toBe(7); // super-admin + 3 people per organisation
