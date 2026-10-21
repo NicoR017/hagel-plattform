@@ -13,6 +13,10 @@ import { confirmDialog } from "../field/ui";
 import { bulkColibri, exportVehiclesXlsx, holdLabel, modeTitle } from "./listActions";
 import { MODE_STATUSES, STATUS_STYLE, inMode, matchesChip } from "./modes";
 import { useNewScans } from "./useScans";
+import { dayLabel, todayIn, tzOfCountry } from "../field/calendar";
+
+/** the open repair booking of a vehicle (badge "Termin Mo 26.10.") */
+const bookingOf = (v: { repair?: unknown }) => (v.repair as { booking?: { date: string } | null } | undefined)?.booking ?? null;
 
 type Dlg = null | "status" | "move" | "shares" | "assign" | "scans";
 
@@ -127,7 +131,10 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
                   <span>{insurerName(v.insurerId) || String(v.kunde || f.stationName(v.clientStationId) || "—")}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{v.claimNumber ? `${t("v3Claim")} ${String(v.claimNumber)}` : f.stationName(v.clientStationId)}</span>
                 </span>
-                <span style={{ flex: "0 0 auto" }}><span className="badge" style={{ background: style.bg, color: style.fg }}>{holdLabel(v)}</span></span>
+                <span style={{ flex: "0 0 auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <span className="badge" style={{ background: style.bg, color: style.fg }}>{holdLabel(v)}</span>
+                  {bookingOf(v) && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8" }}>{t("v4BadgeTermin")} {dayLabel(bookingOf(v)!.date, todayIn(tzOfCountry(st?.country ?? "DE")), "de-DE")}</span>}
+                </span>
                 <span className="c" style={{ flex: "0 1 140px", fontSize: 13 }}>
                   <span>{c.dents} {t("dentsWord")}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{c.es ? `${c.es.bollos} Bollos · ${t("cat")} ${c.es.cat.cat} · ${h1(c.es.totH)}` : `${num(c.totalAW)} AW`}</span>

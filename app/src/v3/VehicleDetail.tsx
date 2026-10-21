@@ -140,6 +140,7 @@ function GtMotive() {
   );
 }
 
+const dmy = (d: unknown) => String(d ?? "").replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3.$2.$1");
 interface Ev { at: string; kind: string; who: string; data: Record<string, unknown> }
 function evText(e: Ev): string {
   const d = e.data;
@@ -151,8 +152,8 @@ function evText(e: Ev): string {
     entered_repair: t("v4EvEntered"), stage: `${t("v4EvStage")} ${String(d.to ?? "")}`, finish: t("v4EvFinish"), todo_add: `${t("v4EvTodo")}: ${String(d.text ?? "")}`,
     todo_done: `${t("v4EvTodoDone")}: ${String(d.text ?? "")}`, todo_reopen: `${t("v4EvTodoOpen")}: ${String(d.text ?? "")}`, todo_delete: `${t("v4EvTodoDel")}: ${String(d.text ?? "")}`,
     check_done: `${t("v4EvCheck")}: ${String(d.key ?? "")}`, check_reopen: `${t("v4EvCheckOpen")}: ${String(d.key ?? "")}`,
-    booking_created: `${t("v4EvBook")}: ${String(d.date ?? "")} ${String(d.time ?? "")}`, booking_moved: `${t("v4EvBookMoved")}: ${String(d.to ?? "")}`,
-    booking_cancelled: `${t("v4EvBookCancelled")}: ${String(d.date ?? "")}`, booking_started: t("v4EvBookStarted"),
+    booking_created: `${t("v4EvBook")}: ${dmy(d.date)} ${String(d.time ?? "")}`, booking_moved: `${t("v4EvBookMoved")}: ${dmy(d.to)}`,
+    booking_cancelled: `${t("v4EvBookCancelled")}: ${dmy(d.date)}`, booking_started: t("v4EvBookStarted"),
   };
   return map[k] ?? k;
 }
@@ -190,6 +191,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
   const x = v as Record<string, unknown>;
   const st = STATUS_STYLE[v.statut] ?? STATUS_STYLE.arrive;
   const comments = (v.repair as Repair | undefined)?.comments.length ?? 0;
+  const booking = (v.repair as { booking?: { date: string } | null } | undefined)?.booking ?? null;
   const open = (t2: Tab) => go({ page: "vehicle", id, tab: t2, ctx });
   const embed = (n: ReactNode) => <div className="fld embed" style={{ background: "#fff", borderRadius: 14, border: "1px solid var(--line)" }}>{n}</div>;
 
@@ -201,6 +203,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           <div style={{ color: "#B9C4D6", fontSize: 13 }}>{String(x.modell || x.fin || "")}{x.claimNumber ? ` · ${t("v3Claim")} ${String(x.claimNumber)}` : ""}</div>
         </div>
         <span className="badge" style={{ background: st.bg, color: st.fg }}>{statusLabel(v.statut)}{v.statut === "attente" && v.statutMotif ? ` · ${holdReasonLabel(String(v.statutMotif))}` : ""}</span>
+        {booking && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8" }}>{t("v4BadgeTermin")} {dayLabel(booking.date, todayIn(tzOfCountry(f.refs?.stations.find((s) => s.id === v.stationId)?.country ?? "DE")), "de-DE")}</span>}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginLeft: "auto" }}>
           {f.can("vehicules.changer_statut") && <button className="btn" onClick={() => setDlg("status")}>{t("v3ChangeStatus")}</button>}
           {f.can("vehicules.deplacer") && <button className="btn" onClick={() => setDlg("move")}>{t("move")}</button>}

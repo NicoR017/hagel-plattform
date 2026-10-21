@@ -1,6 +1,6 @@
 /** Phase 4 strings: assessment assistant, vehicle detail, repair calendar, parts to replace, lightbox (German and English, same keys). */
 export const deV4 = {
-  v4Prev: "Vorheriges Foto", v4Next: "Weiter", v4Add: "Hinzufügen", v4Send: "Senden", v4Done: "Fertig", v4ToList: "Zur Liste",
+  v4BadgeTermin: "Termin", v4Prev: "Vorheriges Foto", v4Next: "Weiter", v4Add: "Hinzufügen", v4Send: "Senden", v4Done: "Fertig", v4ToList: "Zur Liste",
   v4NewTitle: "Neue Expertise", v4Step0: "Scan wählen", v4NewScans: "Neue Colibri-Scans dieser Station", v4NoScans: "Keine neuen Scans.",
   v4ManualPdf: "Colibri-PDF manuell importieren", v4NoScan: "Ohne Scan starten", v4Expertise: "Expertise",
   v4Steps: "Schritte", v4StepBasis: "Basis", v4StepCapture: "Erfassung", v4StepPhotos: "Bilder", v4StepKva: "KVA", v4StepKvaEs: "Presupuesto",
@@ -28,7 +28,7 @@ export const deV4 = {
 } as const;
 
 export const enV4: Record<keyof typeof deV4, string> = {
-  v4Prev: "Previous photo", v4Next: "Next", v4Add: "Add", v4Send: "Send", v4Done: "Done", v4ToList: "To the list",
+  v4BadgeTermin: "Appt.", v4Prev: "Previous photo", v4Next: "Next", v4Add: "Add", v4Send: "Send", v4Done: "Done", v4ToList: "To the list",
   v4NewTitle: "New assessment", v4Step0: "Pick a scan", v4NewScans: "New Colibri scans of this station", v4NoScans: "No new scans.",
   v4ManualPdf: "Import a Colibri PDF by hand", v4NoScan: "Start without a scan", v4Expertise: "Assessment",
   v4Steps: "Steps", v4StepBasis: "Basics", v4StepCapture: "Capture", v4StepPhotos: "Photos", v4StepKva: "Estimate", v4StepKvaEs: "Presupuesto",

@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { createDb, type Db } from "../db";
 import { hashPassword } from "../crypto";
 import { seed } from "../seed";
+import { systemMethodFor } from "../methods";
 import { nextSeq } from "../sync";
 import { memberships, organizations, roleAssignments, roles, stations, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
 
@@ -47,6 +48,7 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
       if (role) await db.insert(roleAssignments).values({ userId: u.id, orgId: org.id, stationId: site.id, roleId: role.id });
       people[p.key] = u.id;
     }
+    const method = await systemMethodFor(db, org.id, country);
     for (let i = 0; i < 16; i++) {
       const statut = STATUSES[i % STATUSES.length];
       const id = crypto.randomUUID();
@@ -56,6 +58,7 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
         repAt: statut === "reparatur" || statut === "fertig" ? new Date() : null,
         header: { land: country, kennzeichen: country === "ES" ? `${1000 + i} TST` : `TS-T ${100 + i}`, modell: MODELS[i % MODELS.length], kunde: site.name, leistungsdatum: "2026-10-20", teiler: 10, stundensatz: country === "ES" ? 69 : 83 },
         panels, panelsAt: {}, shares: { techName: "Test Techniker", techPct: 50, werkPct: 10, werkMode: "pct" }, groupAt: {},
+        methodId: method?.id ?? null, methodVersion: method?.version ?? null,
       });
       await db.insert(vehicleStatusHistory).values({ vehicleId: id, statut });
       if (statut === "reparatur" || statut === "fertig") await db.insert(vehicleAssignments).values({ vehicleId: id, userId: people.tech, type: "pdr" });
