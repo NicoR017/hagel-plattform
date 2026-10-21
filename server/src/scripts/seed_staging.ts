@@ -34,9 +34,10 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
       sts = await db.insert(stations).values([
         { orgId: org.id, type: "carrosserie", name: "Karosserie Teststadt", country, capacite: 30, commissionMode: "pct", commissionPct: "10" },
         { orgId: org.id, type: "hall", name: "PDR Halle Test", country, capacite: 60 },
+        { orgId: org.id, type: "carrosserie", name: "Karosserie Zwei (Bodyshop)", country, capacite: 0, commissionMode: "pct", commissionPct: "10" },
       ]).returning();
     }
-    const site = sts.find((s) => s.type === "carrosserie") ?? sts[0];
+    const site = sts.find((s) => s.type === "carrosserie" && s.name === "Karosserie Teststadt") ?? sts.find((s) => s.type === "carrosserie") ?? sts[0];
     // one fake insurer (receives reports, fake address) linked to the carrosserie: shows the automatic recipient of the station list
     const [fakeIns] = await db.insert(insurers).values({ orgId: org.id, name: "Test Versicherung", reportEmails: ["schaden@versicherung.staging.test"], sendReports: true, reportsToSend: "both" }).returning();
     await db.insert(stationInsurers).values({ stationId: site.id, insurerId: fakeIns.id });

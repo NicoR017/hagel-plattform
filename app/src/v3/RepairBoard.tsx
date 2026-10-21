@@ -14,6 +14,7 @@ import { toast } from "../field/toast";
 import { Dialog, Field, confirmDialog } from "../field/ui";
 import { REPAIR_STAGES, arrivedToday, blockerKey, boardOf, moveCheck, neighbour, stageOf, todosOpen, type RepairStage } from "./boardLogic";
 import { holdLabel } from "./listActions";
+import { BodyshopPick } from "./BodyshopPick";
 
 export const stageLabel = (s: string) => t(`v5Stage_${s}` as Key);
 /** "Finish is not possible: …" in words */
@@ -184,6 +185,7 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                     <span className="muted" style={{ fontSize: 12 }}>{[f.refs?.insurers.find((i) => i.id === v.insurerId)?.name, x.modell].filter(Boolean).join(" · ")}</span>
                     {(!!techOf(v) || !!x.demTechName) && <span className="muted" style={{ fontSize: 11 }}>{techOf(v) ? `PDR ${techOf(v)}` : ""}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</span>}
                   </button>
+                  {stage === "bodyshop" && <BodyshopPick v={v} disabled={!may} compact />}
                   <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                     <span className="badge" style={{ background: open ? "#FBF1D9" : "#E3F4EA", color: open ? "#7A5300" : "#17663F", fontSize: 11 }}>{open ? `${t("v5Todo")}: ${open} ${t("v3Open")}` : `${t("v5Todo")} ✓`}</span>
                     {may && (

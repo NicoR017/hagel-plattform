@@ -135,6 +135,7 @@ export const opSchema = z.discriminatedUnion("type", [
   /** Ask the server to e-mail a report (the PDF is uploaded separately to /files/report/:id). */
   // ---- UI v3 (see V3_OP_TYPES)
   z.object({ ...base, type: z.literal("vehicle.repairStage"), vehicleId: uuidStr, stage: z.enum(REPAIR_STAGES) }),
+  z.object({ ...base, type: z.literal("vehicle.bodyshop"), vehicleId: uuidStr, bodyshopId: uuidStr.nullable() }),
   z.object({ ...base, type: z.literal("repair.todo.add"), vehicleId: uuidStr, todo: z.object({ id: uuidStr, text: z.string().trim().min(1).max(200) }).strict() }),
   z.object({ ...base, type: z.literal("repair.todo.toggle"), todoId: uuidStr, done: z.boolean() }),
   z.object({ ...base, type: z.literal("repair.todo.delete"), todoId: uuidStr }),
@@ -158,7 +159,7 @@ export const KNOWN_OP_TYPES: readonly string[] = opSchema.options.map((o) => o.s
  * types, and keeps them queued (instead of dropping them) when the server does not know them yet (rollback, partial deploy).
  */
 export const V3_OP_TYPES: readonly string[] = [
-  "vehicle.repairStage", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
+  "vehicle.repairStage", "vehicle.bodyshop", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
   "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
 ];
 export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
@@ -201,6 +202,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   /** frozen calculation method (null = historical behaviour) */
   methodId?: string | null;
   methodVersion?: number | null;
+  /** body shop that repairs the car (a carrosserie site of the tenant), set in the "At Bodyshop" column */
+  bodyshopId?: string | null;
   /** repair data, only for users who may see it (see ClientRepair) */
   repair?: ClientRepair;
   updatedAt: string;
@@ -276,6 +279,8 @@ export interface PullResponse {
   gone: string[];
   refs: {
     stations: ClientStation[];
+    /** body shops (carrosserie sites, names only) a car can be sent to: the choices of the "At Bodyshop" column; only for users of the repair board */
+    bodyshops: { id: string; name: string; azureTenant: string | null }[];
     /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
     occupancy: Record<string, number>;
     settings: OrgSettings;

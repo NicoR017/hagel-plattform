@@ -124,9 +124,9 @@ export async function sendBookingMail(c: MailCtx, kind: "created" | "moved" | "c
 
 // ------------------------------------------------------------------ ops
 
-type RepairOp = Extract<Op, { type: "vehicle.repairStage" | "photo.stage" | "repair.todo.add" | "repair.todo.toggle" | "repair.todo.delete" | "repair.check" | "vehicle.comment" | "appointment.add" | "appointment.update" | "appointment.delete" | "booking.create" | "booking.move" | "booking.cancel" }>;
+type RepairOp = Extract<Op, { type: "vehicle.repairStage" | "vehicle.bodyshop" | "photo.stage" | "repair.todo.add" | "repair.todo.toggle" | "repair.todo.delete" | "repair.check" | "vehicle.comment" | "appointment.add" | "appointment.update" | "appointment.delete" | "booking.create" | "booking.move" | "booking.cancel" }>;
 export const isRepairOp = (op: Op): op is RepairOp =>
-  /^(repair\.|appointment\.|booking\.)/.test(op.type) || op.type === "vehicle.repairStage" || op.type === "photo.stage" || op.type === "vehicle.comment";
+  /^(repair\.|appointment\.|booking\.)/.test(op.type) || op.type === "vehicle.repairStage" || op.type === "vehicle.bodyshop" || op.type === "photo.stage" || op.type === "vehicle.comment";
 
 export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: Storage }, tx: Tx, u: Principal, op: RepairOp, at: number): Promise<OpOutcome> {
   const db = tx as unknown as Db;
@@ -173,6 +173,29 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       // "Finish": the repair report goes out by itself (once per vehicle), after the change is saved; a failure never undoes the Finish
       if (op.stage === "finish" && deps.mailer && deps.storage) { const rd = { db: deps.db, storage: deps.storage, mailer: deps.mailer }; return { ...out, after: () => autoRepairReport(rd, row.id) }; }
       return out;
+    }
+
+    /** Which body shop has the car ("At Bodyshop"): a carrosserie site of the same organisation and Colibri tenant as the car's site. null = not set. */
+    case "vehicle.bodyshop": {
+      const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
+      need(u, "reparatur.board", ref);
+      if (row.repairStage == null) throw new Reject("vehicle_not_in_repair");
+      const stamps = { ...(row.groupAt as Record<string, number>) };
+      if ((stamps.bodyshopId ?? 0) > at) return { status: "conflict", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
+      stamps.bodyshopId = at;
+      let name: string | null = null;
+      if (op.bodyshopId) {
+        const [b] = await tx.select().from(stations).where(and(eq(stations.id, op.bodyshopId), eq(stations.orgId, row.orgId)));
+        const [own] = row.stationId ? await tx.select().from(stations).where(eq(stations.id, row.stationId)) : [];
+        if (!b || b.type !== "carrosserie" || !b.active) throw new Reject("bodyshop_invalid");
+        // same Colibri tenant (a site without a tenant is not restricted)
+        if (b.azureTenant && own?.azureTenant && b.azureTenant !== own.azureTenant) throw new Reject("bodyshop_invalid");
+        name = b.name;
+      }
+      if (row.bodyshopId === op.bodyshopId) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
+      await event(tx, row.id, u.id, "bodyshop", { from: row.bodyshopId, to: op.bodyshopId, name });
+      await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: row.id, before: { bodyshopId: row.bodyshopId }, after: { bodyshopId: op.bodyshopId } });
+      return touchVehicle(tx, u, row, { bodyshopId: op.bodyshopId, groupAt: stamps });
     }
 
     case "photo.stage": {

@@ -24,6 +24,7 @@ export const ERROR_MESSAGES = {
   self_delete: { de: "Sie können sich nicht selbst löschen", en: "You cannot delete yourself" },
   replacement_invalid: { de: "Die Ersatzrolle ist ungültig (gleicher Sichtbarkeitsbereich nötig)", en: "The replacement role is invalid (it needs the same visibility scope)" },
   weekly_report_empty: { de: "Keine abgeschlossenen Fahrzeuge in dieser Woche", en: "No finished vehicles in this week" },
+  bodyshop_invalid: { de: "Diese Karosserie kann nicht gewählt werden (andere Organisation oder anderer Tenant)", en: "This body shop cannot be chosen (other organisation or tenant)" },
   no_recipient: { de: "Keine E-Mail-Adresse für diese Person hinterlegt", en: "No e-mail address on file for this person" },
   superadmin_only: { de: "Nur Super-Admin", en: "Super-admin only" },
   forbidden: { de: "Keine Berechtigung", en: "Not permitted" },

@@ -66,6 +66,7 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
       else if (v.statut !== "reparatur" && v.statut !== "attente") { n.statut = "reparatur"; n.statutDepuis = at; n.repAt = (v.repAt as string | null) ?? at; }
       return n;
     }
+    case "vehicle.bodyshop": return v ? { ...v, bodyshopId: op.bodyshopId, updatedAt: at } : v;
     case "repair.todo.add": return v ? withRepair(v, at, (r) => ({ ...r, todos: [...r.todos, { id: op.todo.id, text: op.todo.text, source: "manual", done: false, doneBy: null, doneAt: null, createdBy: null, createdAt: at, sort: r.todos.length }] })) : v;
     case "repair.todo.toggle": return v ? withRepair(v, at, (r) => ({ ...r, todos: r.todos.map((x) => (x.id === op.todoId ? { ...x, done: op.done, doneAt: op.done ? at : null, doneBy: op.done ? "…" : null } : x)) })) : v;
     case "repair.todo.delete": return v ? withRepair(v, at, (r) => ({ ...r, todos: r.todos.filter((x) => x.id !== op.todoId) })) : v;

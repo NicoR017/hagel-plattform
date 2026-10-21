@@ -68,7 +68,7 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
     ...(r.header as Record<string, unknown>),
     ...shares,
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
-    repairStage: r.repairStage, methodId: r.methodId, methodVersion: r.methodVersion,
+    repairStage: r.repairStage, bodyshopId: r.bodyshopId, methodId: r.methodId, methodVersion: r.methodVersion,
     statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
@@ -613,8 +613,11 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const maySplit = u.isSuperadmin || perms.has("repartition_interne.voir");
   const techRows = maySplit ? await db.select().from(technicians).where(and(eq(technicians.orgId, orgId), eq(technicians.active, true))).orderBy(asc(technicians.name)) : [];
   const occ = await occupancyOf(db, orgId, list.map((x) => x.id));
+  const bodyshops = perms.has("reparatur.board")
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
+    : [];
   return {
-    stations: st, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    stations: st, bodyshops, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

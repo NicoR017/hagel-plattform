@@ -194,6 +194,8 @@ export const vehicles = pgTable("vehicles", {
   /** calculation method + version frozen on the vehicle (null = historical behaviour) */
   methodId: uuid("method_id").references((): AnyPgColumn => calcMethods.id),
   methodVersion: integer("method_version"),
+  /** body shop (a "carrosserie" site of the tenant) that repairs the car while it stands in the "At Bodyshop" column */
+  bodyshopId: uuid("bodyshop_id").references((): AnyPgColumn => stations.id),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdBy: uuid("created_by").references(() => users.id),

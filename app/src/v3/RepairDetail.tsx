@@ -8,6 +8,7 @@ import type { LocalPhoto, LocalVehicle } from "../sync/db";
 import { addPhoto, addTodo, deleteTodo, setCheck, setRepairStage, setStatus, tagPhoto, toggleTodo } from "../sync/mutations";
 import { downscale } from "../field/images";
 import { Lightbox } from "../field/Lightbox";
+import { BodyshopPick } from "./BodyshopPick";
 import { go, RTABS, type RTab } from "../field/route";
 import { useField, usePhotos, usePhotoUrl, useVehicle } from "../field/store";
 import { toast } from "../field/toast";
@@ -154,6 +155,12 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
                 </form>
               )}
             </section>
+            {(stage === "bodyshop" || v.bodyshopId) && (
+              <section className="panel" style={{ padding: 16 }}>
+                <h3 style={{ margin: "0 0 8px" }}>🏭 {t("v5Bodyshop")}</h3>
+                <BodyshopPick v={v} disabled={!may} />
+              </section>
+            )}
             <section className="panel" style={{ padding: 16 }}>
               <h3 style={{ margin: "0 0 8px" }}>🧑‍🔧 {t("v5Team")}</h3>
               <div>{names.length ? names.join(", ") : String(x.techName || "") || <span className="muted">{t("v4NobodyAssigned")}</span>}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</div>

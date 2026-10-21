@@ -135,6 +135,7 @@ export const setParts = (c: MutCtx, vehicleId: string, parts: string[]) => setHe
 /** Change the calculation method of a vehicle that has not been measured yet (the server refuses it afterwards). */
 export const setMethod = (c: MutCtx, vehicleId: string, methodId: string, methodVersion: number) => setHeader(c, vehicleId, { methodId, methodVersion });
 
+export const setBodyshop = (c: MutCtx, vehicleId: string, bodyshopId: string | null) => pushV(c, "vehicle.bodyshop", { vehicleId, bodyshopId }, vehicleId);
 export const setRepairStage = (c: MutCtx, vehicleId: string, stage: string) => pushV(c, "vehicle.repairStage", { vehicleId, stage }, vehicleId);
 export const addTodo = (c: MutCtx, vehicleId: string, text: string) => pushV(c, "repair.todo.add", { vehicleId, todo: { id: uuid4(), text: text.trim() } }, vehicleId);
 export const toggleTodo = (c: MutCtx, vehicleId: string, todoId: string, done: boolean) => pushV(c, "repair.todo.toggle", { todoId, done }, vehicleId);
