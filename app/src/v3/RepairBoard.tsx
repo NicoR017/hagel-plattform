@@ -72,32 +72,19 @@ function Planned({ stationId }: { stationId: string }) {
   );
 }
 
-/** "+ Fahrzeug in Reparatur": only assessed cars of the station; pick technician and headliner; the split is shown before it is confirmed. */
+/** "+ Fahrzeug in Reparatur": only assessed cars of the station; the technician and the headliner are picked afterwards in the car's overview. */
 function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () => void }) {
   const f = useField();
   const all = useVehicles();
-  const split = f.can("repartition_interne.voir");
-  const techs = (f.refs?.technicians ?? []).filter((x) => x.kind !== "headliner"), heads = (f.refs?.technicians ?? []).filter((x) => x.kind === "headliner");
   const cands = all.filter((v) => v.stationId === stationId && v.repairStage == null && (v.statut === "besichtigung" || (v.statut === "attente" && String(v.statutMotif ?? "").toLowerCase() !== "teile")) && f.calcOf(v).netto > 0);
   const [pick, setPick] = useState<string | null>(null);
-  const [tech, setTech] = useState(""), [head, setHead] = useState("");
   const v = cands.find((x) => x.id === (pick ?? cands[0]?.id));
-  // chosen here, on purpose: nobody is pre-selected (the technician is picked when the car goes into repair, not during the assessment)
-  const tc = techs.find((x) => x.id === tech), hd = heads.find((x) => x.id === head);
-  const calc = v ? f.calcOf(v) : null;
-  const sh = v && calc && split ? computeShares({ ...(v as object), techName: tc?.name ?? (v as Record<string, unknown>).techName, techPct: tc?.defaultPctPdr ?? (v as Record<string, unknown>).techPct, demTechName: hd?.name ?? "", demTechPct: hd?.defaultPctDemontage ?? 100 } as never, calc) : null;
   const apply = async () => {
     if (!v) return;
-    if (split && tc) await setShares(f.mut, v.id, { techName: tc.name, techPct: tc.defaultPctPdr, ...(hd ? { demTechName: hd.name, demTechPct: hd.defaultPctDemontage } : {}) });
-    if (f.can("vehicules.assigner")) {
-      if (tc?.userId) await assignVehicle(f.mut, v.id, "pdr", [tc.userId]);
-      if (hd?.userId) await assignVehicle(f.mut, v.id, "demontage", [hd.userId]);
-    }
     await setRepairStage(f.mut, v.id, "bereit");
     toast(`${String((v as Record<string, unknown>).kennzeichen || "")} → ${stageLabel("bereit")}`);
     onClose();
   };
-  const line = (l: string, val: string, strong?: boolean) => <div className="row" style={{ padding: "8px 12px", borderBottom: "1px solid #EEF1F5", fontWeight: strong ? 800 : 400, background: strong ? "#E9F4EE" : undefined, color: strong ? "#17663F" : undefined }}><span>{l}</span><span>{val}</span></div>;
   return (
     <Dialog title={t("v5AddTitle")} onClose={onClose}>
       <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>{t("v5AddHint")}</div>
@@ -113,26 +100,8 @@ function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () =>
           );
         })}
       </div>
-      {split && v && (
-        <>
-          <Field label={t("v5TechPdr")}>
-            <select className="sel" value={tc?.id ?? ""} onChange={(e) => setTech(e.target.value)}><option value="">{t("v5TechPick")}</option>{techs.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctPdr} %</option>)}</select>
-          </Field>
-          <Field label={t("v5Headliner")}>
-            <select className="sel" value={hd?.id ?? ""} onChange={(e) => setHead(e.target.value)}><option value="">{t("v5HeadNone")}</option>{heads.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctDemontage} % {t("v5DemShort")}</option>)}</select>
-          </Field>
-          {sh && (
-            <div style={{ border: "1px solid #EEF1F5", borderRadius: 10, overflow: "hidden", fontSize: 14 }}>
-              {line(t("v5Net"), eur(sh.basis + (calc?.glassEur ?? 0)))}
-              {line(`− ${t("v5TechPdr")} ${sh.techName || ""} (${sh.techPct} % ${t("v5Of")} ${eur(sh.pdrBasis)})`, `− ${eur(sh.techEur)}`)}
-              {line(`− ${t("v5Headliner")} ${sh.demTechName || ""} (${sh.demTechPct} % ${t("v5Of")} ${eur(sh.demEur)})`, `− ${eur(sh.demTechEur)}`)}
-              {line(`− ${t("v5Bodyshop")} ${f.stationName(v.clientStationId)}${sh.werkMode === "staffel" ? " (Staffel)" : ` (${sh.werkPct} %)`}`, `− ${eur(sh.werkEur)}`)}
-              {line(`= ${t("v5RemainsPdr")} (${sh.basis ? Math.round((sh.rest / sh.basis) * 100) : 0} %)`, eur(sh.rest), true)}
-            </div>
-          )}
-        </>
-      )}
-      <button className="pbtn" disabled={!v || (split && techs.length > 0 && !tc)} onClick={() => void apply()}>{t("v5AddConfirm")}</button>
+      <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>{t("v5TechInOverview")}</div>
+      <button className="pbtn" disabled={!v} onClick={() => void apply()}>{t("v5AddConfirm")}</button>
     </Dialog>
   );
 }

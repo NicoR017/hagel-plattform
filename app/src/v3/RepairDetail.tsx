@@ -9,6 +9,7 @@ import { addPhoto, addTodo, deleteTodo, setCheck, setRepairStage, setStatus, tag
 import { downscale } from "../field/images";
 import { Lightbox } from "../field/Lightbox";
 import { BodyshopPick } from "./BodyshopPick";
+import { SharesBox } from "../field/Kva";
 import { go, RTABS, type RTab } from "../field/route";
 import { useField, usePhotos, usePhotoUrl, useVehicle } from "../field/store";
 import { toast } from "../field/toast";
@@ -175,7 +176,9 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
             <section className="panel" style={{ padding: 16 }}>
               <h3 style={{ margin: "0 0 8px" }}>🧑‍🔧 {t("v5Team")}</h3>
               <div>{names.length ? names.join(", ") : String(x.techName || "") || <span className="muted">{t("v4NobodyAssigned")}</span>}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</div>
-              {sh && (
+              {/* who works on it and their share: pick the technician and the headliner here, and change a share away from the default */}
+              {sh && may && <div className="fld embed"><SharesBox v={v} c={calc} /></div>}
+              {sh && !may && (
                 <div style={{ marginTop: 10, fontSize: 14 }}>
                   <div className="row"><span>{t("v5Net")}</span><b>{eur(calc.netto)}</b></div>
                   <div className="row"><span className="muted">{t("v5TechPdr")} {sh.techName} ({num(sh.techPct, 1)} %)</span><span>{eur(sh.techEur)}</span></div>

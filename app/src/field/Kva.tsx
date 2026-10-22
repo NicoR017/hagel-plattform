@@ -4,7 +4,7 @@ import { dentBreak, docText, eur, esFormula, esLines, fmtDateL, h1, kvaFileName,
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
-import { setShares, setStatus } from "../sync/mutations";
+import { assignVehicle, setShares, setStatus } from "../sync/mutations";
 import { buildRepairReport, buildSendPdf, shareOrDownload, toDoc } from "./docs";
 import { StatusDialog } from "./Dialogs";
 import { SendReportDialog } from "./SendReport";
@@ -36,12 +36,16 @@ export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: Ca
     </div>
   );
   const techs = f.refs?.technicians ?? [];
-  const choices = techs.length ? techs.map((tc) => ({ key: tc.id, name: tc.name, pdr: tc.defaultPctPdr, dem: tc.defaultPctDemontage })) : people.map((p) => ({ key: p.id, name: p.name, pdr: undefined as number | undefined, dem: undefined as number | undefined }));
+  const choices = techs.length ? techs.map((tc) => ({ key: tc.id, name: tc.name, pdr: tc.defaultPctPdr, dem: tc.defaultPctDemontage, userId: tc.userId as string | null, headliner: tc.kind === "headliner" })) : people.map((p) => ({ key: p.id, name: p.name, pdr: undefined as number | undefined, dem: undefined as number | undefined, userId: p.id as string | null, headliner: false }));
+  /** the offered people per role: PDR technicians for the PDR work, headliners (if there are any) for de-/re-mounting */
+  const offered = (kind: "pdr" | "dem") => (kind === "pdr" ? choices.filter((p) => !p.headliner) : choices.some((p) => p.headliner) ? choices.filter((p) => p.headliner) : choices);
+  /** also gives the person's account the car (needed to finish it); picking the same person again clears it */
+  const assignTo = (kind: "pdr" | "dem", userId: string | null, on: boolean) => { if (userId && f.can("vehicules.assigner")) void assignVehicle(f.mut, v.id, kind === "pdr" ? "pdr" : "demontage", on ? [userId] : []); };
   /** Picking a technician copies his default percentage onto THIS vehicle (editable; later changes of the default do not touch it). */
   const names = (cur: string, on: (s: string, pct?: number) => void, id: string, kind: "pdr" | "dem") => (
     <>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-        {choices.map((p) => <button key={p.key} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => on(cur.toLowerCase() === p.name.toLowerCase() ? "" : p.name, cur.toLowerCase() === p.name.toLowerCase() ? undefined : kind === "pdr" ? p.pdr : p.dem)}>{p.name}</button>)}
+        {offered(kind).map((p) => <button key={p.key} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => { const was = cur.toLowerCase() === p.name.toLowerCase(); on(was ? "" : p.name, was ? undefined : kind === "pdr" ? p.pdr : p.dem); assignTo(kind, p.userId, !was); }}>{p.name}</button>)}
       </div>
       <input id={id} className="inp" style={{ marginTop: 6, fontWeight: 700 }} disabled={!canEdit} placeholder={t("techNameHint")} value={cur} onChange={(e) => on(e.target.value)} />
     </>
@@ -55,15 +59,16 @@ export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: Ca
       {names(a.techName, (s, pct) => void setShares(f.mut, v.id, { techName: s, ...(pct != null ? { techPct: pct } : {}) }), "tnIn", "pdr")}
       {pcts(a.techPct, [40, 45, 50, 55, 60], (n) => void setShares(f.mut, v.id, { techPct: n }))}
       {line(`${a.techName || t("technician")} · ${num(a.techPct, 1)} %`, eur(a.techEur))}
-      {a.demEur > 0 ? (
+      {(
         <>
           {sec(`🔩 ${t("techDem")} · ${eur(a.demEur)}`)}
+          {a.demEur <= 0 && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{t("demHintShares")}</div>}
           {names(x.demTechName ?? "", (s, pct) => void setShares(f.mut, v.id, { demTechName: s, ...(pct != null ? { demTechPct: pct } : {}) }), "dnIn", "dem")}
           <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{x.demTechName ? "" : t("emptyIsSame")}</div>
           {pcts(a.demTechPct, [50, 70, 80, 100], (n) => void setShares(f.mut, v.id, { demTechPct: n }))}
           {line(`${a.demTechName || t("technician")} · ${num(a.demTechPct, 1)} % ${t("ofDem")}`, eur(a.demTechEur))}
         </>
-      ) : <div className="muted" style={{ fontSize: 11, marginTop: 10 }}>{t("demHintShares")}</div>}
+      )}
       </>}
       {sec(`🏭 ${t("commissionTitle")}`)}
       <div className="muted" style={{ fontSize: 11 }}>{f.can("commission.modifier") ? t("commissionEditHint") : t("commissionHint")}</div>

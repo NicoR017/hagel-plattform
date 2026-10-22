@@ -74,7 +74,10 @@ export async function finishBlockers(db: Pick<Db, "select">, vehicleId: string):
   const ph = await db.select({ stage: photos.repairStage }).from(photos).where(and(eq(photos.vehicleId, vehicleId), isNull(photos.deletedAt)));
   for (const s of PHOTO_STAGES) if (!ph.some((p) => p.stage === s)) out.push(`photos:${s}`);
   const [tech] = await db.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.vehicleId, vehicleId), eq(vehicleAssignments.type, "pdr"))).limit(1);
-  if (!tech) out.push("no_technician");
+  // somebody works on it: an assigned PDR technician, or a technician named in the split (a technician without an account cannot be assigned)
+  const [veh] = await db.select({ shares: vehicles.shares }).from(vehicles).where(eq(vehicles.id, vehicleId));
+  const named = String(((veh?.shares ?? {}) as Record<string, unknown>).techName ?? "").trim();
+  if (!tech && !named) out.push("no_technician");
   return out;
 }
 
