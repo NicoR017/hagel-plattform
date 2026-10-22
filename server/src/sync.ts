@@ -154,12 +154,26 @@ export async function processPush(deps: SyncDeps, u: Principal, ops: Op[]): Prom
   return { results, touched };
 }
 
+/** Where an imported car came from in Colibri (BusinessCustomer–insurance link, location, tenant), looked up through the scan it was created from. */
+export async function attachColibriSource(db: Pick<Db, "select" | "execute">, list: ClientVehicle[]): Promise<void> {
+  const ids = list.map((v) => v.id);
+  if (!ids.length) return;
+  const res = (await db.execute(sql`
+    select v.id as id, s.business_customer as bc, s.location as location, s.tenant as tenant
+    from vehicles v join colibri_scans s on (s.partition_key || '|' || s.row_key) = v.colibri_scan_key
+    where v.id in (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})`)) as unknown as { rows: { id: string; bc: string; location: string; tenant: string }[] };
+  const by = new Map(res.rows.map((r) => [r.id, { businessCustomer: r.bc, location: r.location, tenant: r.tenant }]));
+  for (const v of list) v.colibriSource = by.get(v.id) ?? null;
+}
+
 export async function clientVehicleById(db: Db, u: Principal, id: string): Promise<ClientVehicle | null> {
   const [r] = await db.select().from(vehicles).where(eq(vehicles.id, id));
   if (!r || r.deletedAt) return null;
   const as = await assigneesOf(db, [id]);
   const names = await userNames(db, [r.updatedBy]);
-  return toClient(u, r, as.get(id) ?? [], names, await loadOrgSettings(db, r.orgId), await loadMethodMap(db, r.orgId));
+  const cv = toClient(u, r, as.get(id) ?? [], names, await loadOrgSettings(db, r.orgId), await loadMethodMap(db, r.orgId));
+  if (cv) await attachColibriSource(db, [cv]);
+  return cv;
 }
 
 async function userNames(db: Pick<Db, "select">, ids: (string | null)[]): Promise<Map<string, string>> {
@@ -529,6 +543,7 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   }
   // repair data (to-dos, checks, comments, planning, booking) travels inside the vehicle, filtered by what this user may see
   const sent = new Set(outVehicles.map((x) => x.id));
+  await attachColibriSource(db, outVehicles);
   const repair = await repairDataFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
   for (const cv of outVehicles) { const x = repair.get(cv.id); if (x) cv.repair = x; }
   const photoNames = await userNames(db, ps.map((p) => p.takenBy));

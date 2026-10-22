@@ -183,6 +183,7 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                     {arrivedToday(v, today) && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8", fontSize: 11, alignSelf: "flex-start" }}>{t("v5TerminToday")}</span>}
                     <span style={{ fontSize: 12 }}>{st?.name}</span>
                     <span className="muted" style={{ fontSize: 12 }}>{[f.refs?.insurers.find((i) => i.id === v.insurerId)?.name, x.modell].filter(Boolean).join(" · ")}</span>
+                    {!!(v.colibriSource?.businessCustomer || x.kunde) && <span className="bcline" title={t("v5BcLink")}>🔗 {v.colibriSource?.businessCustomer || String(x.kunde)}</span>}
                     {(!!techOf(v) || !!x.demTechName) && <span className="muted" style={{ fontSize: 11 }}>{techOf(v) ? `PDR ${techOf(v)}` : ""}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</span>}
                   </button>
                   {stage === "bodyshop" && <BodyshopPick v={v} disabled={!may} compact />}

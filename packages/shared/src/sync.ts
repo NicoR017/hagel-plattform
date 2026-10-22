@@ -202,6 +202,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   /** frozen calculation method (null = historical behaviour) */
   methodId?: string | null;
   methodVersion?: number | null;
+  /** where the car came from in Colibri (imported from an Azure scan): the BusinessCustomer–insurance link, the location and the tenant; null = not imported from a scan */
+  colibriSource?: { businessCustomer: string; location: string; tenant: string } | null;
   /** body shop that repairs the car (a carrosserie site of the tenant), set in the "At Bodyshop" column */
   bodyshopId?: string | null;
   /** repair data, only for users who may see it (see ClientRepair) */

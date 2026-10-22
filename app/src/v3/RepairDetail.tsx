@@ -135,6 +135,16 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
         {tab === "uebersicht" && (
           <>
             <section className="panel" style={{ padding: 16 }}>
+              <h3 style={{ margin: "0 0 8px" }}>📍 {t("v5Origin")}</h3>
+              <dl className="origin">
+                <dt>{t("v5BcLink")}</dt><dd>{v.colibriSource?.businessCustomer || "—"}</dd>
+                <dt>{t("v5Insurer")}</dt><dd>{f.refs?.insurers.find((i) => i.id === v.insurerId)?.name || "—"}</dd>
+                <dt>{t("v5Customer")}</dt><dd>{f.refs?.stations.find((s) => s.id === v.clientStationId)?.name || String(x.kunde || "—")}</dd>
+                <dt>{t("v5ColibriSite")}</dt><dd>{v.colibriSource ? [v.colibriSource.location, v.colibriSource.tenant].filter(Boolean).join(" · ") || "—" : t("v5NotFromScan")}</dd>
+                {!!x.claimNumber && <><dt>{t("v5Claim")}</dt><dd>{String(x.claimNumber)}</dd></>}
+              </dl>
+            </section>
+            <section className="panel" style={{ padding: 16 }}>
               <h3 style={{ margin: "0 0 4px" }}>✅ {t("v5Todos")}</h3>
               {!rep.todos.length && <p className="muted">{t("v5NoTodos")}</p>}
               {rep.todos.map((td) => (

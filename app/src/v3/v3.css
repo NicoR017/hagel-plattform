@@ -232,3 +232,9 @@
 .v3 .hd .menu .langrow .opts{display:flex;gap:6px;}
 .v3 .hd .menu .langrow button{all:unset;cursor:pointer;box-sizing:border-box;flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;font-weight:700;font-size:13px;color:var(--navy);background:#fff;}
 .v3 .hd .menu .langrow button.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+/* origin of a car (Colibri BusinessCustomer link, insurer, customer) */
+.v3 .card3 .bcline{font-size:11px;color:#1D4FB8;background:#EEF3FD;border-radius:6px;padding:2px 6px;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.v3 dl.origin{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 16px;margin:0;font-size:14px;}
+.v3 dl.origin dt{color:var(--sub);}
+.v3 dl.origin dd{margin:0;font-weight:600;}
