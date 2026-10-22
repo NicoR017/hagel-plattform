@@ -17,12 +17,12 @@ export const calcSettingsOf = (s: OrgSettings | undefined): Settings => {
 };
 
 export interface Prefs {
-  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null; /** the 3 stations used last, the latest first */ recentStationIds?: string[]; lastMode?: "kalk" | "rep" | "all";
+  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null; /** the stations used last, the latest first */ recentStationIds?: string[]; lastMode?: "kalk" | "rep" | "all";
   techPct?: number; demTechPct?: number; defaultCommission?: number;
 }
 export const getPrefs = async (db: LocalDb): Promise<Prefs> => (await db.getMeta<Prefs>("prefs")) ?? {};
-/** the 3 most recently used stations (latest first) */
-export const pushRecent = (recent: string[] | undefined, id: string): string[] => [id, ...(recent ?? []).filter((x) => x !== id)].slice(0, 3);
+/** the most recently used stations (latest first); enough of them to know the latest 3 of every category */
+export const pushRecent = (recent: string[] | undefined, id: string): string[] => [id, ...(recent ?? []).filter((x) => x !== id)].slice(0, 15);
 export const setPrefs = async (db: LocalDb, p: Partial<Prefs>) => {
   const cur = await getPrefs(db);
   db.setMeta("prefs", { ...cur, ...p, ...(p.lastStationId ? { recentStationIds: pushRecent(cur.recentStationIds, p.lastStationId) } : {}) });

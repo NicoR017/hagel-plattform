@@ -77,15 +77,16 @@ export function Stations({ userName }: { userName: string }) {
       </button>
     );
   };
-  // categories: the 3 stations used last, then PDR halls, body shops and car parks (every station also stays in its own category)
-  const recent = (prefs?.recentStationIds ?? []).map((id) => shown.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s).slice(0, 3);
-  const byType = (type: string) => shown.filter((s) => s.type === type);
+  // categories (PDR workshops, body shops, car parks): in each, the 3 stations used last; "show more" loads the others of that category
+  const [more, setMore] = useState<Record<string, boolean>>({});
+  const rank = (id: string) => { const i = (prefs?.recentStationIds ?? []).indexOf(id); return i < 0 ? 99 : i; };
+  const ordered = (type: string) => shown.filter((s) => s.type === type).sort((x, y) => rank(x.id) - rank(y.id) || x.name.localeCompare(y.name, "de"));
   const groups = [
-    { key: "recent", title: t("v6GroupRecent"), items: recent },
-    { key: "hall", title: t("v6GroupHall"), items: byType("hall") },
-    { key: "carrosserie", title: t("v6GroupCarro"), items: byType("carrosserie") },
-    { key: "parc", title: t("v6GroupParc"), items: byType("parc") },
-  ].filter((g) => g.items.length);
+    { key: "hall", title: t("v6GroupHall") },
+    { key: "carrosserie", title: t("v6GroupCarro") },
+    { key: "parc", title: t("v6GroupParc") },
+  ].map((g) => ({ ...g, all: ordered(g.key) })).filter((g) => g.all.length);
+  const LIMIT = 3;
 
   return (
     <main>
@@ -115,12 +116,22 @@ export function Stations({ userName }: { userName: string }) {
 
       <section aria-label={t("v3Stations")} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {!shown.length && <p className="empty">{f.refs ? t("v3NoStations") : t("loading")}</p>}
-        {groups.map((g) => (
-          <div key={g.key} className="stgroup" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600 }}>{g.title} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({g.items.length})</span></h2>
-            <div className="stgrid">{g.items.map((s) => card(s, g.key))}</div>
-          </div>
-        ))}
+        {groups.map((g) => {
+          // searching shows every match; otherwise only the 3 used last until "show more"
+          const open = !!needle || !!more[g.key] || g.all.length <= LIMIT;
+          const items = open ? g.all : g.all.slice(0, LIMIT);
+          return (
+            <div key={g.key} className="stgroup" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 600 }}>{g.title} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({g.all.length})</span></h2>
+              <div className="stgrid">{items.map((s) => card(s, g.key))}</div>
+              {!needle && g.all.length > LIMIT && (
+                <button className="btn" style={{ alignSelf: "flex-start" }} aria-expanded={!!more[g.key]} onClick={() => setMore({ ...more, [g.key]: !more[g.key] })}>
+                  {more[g.key] ? t("v6ShowLess") : `${t("v6ShowMore")} (${g.all.length - LIMIT})`}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </section>
     </main>
   );
