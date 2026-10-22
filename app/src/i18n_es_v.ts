@@ -77,7 +77,7 @@ export const esV: Record<string, string> = {
   v6OpenSettings: "Abrir precios y ajustes", v6PricesHint: "Tarifas horarias DE/ES, divisor estándar y plazos por estado.",
   v6KpiUsers: "Usuarios activos", v6KpiInvites: "invitaciones pendientes", v6KpiAzure: "Sincronización Azure", v6KpiAzureOpen: "asignaciones pendientes", v6KpiStations: "Estaciones", v6KpiFull: "completas", v6KpiRoles: "Roles", v6KpiRolesSub: "estándar + propios",
   v6AzureOk: "correcta", v6AzureOff: "no configurada", v6AzureErr: "error en la última ejecución", v6LastAudit: "Últimos cambios",
-  v6Edit: "Editar", v6EditUser: "Editar usuario", v6DeleteUser: "Eliminar", v6DeleteUserQ: "¿Eliminar definitivamente al usuario? Ya no podrá iniciar sesión y se cerrarán sus sesiones. Los vehículos y el historial se conservan (como “Usuario eliminado”).",
+  v6DeleteStation: "Eliminar", v6DeleteStationQ: "¿Eliminar definitivamente esta estación? Solo es posible sin vehículos asignados. Sus vínculos (aseguradoras, campañas, roles de esta estación) también se eliminan.", v6Edit: "Editar", v6EditUser: "Editar usuario", v6DeleteUser: "Eliminar", v6DeleteUserQ: "¿Eliminar definitivamente al usuario? Ya no podrá iniciar sesión y se cerrarán sus sesiones. Los vehículos y el historial se conservan (como “Usuario eliminado”).",
   v6Deleted: "Eliminado", v6LastLogin: "Último inicio de sesión", v6Invited: "Invitado", v6Disabled: "Desactivado",
   v6DeleteRole: "Eliminar rol", v6DeleteRoleQ: "¿Eliminar el rol?", v6DeleteRoleUsed: "Este rol todavía tiene miembros. Elija un rol sustituto que asuma sus asignaciones y las invitaciones pendientes.",
   v6Replacement: "Rol sustituto", v6DeleteRoleGo: "Eliminar y reasignar", v6RoleMembers: "asignaciones",

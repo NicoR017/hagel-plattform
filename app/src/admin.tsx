@@ -301,7 +301,10 @@ export function SitesPage({ canManage, canInsurers = true }: { canManage: boolea
               <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.type === "carrosserie" && !s.capacite ? "—" : <Occ present={s.present ?? 0} capacity={s.capacite} />}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
                 <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails, excluded: s.excludedInsurerEmails ?? [], rpd: s.repairsPerDay ?? 3, bcs: (s as unknown as { azureBcIds?: string[] }).azureBcIds ?? [], bcFilter: "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", ") })}>{t("edit")}</button>{" "}
-                <button className="btn danger" onClick={() => act(() => api("POST", `/admin/stations/${s.id}/active`, { active: !s.active }), setErr, sites.reload)}>{s.active ? t("deactivate") : t("reactivate")}</button></>}</td>
+                <button className="btn danger" onClick={() => act(() => api("POST", `/admin/stations/${s.id}/active`, { active: !s.active }), setErr, sites.reload)}>{s.active ? t("deactivate") : t("reactivate")}</button>{" "}
+                <button className="btn danger" onClick={() => { if (confirmDialog(`${t("v6DeleteStationQ")}
+
+${s.name}`)) void act(() => api("DELETE", `/admin/stations/${s.id}`), setErr, () => { setF(null); void sites.reload(); }); }}>{t("v6DeleteStation")}</button></>}</td>
             </tr>
           ))}</tbody>
         </table>

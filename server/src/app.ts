@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
@@ -30,7 +30,7 @@ import { loadPrincipal } from "./principal";
 import { buildDashboard, buildTechSheets } from "./dashboard";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
-  auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
+  auditLog, campaignStations, insurers, invitations, repairBookings, stationInsurers, vehicles, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
 } from "./schema";
 
 export interface Limits { requestLink: number; verify: number; accept: number; refresh: number; login: number }
@@ -511,6 +511,35 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const [s] = await db.update(stations).set(set).where(eq(stations.id, before.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "station", entityId: s.id, before, after: s });
     return c.json(s);
+  });
+  /**
+   * Delete a station for good. Refused while any vehicle that still exists stands there, belongs to it as customer, or is assigned to it as
+   * body shop, and while repair appointments are open there: move or return the cars first (or just deactivate the station).
+   * Links that only make sense with the station go with it (insurers, campaigns, roles tied to it, open invitations); deleted vehicles lose the reference.
+   */
+  org.delete("/stations/:id", require("stations.gerer"), async (c) => {
+    const orgId = c.get("orgId"), p = c.get("principal");
+    const [s] = await db.select().from(stations).where(and(eq(stations.id, c.req.param("id") ?? ""), eq(stations.orgId, orgId)));
+    if (!s) throw new HttpError(404, "station_not_found");
+    const refs = or(eq(vehicles.stationId, s.id), eq(vehicles.clientStationId, s.id), eq(vehicles.bodyshopId, s.id));
+    const [live] = await db.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(refs, isNull(vehicles.deletedAt)));
+    if (live.n) throw new HttpError(409, "station_in_use", { n: String(live.n) });
+    const [open] = await db.select({ n: sql<number>`count(*)::int` }).from(repairBookings).where(and(eq(repairBookings.stationId, s.id), inArray(repairBookings.status, ["booked", "started"])));
+    if (open.n) throw new HttpError(409, "station_has_bookings", { n: String(open.n) });
+    await db.transaction(async (tx) => {
+      await tx.update(vehicles).set({ stationId: null }).where(eq(vehicles.stationId, s.id));
+      await tx.update(vehicles).set({ clientStationId: null }).where(eq(vehicles.clientStationId, s.id));
+      await tx.update(vehicles).set({ bodyshopId: null }).where(eq(vehicles.bodyshopId, s.id));
+      await tx.delete(repairBookings).where(eq(repairBookings.stationId, s.id));
+      await tx.delete(stationInsurers).where(eq(stationInsurers.stationId, s.id));
+      await tx.delete(campaignStations).where(eq(campaignStations.stationId, s.id));
+      await tx.delete(roleAssignments).where(and(eq(roleAssignments.orgId, orgId), or(eq(roleAssignments.stationId, s.id), eq(roleAssignments.scopeClientStationId, s.id))));
+      await tx.delete(invitations).where(and(eq(invitations.orgId, orgId), eq(invitations.stationId, s.id)));
+      await tx.delete(stations).where(eq(stations.id, s.id));
+    });
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: "station", entityId: s.id, before: s });
+    hub.publish(orgId, 0);
+    return c.json({ ok: true });
   });
   org.post("/stations/:id/active", require("stations.gerer"), zValidator("json", z.object({ active: z.boolean() }), validationHook), async (c) => {
     const orgId = c.get("orgId");
