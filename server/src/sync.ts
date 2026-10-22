@@ -14,7 +14,7 @@ import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, effectivePermissions, filterFields, type Principal, type VehicleRef } from "./permissions";
 import {
-  calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
+  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import type { Storage } from "./storage";
 
@@ -331,7 +331,9 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       }
       const cf = row.colibriFile as { key?: string } | null;
       if (cf?.key) await deps.storage.delete(cf.key).catch(() => undefined);
-      await tx.update(vehicles).set({ deletedAt: new Date(), seq, updatedBy: u.id, updatedAt: new Date(), colibriFile: null }).where(eq(vehicles.id, row.id));
+      await tx.update(vehicles).set({ deletedAt: new Date(), seq, updatedBy: u.id, updatedAt: new Date(), colibriFile: null, colibriScanKey: null }).where(eq(vehicles.id, row.id));
+      // the Colibri scan this car was made from is available again
+      await tx.update(colibriScans).set({ importStatus: "new", vehicleId: null, importedBy: null, importedAt: null, updatedAt: new Date() }).where(and(eq(colibriScans.vehicleId, row.id), eq(colibriScans.importStatus, "imported")));
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: row.id, before: { kennzeichen: (row.header as Record<string, unknown>).kennzeichen } });
       return { status: "ok", orgId: row.orgId, seq };
     }

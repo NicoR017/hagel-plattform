@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { colibriScans, vehicles } from "../src/schema";
+import { reopenScansOfDeletedVehicles } from "../src/azure_sync";
 import { call, dentsPanel, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx, A: string, imported: string, manual: string;
@@ -25,5 +26,24 @@ describe("origin of a car", () => {
     const p = await pull(c, c.superToken, c.orgES);
     expect(p.vehicles.find((v: any) => v.id === imported).colibriSource).toEqual({ businessCustomer: "Allianz-Allianz", location: "Madrid", tenant: "PDR-Team ES" });
     expect(p.vehicles.find((v: any) => v.id === manual).colibriSource).toBeNull();
+  });
+});
+
+describe("a scan whose vehicle was deleted is available again", () => {
+  const scanOf = async (pk: string) => (await c.h.db.select().from(colibriScans).where(eq(colibriScans.partitionKey, pk)))[0];
+  it("deleting the vehicle (app) opens the scan again and frees its key", async () => {
+    await c.h.db.update(colibriScans).set({ importStatus: "imported", vehicleId: imported }).where(eq(colibriScans.partitionKey, "202610221030OR1"));
+    const r = ((await push(c, c.superToken, [op("vehicle.delete", { vehicleId: imported })])).body.results as { status: string }[])[0];
+    expect(r.status).toBe("ok");
+    expect(await scanOf("202610221030OR1")).toMatchObject({ importStatus: "new", vehicleId: null });
+    expect((await c.h.db.select().from(vehicles).where(eq(vehicles.id, imported)))[0].colibriScanKey).toBeNull();
+  });
+  it("a vehicle deleted by other means (earlier versions, the database) is caught up by the next mirror run", async () => {
+    const id = uuid();
+    await c.h.db.insert(vehicles).values({ id, orgId: c.orgES, stationId: A, statut: "besichtigung", header: {}, panels: {}, colibriScanKey: "202610221111OR3|undefined", deletedAt: new Date() } as never);
+    await c.h.db.insert(colibriScans).values({ partitionKey: "202610221111OR3", rowKey: "undefined", tenant: "PDR-Team ES", plate: "OR 3", importStatus: "imported", vehicleId: id });
+    expect(await reopenScansOfDeletedVehicles(c.h.db)).toBe(1);
+    expect(await scanOf("202610221111OR3")).toMatchObject({ importStatus: "new", vehicleId: null });
+    expect(await reopenScansOfDeletedVehicles(c.h.db)).toBe(0);
   });
 });

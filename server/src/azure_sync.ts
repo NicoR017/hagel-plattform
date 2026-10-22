@@ -33,8 +33,21 @@ const pruneRaw = (r: TableRow) => Object.fromEntries(Object.entries(r).filter(([
  * One run of the Azure -> database mirror (worker every few minutes, or "sync now" in the admin).
  * Idempotent; the incremental cursor is the newest Timestamp seen (minus an overlap), so nothing is skipped.
  */
+/**
+ * A scan whose vehicle was deleted is available again (and the deleted vehicle gives up the scan key, which is unique): otherwise the scan stays
+ * "imported" for ever and never shows up in the list of available scans. Returns how many scans were opened again.
+ */
+export async function reopenScansOfDeletedVehicles(db: Pick<Db, "execute">): Promise<number> {
+  const r = (await db.execute(sql`
+    update colibri_scans s set import_status = 'new', vehicle_id = null, imported_by = null, imported_at = null, updated_at = now()
+    from vehicles v where s.vehicle_id = v.id and v.deleted_at is not null and s.import_status = 'imported' returning 1`)) as unknown as { rows: unknown[] };
+  await db.execute(sql`update vehicles set colibri_scan_key = null where deleted_at is not null and colibri_scan_key is not null`);
+  return r.rows.length;
+}
+
 export async function syncAzure(db: Db, az: AzureSource, o: { now?: () => Date; initialDays?: number } = {}): Promise<SyncStats> {
   const now = o.now ?? (() => new Date());
+  await reopenScansOfDeletedVehicles(db).catch(() => undefined); // never blocks the mirror
   const [run] = await db.insert(azureSyncRuns).values({ startedAt: now() }).returning();
   const stats: SyncStats = { tenants: 0, businessCustomers: 0, insurances: 0, links: 0, scansSeen: 0, scansNew: 0, scansFailed: 0, linked: 0, renamed: 0 };
   try {
