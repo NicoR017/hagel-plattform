@@ -2,6 +2,7 @@
 import { azureFromEnv } from "./azure";
 import { syncAzure } from "./azure_sync";
 import { runBackup, type BackupEnv } from "./backup";
+import { runDiskBackup } from "./backup_disk";
 import { createDb } from "./db";
 import { runDueBookings } from "./repair";
 
@@ -14,8 +15,13 @@ const backupEnv = (): BackupEnv | null =>
 async function backup() {
   // staging is rebuilt from production whenever needed: it never writes backups (and never into the production bucket)
   if (env.APP_ENV === "staging") return console.log("[backup] skipped: APP_ENV=staging");
+  // a disk (BACKUP_DIR: a Render disk mounted on the worker) when there is no object store
+  if (env.BACKUP_DIR && env.DATABASE_URL) {
+    try { console.log("[backup] done", await runDiskBackup(env.DATABASE_URL, env.BACKUP_DIR, Number(env.BACKUP_KEEP_DAYS ?? 30))); } catch (err) { console.error("[backup] FAILED", err); }
+    return;
+  }
   const e = backupEnv();
-  if (!e) return console.warn("[backup] skipped: DATABASE_URL / S3_* not set");
+  if (!e) return console.warn("[backup] skipped: DATABASE_URL / S3_* / BACKUP_DIR not set");
   try { console.log("[backup] done", await runBackup(e)); } catch (err) { console.error("[backup] FAILED", err); }
 }
 
