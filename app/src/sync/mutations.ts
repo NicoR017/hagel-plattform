@@ -155,7 +155,7 @@ export const addAppointment = (c: MutCtx, vehicleId: string, a: { technicianId: 
   pushV(c, "appointment.add", { vehicleId, appointment: { id: uuid4(), technicianId: a.technicianId, date: a.date, durationMin: a.durationMin, note: a.note ?? "" } }, vehicleId);
 export const deleteAppointment = (c: MutCtx, vehicleId: string, appointmentId: string) => pushV(c, "appointment.delete", { appointmentId }, vehicleId);
 
-export const createBooking = (c: MutCtx, vehicleId: string, b: { date: string; time: string; phone: string; email: string }) =>
+export const createBooking = (c: MutCtx, vehicleId: string, b: { date: string; time: string; phone: string; email: string; stationId?: string }) =>
   pushV(c, "booking.create", { vehicleId, booking: { id: uuid4(), ...b } }, vehicleId);
 export const moveBooking = (c: MutCtx, vehicleId: string, bookingId: string, date: string, time: string) => pushV(c, "booking.move", { bookingId, date, time }, vehicleId);
 export const cancelBooking = (c: MutCtx, vehicleId: string, bookingId: string) => pushV(c, "booking.cancel", { bookingId }, vehicleId);

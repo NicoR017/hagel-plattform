@@ -14,7 +14,7 @@ import type { Storage } from "./storage";
 import { recipientsForStation } from "./reports";
 import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
-  vehicleComments, vehicleStatusHistory, vehicles,
+  vehicleComments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "./sync";
 
@@ -91,11 +91,18 @@ async function bookedCount(tx: Tx, stationId: string, date: string, exceptId?: s
 async function startBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, row: VehicleRow, byUser: string | null, why: string) {
   const now = new Date();
   await tx.update(repairBookings).set({ status: "started", startedAt: now }).where(eq(repairBookings.id, booking.id));
-  const stamps = { ...(row.groupAt as Record<string, number>), status: Date.now(), repairStage: Date.now() };
+  const stamps: Record<string, number> = { ...(row.groupAt as Record<string, number>), status: Date.now(), repairStage: Date.now() };
+  const set: Partial<typeof vehicles.$inferInsert> = {};
+  // the repair takes place in another station than the assessment: the car goes there now (a move, like any other, in the history)
+  if (booking.stationId !== row.stationId) {
+    await tx.insert(vehicleMoves).values({ vehicleId: row.id, fromStationId: row.stationId, toStationId: booking.stationId, userId: byUser, note: "repair_appointment" });
+    set.stationId = booking.stationId; stamps.site = Date.now();
+    await event(tx, row.id, byUser, "booking_moved_car", { from: row.stationId, to: booking.stationId });
+  }
   await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: "reparatur", userId: byUser });
   await partsToTodos(tx, row, byUser);
   await event(tx, row.id, byUser, "booking_started", { bookingId: booking.id, date: booking.date, why });
-  return touchVehicle(tx, null, row, { statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", groupAt: stamps });
+  return touchVehicle(tx, null, row, { ...set, statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", groupAt: stamps });
 }
 
 async function cancelBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, byUser: string | null, reason: string) {
@@ -301,14 +308,17 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       const [ex] = await tx.select().from(repairBookings).where(eq(repairBookings.id, b.id));
       if (ex) { if (ex.vehicleId !== row.id) throw new Reject("not_allowed"); return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id }; }
       if (!(BOOKABLE as readonly string[]).includes(row.statut) || row.repairStage != null || !row.stationId) throw new Reject("booking_status");
+      // where the repair takes place: the station of the assessment, or another PDR hall / body shop of the organisation
+      const placeId = b.stationId ?? row.stationId;
       const [open] = await tx.select().from(repairBookings).where(and(eq(repairBookings.vehicleId, row.id), eq(repairBookings.status, "booked")));
       if (open) throw new Reject("booking_exists");
-      const [st] = await tx.select().from(stations).where(eq(stations.id, row.stationId)).for("update"); // serialises two assessors booking the same day
+      const [st] = await tx.select().from(stations).where(and(eq(stations.id, placeId), eq(stations.orgId, row.orgId))).for("update"); // serialises two assessors booking the same day
+      if (!st || !st.active || (placeId !== row.stationId && st.type === "parc")) throw new Reject("station_unknown");
       const today = todayIn(tzOfCountry(st.country));
       if (!bookableDay(b.date, today)) throw new Reject("booking_date_invalid");
       if ((await bookedCount(tx, st.id, b.date)) >= st.repairsPerDay) throw new Reject("booking_full");
-      const [created] = await tx.insert(repairBookings).values({ id: b.id, orgId: row.orgId, stationId: st.id, vehicleId: row.id, date: b.date, time: b.time, customerPhone: b.phone, customerEmail: b.email.toLowerCase(), createdBy: u.id }).returning();
-      await event(tx, row.id, u.id, "booking_created", { bookingId: b.id, date: b.date, time: b.time });
+      const [created] = await tx.insert(repairBookings).values({ id: b.id, orgId: row.orgId, stationId: st.id, originStationId: row.stationId, vehicleId: row.id, date: b.date, time: b.time, customerPhone: b.phone, customerEmail: b.email.toLowerCase(), createdBy: u.id }).returning();
+      await event(tx, row.id, u.id, "booking_created", { bookingId: b.id, date: b.date, time: b.time, stationId: st.id });
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "booking", entityId: b.id, after: { date: b.date, time: b.time, vehicleId: row.id } });
       const out = b.date === today ? await startBooking(tx, created, row, u.id, "booked_for_today") : await touchVehicle(tx, u, row);
       return { ...out, after: () => sendBookingMail({ db: deps.db, mailer: deps.mailer }, "created", b.id, u.id) };
@@ -354,9 +364,9 @@ export async function runDueBookings(db: Db, now = new Date(), notify?: (orgId: 
       const [cur] = await tx.select().from(repairBookings).where(eq(repairBookings.id, b.id)).for("update");
       if (!cur || cur.status !== "booked") return null;
       const [row] = await tx.select().from(vehicles).where(eq(vehicles.id, cur.vehicleId)).for("update");
-      const ok = row && !row.deletedAt && row.stationId === cur.stationId && (BOOKABLE as readonly string[]).includes(row.statut) && row.repairStage == null;
+      const ok = row && !row.deletedAt && (row.stationId === cur.stationId || row.stationId === (cur.originStationId ?? cur.stationId)) && (BOOKABLE as readonly string[]).includes(row.statut) && row.repairStage == null;
       if (!ok) {
-        await cancelBooking(tx, cur, null, row ? (row.deletedAt ? "vehicle_deleted" : row.stationId !== cur.stationId ? "vehicle_moved" : `vehicle_status_${row.statut}`) : "vehicle_missing");
+        await cancelBooking(tx, cur, null, row ? (row.deletedAt ? "vehicle_deleted" : !(row.stationId === cur.stationId || row.stationId === (cur.originStationId ?? cur.stationId)) ? "vehicle_moved" : `vehicle_status_${row.statut}`) : "vehicle_missing");
         return { kind: "cancelled" as const, out: null };
       }
       return { kind: "started" as const, out: await startBooking(tx, cur, row, null, "appointment_day") };
@@ -403,7 +413,7 @@ export async function repairDataFor(db: Pick<Db, "select">, u: Principal, items:
       appointments: board ? appts.filter((a) => a.vehicleId === row.id).map((a) => ({ id: a.id, technicianId: a.technicianId, date: a.date, durationMin: a.durationMin, note: a.note })) : [],
       autoStartedOn: board ? ([...started].reverse().find((s) => s.vehicleId === row.id)?.date ?? null) : null,
       lastReport: board ? (() => { const r = [...reports].reverse().find((x) => x.vehicleId === row.id); return r ? { status: r.status, at: (r.sentAt ?? r.createdAt).toISOString(), auto: r.sentBy == null } : null; })() : null,
-      booking: bk ? { id: bk.id, date: bk.date, time: bk.time, status: bk.status, phone: bk.customerPhone, email: bk.customerEmail, createdBy: bk.createdBy ? names.get(bk.createdBy) ?? null : null, createdAt: bk.createdAt.toISOString() } : null,
+      booking: bk ? { id: bk.id, stationId: bk.stationId, date: bk.date, time: bk.time, status: bk.status, phone: bk.customerPhone, email: bk.customerEmail, createdBy: bk.createdBy ? names.get(bk.createdBy) ?? null : null, createdAt: bk.createdAt.toISOString() } : null,
     });
   }
   return out;

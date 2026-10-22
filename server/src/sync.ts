@@ -633,8 +633,12 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const bodyshops = perms.has("reparatur.board")
     ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
     : [];
+  const repairLocations = perms.has("termine.buchen")
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), inArray(stations.type, ["hall", "carrosserie"]), eq(stations.active, true))).orderBy(asc(stations.name)))
+      .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
+    : [];
   return {
-    stations: st, bodyshops, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

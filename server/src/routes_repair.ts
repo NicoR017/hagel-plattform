@@ -29,7 +29,8 @@ export function repairRoutes({ db, storage, mailer, needAuth, needOrg }: Deps) {
     if (to < from || (Date.parse(to) - Date.parse(from)) / 86_400_000 > 400) throw new HttpError(400, "invalid_input");
     const [st] = await db.select().from(stations).where(and(eq(stations.id, c.req.param("id") ?? ""), eq(stations.orgId, orgId)));
     if (!st) throw new HttpError(404, "station_not_found");
-    const mayBook = canOrg(u, "termine.buchen", orgId, st.id), mayBoard = canOrg(u, "reparatur.board", orgId, st.id);
+    // whoever books repairs may look at the calendar of any station of the organisation (the repair can take place elsewhere)
+    const mayBook = canOrg(u, "termine.buchen", orgId, st.id) || u.grants.some((g) => g.orgId === orgId && g.permissions.includes("termine.buchen")), mayBoard = canOrg(u, "reparatur.board", orgId, st.id);
     if (!mayBook && !mayBoard) throw new HttpError(403, "forbidden");
     const rows = await db.select({ b: repairBookings, plate: vehicles.header }).from(repairBookings).innerJoin(vehicles, eq(vehicles.id, repairBookings.vehicleId))
       .where(and(eq(repairBookings.stationId, st.id), inArray(repairBookings.status, ["booked", "started"])));

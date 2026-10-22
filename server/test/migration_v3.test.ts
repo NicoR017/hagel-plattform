@@ -89,7 +89,7 @@ describe("migrations 0010+ on a pre-v3 database", () => {
   });
 
   it("the migration SQL is additive only: no DROP, RENAME, type change or DELETE", () => {
-    for (const f of ["0010_v3_schema.sql", "0011_v3_backfill.sql", "0012_technician_email.sql", "0013_vehicle_bodyshop.sql"]) {
+    for (const f of ["0010_v3_schema.sql", "0011_v3_backfill.sql", "0012_technician_email.sql", "0013_vehicle_bodyshop.sql", "0014_booking_origin_station.sql"]) {
       const sql = readFileSync(join(migrationsFolder, f), "utf8").replace(/--.*$/gm, "");
       expect(sql, f).not.toMatch(/\bDROP\b|\bRENAME\b|\bDELETE\s+FROM\b|\bTRUNCATE\b|ALTER\s+COLUMN|SET\s+NOT\s+NULL/i);
     }

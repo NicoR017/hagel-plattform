@@ -22,10 +22,14 @@ const loc = () => (getLang() === "de" ? "de-DE" : "en-GB");
  */
 export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => void }) {
   const f = useField();
-  const station = f.refs?.stations.find((s) => s.id === v.stationId);
+  // where the repair takes place: by default the station of the assessment, but it can be another PDR hall / body shop
+  const places = f.refs?.repairLocations ?? [];
+  const [placeId, setPlaceId] = useState(v.stationId ?? "");
+  const own = f.refs?.stations.find((s) => s.id === v.stationId);
+  const station = places.find((p) => p.id === placeId) ?? (placeId === v.stationId ? own : undefined) ?? own;
   const tz = tzOfCountry(station?.country ?? "DE");
   const today = todayIn(tz);
-  const booking = (v.repair as { booking?: { id: string; date: string; time: string; phone: string; email: string; createdBy: string | null } | null } | undefined)?.booking ?? null;
+  const booking = (v.repair as { booking?: { id: string; stationId?: string; date: string; time: string; phone: string; email: string; createdBy: string | null } | null } | undefined)?.booking ?? null;
   const [moving, setMoving] = useState(false);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [day, setDay] = useState<string | null>(null);
@@ -77,7 +81,7 @@ export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => voi
     if (!sel || missing.length) return;
     const ok = await (moving && booking
       ? run(() => moveBooking(f.mut, v.id, booking.id, sel, time), t("v4BookMoved"))
-      : run(() => createBooking(f.mut, v.id, { date: sel, time, phone: phone.trim(), email: email.trim() }), t("v4BookDone")));
+      : run(() => createBooking(f.mut, v.id, { date: sel, time, phone: phone.trim(), email: email.trim(), ...(station && station.id !== v.stationId ? { stationId: station.id } : {}) }), t("v4BookDone")));
     if (ok) { setMoving(false); setDay(null); onDone?.(); }
   };
 
@@ -87,6 +91,7 @@ export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => voi
         <div className="bk-card">
           <div className="muted" style={{ fontSize: 12 }}>{t("v4BookedFor")}</div>
           <div style={{ fontSize: 20, fontWeight: 800 }}>{dayLabel(booking.date, today, loc())} · {booking.time} {t("v4Clock")}</div>
+          {booking.stationId && <div style={{ marginTop: 4, fontSize: 14 }}>📍 {t("v6RepairAt")}: <b>{f.refs?.repairLocations.find((p) => p.id === booking.stationId)?.name ?? f.refs?.stations.find((s) => s.id === booking.stationId)?.name ?? "—"}</b>{booking.stationId !== v.stationId ? <span className="muted"> · {t("v6CarMovesThere")}</span> : null}</div>}
           <div style={{ marginTop: 6, fontSize: 14 }}>
             <a href={`tel:${booking.phone.replace(/[^+\d]/g, "")}`} style={{ fontWeight: 700 }}>📞 {t("v4CallCustomer")}: {booking.phone}</a><br />
             ✉ {booking.email}{booking.createdBy ? <span className="muted"> · {t("v4BookedBy")} {booking.createdBy}</span> : null}
@@ -103,6 +108,14 @@ export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => voi
 
   return (
     <div className="bk">
+      {!moving && places.length > 1 && (
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginBottom: 10 }}>📍 {t("v6RepairAt")}
+          <select className="sel" value={station?.id ?? ""} onChange={(e) => { setPlaceId(e.target.value); setDay(null); setCal(null); }}>
+            {places.map((p) => <option key={p.id} value={p.id}>{p.name}{p.id === v.stationId ? ` (${t("v6AssessedHere")})` : ""}</option>)}
+          </select>
+          {station && station.id !== v.stationId && <span className="muted" style={{ fontSize: 12 }}>{t("v6CarMovesThere")}</span>}
+        </label>
+      )}
       <div className="bk-nav">
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <button className="chip" aria-label={t("v4PrevYear")} onClick={() => setMonth(shiftMonth(month, -12, today))}>«</button>

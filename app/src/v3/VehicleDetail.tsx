@@ -149,7 +149,7 @@ function evText(e: Ev): string {
   if (e.kind === "send") return `✉ ${String(d.type)} → ${(d.recipients as string[] | undefined)?.join(", ") ?? ""} (${String(d.status)})`;
   const k = String(d.type);
   const map: Record<string, string> = {
-    bodyshop: `${t("v5Bodyshop")}: ${String(d.name ?? "—")}`, entered_repair: t("v4EvEntered"), stage: `${t("v4EvStage")} ${String(d.to ?? "")}`, finish: t("v4EvFinish"), todo_add: `${t("v4EvTodo")}: ${String(d.text ?? "")}`,
+    booking_moved_car: `${t("move")}: ${String(d.to ?? "")}`, bodyshop: `${t("v5Bodyshop")}: ${String(d.name ?? "—")}`, entered_repair: t("v4EvEntered"), stage: `${t("v4EvStage")} ${String(d.to ?? "")}`, finish: t("v4EvFinish"), todo_add: `${t("v4EvTodo")}: ${String(d.text ?? "")}`,
     todo_done: `${t("v4EvTodoDone")}: ${String(d.text ?? "")}`, todo_reopen: `${t("v4EvTodoOpen")}: ${String(d.text ?? "")}`, todo_delete: `${t("v4EvTodoDel")}: ${String(d.text ?? "")}`,
     check_done: `${t("v4EvCheck")}: ${String(d.key ?? "")}`, check_reopen: `${t("v4EvCheckOpen")}: ${String(d.key ?? "")}`,
     booking_created: `${t("v4EvBook")}: ${dmy(d.date)} ${String(d.time ?? "")}`, booking_moved: `${t("v4EvBookMoved")}: ${dmy(d.to)}`,

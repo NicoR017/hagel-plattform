@@ -491,7 +491,10 @@ export const repairAppointments = pgTable("repair_appointments", {
 export const repairBookings = pgTable("repair_bookings", {
   id: uuid("id").primaryKey(),
   orgId: uuid("org_id").notNull().references(() => organizations.id),
+  /** where the repair takes place (the station the car is moved to on the day; may differ from the one of the assessment) */
   stationId: uuid("station_id").notNull().references(() => stations.id),
+  /** where the car stood when it was booked (null on older bookings: = stationId) */
+  originStationId: uuid("origin_station_id").references(() => stations.id),
   vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
   date: text("date").notNull(),
   /** booked | cancelled | started */

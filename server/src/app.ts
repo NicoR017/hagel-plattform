@@ -533,6 +533,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
       await tx.update(vehicles).set({ stationId: null }).where(eq(vehicles.stationId, s.id));
       await tx.update(vehicles).set({ clientStationId: null }).where(eq(vehicles.clientStationId, s.id));
       await tx.update(vehicles).set({ bodyshopId: null }).where(eq(vehicles.bodyshopId, s.id));
+      await tx.update(repairBookings).set({ originStationId: null }).where(eq(repairBookings.originStationId, s.id));
       await tx.delete(repairBookings).where(eq(repairBookings.stationId, s.id));
       await tx.delete(stationInsurers).where(eq(stationInsurers.stationId, s.id));
       await tx.delete(campaignStations).where(eq(campaignStations.stationId, s.id));
