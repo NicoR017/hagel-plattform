@@ -296,16 +296,24 @@ export function SitesPage({ canManage, canInsurers = true }: { canManage: boolea
   const azBc = useLoad<{ id: string; name: string; links?: { id: string; name: string }[] }[]>(canManage ? "/admin/azure/business-customers" : "");
   const [f, setF] = useState<(typeof emptySite & { id?: string }) | null>(null);
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState<"all" | "hall" | "carrosserie" | "parc">("all");
   const [err, setErr] = useState("");
   const typeLabel = (x: string) => t(x as Key);
   return (
     <>
       <Card title={t("sites")} actions={canManage && <button className="btn" onClick={() => setF({ ...emptySite })}>{t("newSite")}</button>}>
         <Err msg={sites.err} />
+        <div className="chips" role="tablist" aria-label={t("type")} style={{ marginBottom: 8 }}>
+          {([["all", t("v6CatAll")], ["hall", t("v6GroupHall")], ["carrosserie", t("v6GroupCarro")], ["parc", t("v6GroupParc")]] as const).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={cat === k} className={"chip" + (cat === k ? " on" : "")} onClick={() => setCat(k)}>
+              {label} ({(sites.data ?? []).filter((s) => k === "all" || s.type === k).length})
+            </button>
+          ))}
+        </div>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("v6SearchStations")} aria-label={t("v6SearchStations")} style={{ marginBottom: 10 }} />
         <table>
           <thead><tr><th>{t("name")}</th><th>{t("type")}</th><th>{t("capacity")}</th><th>{t("country")}</th><th>{t("tenant")}</th><th /></tr></thead>
-          <tbody>{(sites.data ?? []).filter((s) => matches(q, [s.name, s.address, s.azureTenant, typeLabel(s.type), s.country, ...(s.reportEmails ?? [])])).map((s) => (
+          <tbody>{(sites.data ?? []).filter((s) => (cat === "all" || s.type === cat) && matches(q, [s.name, s.address, s.azureTenant, typeLabel(s.type), s.country, ...(s.reportEmails ?? [])])).map((s) => (
             <tr key={s.id}>
               <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.type === "carrosserie" && !s.capacite ? "—" : <Occ present={s.present ?? 0} capacity={s.capacite} />}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
