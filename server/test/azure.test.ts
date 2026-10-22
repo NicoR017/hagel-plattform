@@ -508,3 +508,40 @@ describe("administration: status, mapping, pickers", () => {
     expect((await c.h.db.select().from(campaignStations)).length).toBe(1);
   });
 });
+
+describe("load a scan into the station the user is in", () => {
+  const key = { partitionKey: PK, rowKey: RK };
+  let other = "";
+  it("a vehicle deleted (wrong station) gives the scan back; it is offered in the other stations too (?all=1)", async () => {
+    const scan0 = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
+    expect(scan0.importStatus).toBe("imported");
+    const vid = scan0.vehicleId!;
+    const { push: pushOps, op } = await import("./helpers");
+    expect(((await pushOps(c, c.superToken, [op("vehicle.delete", { vehicleId: vid })])).body.results as { status: string }[])[0].status).toBe("ok");
+    const after = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
+    expect(after).toMatchObject({ importStatus: "new", vehicleId: null });
+    [other] = (await c.h.db.insert(stations).values({ orgId: c.orgES, type: "hall", name: "Talauto Test", country: "ES", capacite: 10, azureTenant: scan0.tenant }).returning()).map((s) => s.id);
+    const normal = (await call(c, "GET", "/azure/scans", { token: importer, org: c.orgES })).body as { rowKey: string; stationId: string }[];
+    expect(normal.find((s) => s.rowKey === RK)?.stationId).toBe(HALL); // by default: in the station its mapping says
+    const all = (await call(c, "GET", "/azure/scans?all=1", { token: importer, org: c.orgES })).body as { rowKey: string; importable: boolean }[];
+    expect(all.find((s) => s.rowKey === RK)?.importable).toBe(true);
+  });
+
+  it("imported with station_id: the car stands in the chosen station, still belongs to the customer of its BusinessCustomer link", async () => {
+    const r = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0];
+    expect(r.status).toBe("imported");
+    const v = (await pull(c, importer, c.orgES)).vehicles.find((x: any) => x.id === r.vehicleId);
+    expect(v).toMatchObject({ stationId: other, clientStationId: A, kennzeichen: "9547 LPV" });
+  });
+
+  it("not into a station of another tenant or organisation, nor a station the user may not import into", async () => {
+    const [{ id: dev }] = await c.h.db.insert(stations).values({ orgId: c.orgDE, type: "hall", name: "Halle DE", country: "DE", capacite: 5 }).returning();
+    await c.h.db.update(colibriScans).set({ importStatus: "new", vehicleId: null }).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK)));
+    const wrongOrg = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: dev } })).body.results[0];
+    expect(wrongOrg.status).toBe("unmapped");
+    const unknown = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: uuid() } })).body.results[0];
+    expect(unknown.status).toBe("unmapped");
+    const notAllowed = (await call(c, "POST", "/azure/scans/import", { token: tech, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0];
+    expect(notAllowed.status).toBe("not_allowed");
+  });
+});

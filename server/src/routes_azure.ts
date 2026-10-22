@@ -20,7 +20,7 @@ interface Deps {
   validationHook: (r: { success: boolean }, c: Context) => Response | undefined;
 }
 
-const keyInput = z.object({ keys: z.array(z.object({ partitionKey: z.string().min(1).max(300), rowKey: z.string().max(300) })).min(1).max(50) });
+const keyInput = z.object({ station_id: z.string().uuid().optional(), keys: z.array(z.object({ partitionKey: z.string().min(1).max(300), rowKey: z.string().max(300) })).min(1).max(50) });
 
 export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }: Deps) {
   const r = new Hono<Env>();
@@ -35,17 +35,20 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     const isAdmin = canOrg(u, "stations.gerer", orgId);
     const insName = new Map(ctx.insurers.map((i) => [i.id, i.name]));
     const stName = new Map(ctx.stations.map((s) => [s.id, s.name]));
+    // ?all=1: also the scans mapped to another station (or to none) of the organisation: they can be loaded into the station the user is in
+    const everywhere = c.req.query("all") === "1" && canOrg(u, "colibri.importer", orgId);
     const out = [];
     for (const s of rows) {
       const m = mapScan(s, ctx);
       const mine = m.orgId === orgId && m.stationId && canOrg(u, "colibri.importer", orgId, m.stationId);
       const adminUnmapped = !m.orgId && isAdmin; // only visible to admins of an organisation that owns this tenant
-      if (!mine && !adminUnmapped) continue;
+      const elsewhere = everywhere && !mine && (m.orgId === orgId || !m.orgId);
+      if (!mine && !adminUnmapped && !elsewhere) continue;
       out.push({
         partitionKey: s.partitionKey, rowKey: s.rowKey, scanDateTime: s.scanDateTime, plate: s.plate, brand: s.brand, model: s.model, colibriNumber: s.colibriNumber,
         businessCustomer: s.businessCustomer, claimNumber: s.claimNumber, location: s.location, dentsTotal: s.dentsTotal, tenant: s.tenant,
         stationId: m.stationId, stationName: m.stationId ? stName.get(m.stationId) ?? "" : "", clientName: m.clientStationId ? stName.get(m.clientStationId) ?? "" : "",
-        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings, importable: m.importable && !!mine,
+        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings, importable: (m.importable && !!mine) || (elsewhere && !s.scanFailed),
       });
     }
     // newest first, by the real time (a Date compared as text is not chronological)
@@ -56,7 +59,8 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
 
   r.post("/azure/scans/import", needAuth, needOrg, zValidator("json", keyInput, validationHook), async (c) => {
     if (!az) throw new HttpError(409, "azure_unavailable");
-    const results = await importScans({ db, az, storage, hub }, c.get("principal"), c.req.valid("json").keys, c.get("orgId"));
+    const body = c.req.valid("json");
+    const results = await importScans({ db, az, storage, hub }, c.get("principal"), body.keys, c.get("orgId"), body.station_id ?? null);
     return c.json({ results });
   });
 

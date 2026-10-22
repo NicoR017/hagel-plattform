@@ -17,11 +17,18 @@ export const calcSettingsOf = (s: OrgSettings | undefined): Settings => {
 };
 
 export interface Prefs {
-  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null; lastMode?: "kalk" | "rep" | "all";
+  land?: "DE" | "ES"; logo?: "pdr" | "none"; lastCompanyId?: string | null; lastClientStationId?: string | null; lastStationId?: string | null; /** the 3 stations used last, the latest first */ recentStationIds?: string[]; lastMode?: "kalk" | "rep" | "all";
   techPct?: number; demTechPct?: number; defaultCommission?: number;
 }
 export const getPrefs = async (db: LocalDb): Promise<Prefs> => (await db.getMeta<Prefs>("prefs")) ?? {};
-export const setPrefs = async (db: LocalDb, p: Partial<Prefs>) => db.setMeta("prefs", { ...(await getPrefs(db)), ...p });
+/** the 3 most recently used stations (latest first) */
+export const pushRecent = (recent: string[] | undefined, id: string): string[] => [id, ...(recent ?? []).filter((x) => x !== id)].slice(0, 3);
+export const setPrefs = async (db: LocalDb, p: Partial<Prefs>) => {
+  const cur = await getPrefs(db);
+  db.setMeta("prefs", { ...cur, ...p, ...(p.lastStationId ? { recentStationIds: pushRecent(cur.recentStationIds, p.lastStationId) } : {}) });
+};
+/** a station was opened (from the home page): it counts as used */
+export const touchStation = async (db: LocalDb, id: string) => { const cur = await getPrefs(db); await db.setMeta("prefs", { ...cur, recentStationIds: pushRecent(cur.recentStationIds, id) }); };
 export async function getRefs(db: LocalDb, orgId: string): Promise<Refs | undefined> { return db.getMeta<Refs>(refsKey(orgId)); }
 
 const today = () => new Date().toISOString().slice(0, 10);

@@ -3,7 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { t } from "../i18n";
 import { go } from "../field/route";
 import { useField, useVehicles } from "../field/store";
-import { getPrefs } from "../sync/mutations";
+import { getPrefs, touchStation } from "../sync/mutations";
 import { occLevel } from "../field/occupancy";
 import { inMode, stationCounts } from "./modes";
 import { useNewScans } from "./useScans";
@@ -55,6 +55,38 @@ export function Stations({ userName }: { userName: string }) {
   const kalk = vehicles.filter((v) => list.some((s) => s.id === v.stationId) && inMode(v, "kalk")).length;
   const rep = vehicles.filter((v) => v.statut === "reparatur" && list.some((s) => s.id === v.stationId)).length;
 
+  const open = (id: string) => { void touchStation(f.db, id); go({ page: "mode", stationId: id }); };
+  const card = (s: (typeof list)[number], section: string) => {
+    const c = stationCounts(vehicles, s.id);
+    return (
+      <button key={section + s.id} className={"stcard" + (s.id === last ? " last" : "")} onClick={() => open(s.id)}>
+        <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</span>
+            <span className="muted" style={{ fontSize: 12 }}>{[s.address, s.azureTenant ? `${t("v3Tenant")} ${s.azureTenant}` : ""].filter(Boolean).join(" · ") || "—"}</span>
+          </span>
+          <span className="badge" style={{ background: "#EEF0F3", color: "#3B4555" }}>{typeLabel(s.type)}</span>
+        </span>
+        <OccLine present={f.refs?.occupancy?.[s.id] ?? c.present} capacity={s.capacite} />
+        <span className="three">
+          <span><b>{c.kalk}</b>{t("v3ModeKalk")}</span>
+          <span><b>{c.rep}</b>{t("v3ModeRep")}</span>
+          <span><b>{scans.byStation.get(s.name) ?? (scans.known ? 0 : "–")}</b>{t("v3NewScans")}</span>
+        </span>
+        {s.id === last && <span className="badge" style={{ position: "absolute", top: -10, right: 12, background: "#1D4FB8", color: "#fff" }}>{t("v3LastUsed")}</span>}
+      </button>
+    );
+  };
+  // categories: the 3 stations used last, then PDR halls, body shops and car parks (every station also stays in its own category)
+  const recent = (prefs?.recentStationIds ?? []).map((id) => shown.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s).slice(0, 3);
+  const byType = (type: string) => shown.filter((s) => s.type === type);
+  const groups = [
+    { key: "recent", title: t("v6GroupRecent"), items: recent },
+    { key: "hall", title: t("v6GroupHall"), items: byType("hall") },
+    { key: "carrosserie", title: t("v6GroupCarro"), items: byType("carrosserie") },
+    { key: "parc", title: t("v6GroupParc"), items: byType("parc") },
+  ].filter((g) => g.items.length);
+
   return (
     <main>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
@@ -81,32 +113,14 @@ export function Stations({ userName }: { userName: string }) {
         {scans.known && <div className="kpi"><div className="l">{t("v3KpiScans")}</div><div className="n">{scans.total}</div></div>}
       </section>
 
-      <section aria-label={t("v3Stations")} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 600 }}>{t("v3MyStations")}</h2>
+      <section aria-label={t("v3Stations")} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {!shown.length && <p className="empty">{f.refs ? t("v3NoStations") : t("loading")}</p>}
-        <div className="stgrid">
-          {shown.map((s) => {
-            const c = stationCounts(vehicles, s.id);
-            return (
-              <button key={s.id} className={"stcard" + (s.id === last ? " last" : "")} onClick={() => go({ page: "mode", stationId: s.id })}>
-                <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                  <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</span>
-                    <span className="muted" style={{ fontSize: 12 }}>{[s.address, s.azureTenant ? `${t("v3Tenant")} ${s.azureTenant}` : ""].filter(Boolean).join(" · ") || "—"}</span>
-                  </span>
-                  <span className="badge" style={{ background: "#EEF0F3", color: "#3B4555" }}>{typeLabel(s.type)}</span>
-                </span>
-                <OccLine present={f.refs?.occupancy?.[s.id] ?? c.present} capacity={s.capacite} />
-                <span className="three">
-                  <span><b>{c.kalk}</b>{t("v3ModeKalk")}</span>
-                  <span><b>{c.rep}</b>{t("v3ModeRep")}</span>
-                  <span><b>{scans.byStation.get(s.name) ?? (scans.known ? 0 : "–")}</b>{t("v3NewScans")}</span>
-                </span>
-                {s.id === last && <span className="badge" style={{ position: "absolute", top: -10, right: 12, background: "#1D4FB8", color: "#fff" }}>{t("v3LastUsed")}</span>}
-              </button>
-            );
-          })}
-        </div>
+        {groups.map((g) => (
+          <div key={g.key} className="stgroup" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 600 }}>{g.title} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({g.items.length})</span></h2>
+            <div className="stgrid">{g.items.map((s) => card(s, g.key))}</div>
+          </div>
+        ))}
       </section>
     </main>
   );

@@ -75,22 +75,29 @@ const todayIso = (d: Date) => d.toISOString().slice(0, 10);
  * claim number, campaign if one is active for the site), the PDF attached, the overview photos copied (1280 px JPEG q0.6).
  * A scan is imported once: the claim is atomic and vehicles.colibri_scan_key is unique.
  */
-export async function importScans(d: ImportDeps, u: Principal, keys: { partitionKey: string; rowKey: string }[], callerOrgId: string): Promise<ImportResult[]> {
+export async function importScans(d: ImportDeps, u: Principal, keys: { partitionKey: string; rowKey: string }[], callerOrgId: string, stationOverride: string | null = null): Promise<ImportResult[]> {
   const out: ImportResult[] = [];
   const ctx = await loadMappingContext(d.db);
   const myTenants = await tenantsOfOrg(d.db, callerOrgId);
-  for (const k of keys) out.push(await importOne(d, u, k, ctx, myTenants));
+  for (const k of keys) out.push(await importOne(d, u, k, ctx, myTenants, callerOrgId, stationOverride));
   return out;
 }
 
-async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string; rowKey: string }, ctx: Awaited<ReturnType<typeof loadMappingContext>>, myTenants: string[]): Promise<ImportResult> {
+async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string; rowKey: string }, ctx: Awaited<ReturnType<typeof loadMappingContext>>, myTenants: string[], callerOrgId: string, stationOverride: string | null): Promise<ImportResult> {
   const base = { partitionKey: k.partitionKey, rowKey: k.rowKey };
   const now = d.now?.() ?? new Date();
   const [scan] = await d.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, k.partitionKey), eq(colibriScans.rowKey, k.rowKey)));
   // a scan of a tenant the caller's organisation does not use does not exist for him (no information leaks across tenants)
   if (!scan || !myTenants.includes(scan.tenant)) return { ...base, status: "not_found" };
   if (scan.importStatus === "imported") return { ...base, status: "already", vehicleId: scan.vehicleId ?? undefined };
-  const m: ScanMapping = mapScan(scan, ctx);
+  let m: ScanMapping = mapScan(scan, ctx);
+  // "load it into THIS station": the car stands in the chosen station (a station of the caller's organisation in the scan's Colibri tenant);
+  // the customer body shop it belongs to stays the one of the scan's BusinessCustomer link
+  if (stationOverride) {
+    const [st] = await d.db.select().from(stations).where(eq(stations.id, stationOverride));
+    if (!st || st.orgId !== callerOrgId || !st.active || (st.azureTenant && st.azureTenant !== scan.tenant)) return { ...base, status: "unmapped" };
+    m = { ...m, orgId: st.orgId, stationId: st.id, importable: !scan.scanFailed };
+  }
   // the scan must belong to the user's organisation through ITS tenant — never through a name
   if (!m.importable || !m.orgId || !m.stationId) return { ...base, status: "unmapped" };
   const orgTenants = await tenantsOfOrg(d.db, m.orgId);
