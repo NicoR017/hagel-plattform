@@ -1,12 +1,12 @@
 // Verwaltung in the new interface: left menu + content, like the vehicle detail. The existing screens (users, roles, stations, insurers,
-// campaigns, letterheads, Azure, audit, organisations) are reused inside it; new here: overview, calculation methods, weekly report.
+// letterheads, Azure, audit, organisations) are reused inside it; new here: overview, calculation methods, weekly report.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { computeVehicle, DEFAULT_AW_PARAMS, DEFAULT_SETTINGS, ES_MATRIX_DEFAULT, type CalcMethodDef, type CalcVehicle, type EsMatrix } from "@hagel/calc";
 import { generateTechnicianWorksheets, techPdfFileName, eur, type TechSheetData } from "@hagel/documents";
 import type { ClientMethod } from "@hagel/shared";
 import { api } from "../api";
 import { act, AuditPage, Card, Err, OrgsPage, RolesPage, SitesPage, UsersPage, useLoad } from "../admin";
-import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "../admin2";
+import { AzurePage, CompaniesPage, InsurersPage, TechniciansPage } from "../admin2";
 import { SettingsDialog } from "../field/Dialogs";
 import { shareOrDownload } from "../field/docs";
 import { hrefOf, type Route } from "../field/route";
@@ -21,10 +21,10 @@ interface Me {
   grants: { orgId: string; stationId: string | null; permissions: string[] }[];
 }
 
-type Section = "overview" | "users" | "roles" | "sites" | "insurers" | "methods" | "technicians" | "weekly" | "campaigns" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
+type Section = "overview" | "users" | "roles" | "sites" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
 
 /** Map of the old tab names (bookmarks) to the new sections */
-const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", campaigns: "campaigns", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
+const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
 
 export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: (id: string) => void; route: Route }) {
   const perms = new Set(me.grants.filter((g) => g.orgId === org && g.stationId === null).flatMap((g) => g.permissions));
@@ -39,7 +39,6 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     { title: "v6MenuStructure", items: [
       { k: "sites", label: t("sites"), show: true },
       { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
-      { k: "campaigns", label: t("campaigns"), show: has("campagnen.gerer" as never) || has("campagnes.gerer") },
       { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
     ] },
     { title: "v6MenuCalc", items: [
@@ -72,7 +71,6 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     case "roles": body = <RolesPage />; break;
     case "sites": body = <SitesPage canManage={has("stations.gerer")} canInsurers={has("assurances.gerer")} />; break;
     case "insurers": body = <InsurersPage canMethods={has("methoden.gerer")} />; break;
-    case "campaigns": body = <CampaignsPage />; break;
     case "letterheads": body = <CompaniesPage />; break;
     case "methods": body = <MethodsPage />; break;
     case "prices": body = <PricesPage />; break;

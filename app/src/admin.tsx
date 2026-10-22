@@ -281,6 +281,13 @@ function Recipients({ stationId, emails, excluded, canInsurers, onChange }: { st
   );
 }
 
+/** search: every word typed must appear (case and accents ignored) in one of the fields */
+export const matches = (q: string, fields: (string | null | undefined)[]): boolean => {
+  const norm = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const hay = norm(fields.filter(Boolean).join(" "));
+  return norm(q).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+};
+
 const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", capacite: 0, azure_tenant: "", commission_pct: 0, report_emails: [] as string[], excluded: [] as string[], rpd: 3, bcs: [] as string[], links: [] as string[], bcFilter: "", aliases: "" };
 
 export function SitesPage({ canManage, canInsurers = true }: { canManage: boolean; canInsurers?: boolean }) {
@@ -288,15 +295,17 @@ export function SitesPage({ canManage, canInsurers = true }: { canManage: boolea
   const tenants = useLoad<string[]>("/admin/tenants");
   const azBc = useLoad<{ id: string; name: string; links?: { id: string; name: string }[] }[]>(canManage ? "/admin/azure/business-customers" : "");
   const [f, setF] = useState<(typeof emptySite & { id?: string }) | null>(null);
+  const [q, setQ] = useState("");
   const [err, setErr] = useState("");
   const typeLabel = (x: string) => t(x as Key);
   return (
     <>
       <Card title={t("sites")} actions={canManage && <button className="btn" onClick={() => setF({ ...emptySite })}>{t("newSite")}</button>}>
         <Err msg={sites.err} />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("v6SearchStations")} aria-label={t("v6SearchStations")} style={{ marginBottom: 10 }} />
         <table>
           <thead><tr><th>{t("name")}</th><th>{t("type")}</th><th>{t("capacity")}</th><th>{t("country")}</th><th>{t("tenant")}</th><th /></tr></thead>
-          <tbody>{sites.data?.map((s) => (
+          <tbody>{(sites.data ?? []).filter((s) => matches(q, [s.name, s.address, s.azureTenant, typeLabel(s.type), s.country, ...(s.reportEmails ?? [])])).map((s) => (
             <tr key={s.id}>
               <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.type === "carrosserie" && !s.capacite ? "—" : <Occ present={s.present ?? 0} capacity={s.capacite} />}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>

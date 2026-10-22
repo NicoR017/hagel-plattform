@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, httpFetch } from "./api";
-import { act, Card, Err, useLoad } from "./admin";
+import { act, Card, Err, matches, useLoad } from "./admin";
 import { fmtDateTime, t } from "./i18n";
 
 interface Station { id: string; type: string; name: string; active: boolean }
@@ -33,6 +33,7 @@ function InsurerMethods({ insurerId, methods }: { insurerId: string; methods: { 
 export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
   const methods = useLoad<{ id: string; name: string; country: string; archived: boolean; isSystem: boolean }[]>(canMethods ? "/admin/methods" : "");
   const list = useLoad<Insurer[]>("/admin/insurers");
+  const [q, setQ] = useState("");
   const sites = useLoad<Station[]>("/admin/stations");
   const [f, setF] = useState<{ id?: string; name: string; emails: string; send: boolean; which: string; azure: string } | null>(null);
   const azIns = useLoad<{ id: string; name: string }[]>("/admin/azure/insurances");
@@ -48,7 +49,8 @@ export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
     <>
       <Card title={t("insurers")} actions={<button className="btn" onClick={() => setF({ name: "", emails: "", send: false, which: "both", azure: "" })}>{t("newInsurer")}</button>}>
         <Err msg={list.err || err} />
-        {(list.data ?? []).map((i) => (
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("v6SearchInsurers")} aria-label={t("v6SearchInsurers")} style={{ marginBottom: 10 }} />
+        {(list.data ?? []).filter((i) => matches(q, [i.name, ...i.reportEmails])).map((i) => (
           <div key={i.id} style={{ borderTop: "1px solid var(--line)", padding: "10px 0" }}>
             <div className="row">
               <b className="grow">{i.name}</b>
