@@ -7,7 +7,7 @@
 // Only the `stable` part is compared: tables that exist today. Tables added later are listed under `added`, never compared.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { createDb } from "../db";
 import { organizations, stations, vehicles } from "../schema";
@@ -23,15 +23,22 @@ async function count(db: { execute: (q: ReturnType<typeof sql>) => Promise<unkno
 
 export async function buildReport(db: Awaited<ReturnType<typeof createDb>>["db"]) {
   const orgs = await db.select().from(organizations);
-  const stName = new Map((await db.select().from(stations)).map((s) => [s.id, s.name]));
+  // also runs on a database BEFORE the v3 migrations (the "before" numbers): only the columns / tables that exist are read
+  const existing = async (table: string) => new Set(((await db.execute(sql`select column_name as c from information_schema.columns where table_schema = 'public' and table_name = ${table}`)) as unknown as { rows: { c: string }[] }).rows.map((r) => r.c));
+  const vCols = await existing("vehicles");
+  const vSelect = Object.fromEntries(Object.entries(getTableColumns(vehicles)).filter(([, col]) => vCols.has(col.name)));
+  const sCols = await existing("stations");
+  const sSelect = Object.fromEntries(Object.entries(getTableColumns(stations)).filter(([, col]) => sCols.has(col.name)));
+  const stName = new Map(((await db.select(sSelect as typeof stations._.columns).from(stations)) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
+  const hasMethods = (await existing("calc_methods")).size > 0;
 
   const stable: Record<string, unknown> = {};
   const perOrg: Record<string, unknown> = {};
   const digest = createHash("sha256");
   for (const o of orgs.sort((a, b) => a.name.localeCompare(b.name))) {
-    const rows = await db.select().from(vehicles).where(eq(vehicles.orgId, o.id));
+    const rows = (await db.select(vSelect as typeof vehicles._.columns).from(vehicles).where(eq(vehicles.orgId, o.id))) as unknown as (typeof vehicles.$inferSelect)[];
     const settings = calcSettings(await loadOrgSettings(db, o.id));
-    const methods = await loadMethodMap(db, o.id);
+    const methods = hasMethods ? await loadMethodMap(db, o.id) : new Map();
     const byStation: Record<string, number> = {}, byStatus: Record<string, number> = {};
     let live = 0, deleted = 0, net = 0, gross = 0, withShares = 0;
     for (const r of [...rows].sort((a, b) => a.id.localeCompare(b.id))) {
