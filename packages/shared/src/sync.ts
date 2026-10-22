@@ -101,6 +101,8 @@ const appointmentInput = z.object({
 }).strict();
 const bookingInput = z.object({
   id: uuidStr, date: ymd, time: hhmm,
+  /** where the repair takes place; absent = the station the car is in */
+  stationId: uuidStr.optional(),
   phone: z.string().trim().min(6).max(40).regex(/^[+\d][\d\s().\/-]{4,}$/),
   email: z.string().trim().max(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
 }).strict();
@@ -224,7 +226,7 @@ export interface ClientRepair {
   finishBlockers: string[];
   comments: { id: string; userId: string | null; userName: string; at: string; text: string }[];
   appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[];
-  booking: { id: string; date: string; time: string; status: string; phone: string; email: string; createdBy: string | null; createdAt: string } | null;
+  booking: { id: string; stationId: string; date: string; time: string; status: string; phone: string; email: string; createdBy: string | null; createdAt: string } | null;
   /** day of the repair booking that moved this car into "Bereit" by itself (card badge "Termin heute") */
   autoStartedOn?: string | null;
   /** the last repair report sent for this vehicle (automatic or re-sent) */
@@ -281,6 +283,8 @@ export interface PullResponse {
   gone: string[];
   refs: {
     stations: ClientStation[];
+    /** where a repair can be booked (PDR halls and body shops of the organisation, names only): the choices of the repair appointment; only for users who book */
+    repairLocations: { id: string; name: string; type: string; country: string; repairsPerDay: number; azureTenant: string | null }[];
     /** body shops (carrosserie sites, names only) a car can be sent to: the choices of the "At Bodyshop" column; only for users of the repair board */
     bodyshops: { id: string; name: string; azureTenant: string | null }[];
     /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
