@@ -1,3 +1,4 @@
+import { SCAN_SORTS, loadScanSort, saveScanSort, sortScans, type ScanSort } from "./scanSort";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { fmtDateTime, t } from "../i18n";
@@ -17,6 +18,7 @@ interface ImportResult { status: string; vehicleId?: string; message?: string; c
 export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mode }) {
   const f = useField();
   const [scans, setScans] = useState<Scan[] | null>(null);
+  const [sortBy, setSortBy] = useState<ScanSort>(loadScanSort());
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const pdf = useRef<HTMLInputElement>(null);
@@ -70,8 +72,12 @@ export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mod
           <h2 style={{ fontSize: 16, marginBottom: 10 }}>☁ {t("v4NewScans")}</h2>
           {scans === null && <p className="muted">{t("loading")}</p>}
           {scans && !scans.length && <p className="empty">{err || t("v4NoScans")}</p>}
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginBottom: 8 }}>{t("v6ScanSort")}
+            <select className="sel" style={{ width: "auto", minHeight: 40 }} value={sortBy} onChange={(e) => { const v = e.target.value as ScanSort; setSortBy(v); saveScanSort(v); }}>
+              {SCAN_SORTS.map((k) => <option key={k} value={k}>{t(("v6ScanSort_" + k) as never)}</option>)}
+            </select></label>
           <div className="rows">
-            {(scans ?? []).map((s) => (
+            {sortScans(scans ?? [], sortBy).map((s) => (
               <div key={s.partitionKey + s.rowKey} className="vrow" style={{ padding: 12 }}>
                 <span className="c" style={{ flex: "1 1 200px" }}>
                   <b style={{ fontSize: 16 }}>{s.plate || "—"}</b>

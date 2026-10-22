@@ -1,3 +1,4 @@
+import { SCAN_SORTS, loadScanSort, saveScanSort, sortScans, type ScanSort } from "../v3/scanSort";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { fmtDateTime, t } from "../i18n";
@@ -17,6 +18,7 @@ const keyOf = (s: { partitionKey: string; rowKey: string }) => `${s.partitionKey
 export function ScansDialog({ onClose }: { onClose: () => void }) {
   const f = useField();
   const [scans, setScans] = useState<Scan[] | null>(null);
+  const [sortBy, setSortBy] = useState<ScanSort>(loadScanSort());
   const [err, setErr] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -61,7 +63,11 @@ export function ScansDialog({ onClose }: { onClose: () => void }) {
             <button className="seg" onClick={() => setSel(sel.size === importable.length ? new Set() : new Set(importable.map(keyOf)))}>{sel.size === importable.length && sel.size > 0 ? t("none") : t("all")}</button>
             <button className="seg on" disabled={busy || !sel.size} onClick={() => void run(importable.filter((s) => sel.has(keyOf(s))))}>{busy ? t("importing") : `${t("importSelected")} (${sel.size})`}</button>
           </div>
-          {scans.map((s) => (
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginBottom: 8 }}>{t("v6ScanSort")}
+            <select className="sel" style={{ width: "auto", minHeight: 40 }} value={sortBy} onChange={(e) => { const v = e.target.value as ScanSort; setSortBy(v); saveScanSort(v); }}>
+              {SCAN_SORTS.map((k) => <option key={k} value={k}>{t(("v6ScanSort_" + k) as never)}</option>)}
+            </select></label>
+          {sortScans(scans, sortBy).map((s) => (
             <div key={keyOf(s)} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "8px 10px", marginBottom: 8, opacity: s.importable ? 1 : 0.7 }}>
               <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <input type="checkbox" style={{ width: 24, height: 24 }} disabled={!s.importable || busy} checked={sel.has(keyOf(s))}

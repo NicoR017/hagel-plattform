@@ -48,7 +48,9 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
         insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings, importable: m.importable && !!mine,
       });
     }
-    out.sort((a, b) => String(b.scanDateTime ?? b.partitionKey).localeCompare(String(a.scanDateTime ?? a.partitionKey)));
+    // newest first, by the real time (a Date compared as text is not chronological)
+    const at = (x: { scanDateTime: Date | string | null; partitionKey: string }) => (x.scanDateTime ? new Date(x.scanDateTime).getTime() : 0);
+    out.sort((a, b) => at(b) - at(a) || b.partitionKey.localeCompare(a.partitionKey));
     return c.json(out.slice(0, 300));
   });
 
