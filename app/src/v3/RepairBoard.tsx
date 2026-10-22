@@ -181,7 +181,7 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                       {v.statut === "attente" && <span className="badge" style={{ background: "#FDF0E1", color: "#8A4A06", fontSize: 11 }}>{holdLabel(v)}</span>}
                     </span>
                     {arrivedToday(v, today) && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8", fontSize: 11, alignSelf: "flex-start" }}>{t("v5TerminToday")}</span>}
-                    <span style={{ fontSize: 12 }}>{st?.name}</span>
+                    <span style={{ fontSize: 12 }}>📍 {st?.name}{v.clientStationId && v.clientStationId !== v.stationId ? <span className="muted"> · 🏢 {f.refs?.stations.find((s) => s.id === v.clientStationId)?.name ?? String(x.kunde || "")}</span> : null}</span>
                     <span className="muted" style={{ fontSize: 12 }}>{[f.refs?.insurers.find((i) => i.id === v.insurerId)?.name, x.modell].filter(Boolean).join(" · ")}</span>
                     {!!(v.colibriSource?.businessCustomer || x.kunde) && <span className="bcline" title={t("v5BcLink")}>🔗 {v.colibriSource?.businessCustomer || String(x.kunde)}</span>}
                     {(!!techOf(v) || !!x.demTechName) && <span className="muted" style={{ fontSize: 11 }}>{techOf(v) ? `PDR ${techOf(v)}` : ""}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</span>}

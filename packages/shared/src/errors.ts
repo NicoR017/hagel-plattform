@@ -28,7 +28,7 @@ export const ERROR_MESSAGES = {
   replacement_invalid: { de: "Die Ersatzrolle ist ungültig (gleicher Sichtbarkeitsbereich nötig)", en: "The replacement role is invalid (it needs the same visibility scope)" },
   weekly_report_empty: { de: "Keine abgeschlossenen Fahrzeuge in dieser Woche", en: "No finished vehicles in this week" },
   bodyshop_invalid: { de: "Diese Karosserie kann nicht gewählt werden (andere Organisation oder anderer Tenant)", en: "This body shop cannot be chosen (other organisation or tenant)" },
-  station_in_use: { de: "Die Station kann nicht gelöscht werden: {n} Fahrzeug(e) sind noch zugeordnet. Zuerst verschieben oder zurückgeben (oder die Station nur deaktivieren).", en: "The station cannot be deleted: {n} vehicle(s) are still assigned. Move or return them first (or just deactivate the station)." },
+  station_in_use: { de: "Die Station kann nicht gelöscht werden: {n} Fahrzeug(e) stehen dort, {m} gehören ihr als Kunde, {k} sind ihr als Karosserie zugeordnet. Zuerst verschieben oder zurückgeben (oder die Station nur deaktivieren).", en: "The station cannot be deleted: {n} vehicle(s) stand there, {m} belong to it as customer, {k} are assigned to it as body shop. Move or return them first (or just deactivate the station)." },
   station_has_bookings: { de: "Die Station hat noch {n} offene Reparaturtermine.", en: "The station still has {n} open repair appointments." },
   no_recipient: { de: "Keine E-Mail-Adresse für diese Person hinterlegt", en: "No e-mail address on file for this person" },
   superadmin_only: { de: "Nur Super-Admin", en: "Super-admin only" },

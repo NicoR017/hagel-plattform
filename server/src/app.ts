@@ -521,9 +521,12 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const orgId = c.get("orgId"), p = c.get("principal");
     const [s] = await db.select().from(stations).where(and(eq(stations.id, c.req.param("id") ?? ""), eq(stations.orgId, orgId)));
     if (!s) throw new HttpError(404, "station_not_found");
-    const refs = or(eq(vehicles.stationId, s.id), eq(vehicles.clientStationId, s.id), eq(vehicles.bodyshopId, s.id));
-    const [live] = await db.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(refs, isNull(vehicles.deletedAt)));
-    if (live.n) throw new HttpError(409, "station_in_use", { n: String(live.n) });
+    // a car BELONGS to a body shop (customer) and STANDS in a hall, a car park or a body shop: both ties count
+    const count = async (cond: ReturnType<typeof eq>) => (await db.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(cond, isNull(vehicles.deletedAt))))[0].n;
+    const standing = await count(eq(vehicles.stationId, s.id));
+    const owned = await count(eq(vehicles.clientStationId, s.id));
+    const repairing = await count(eq(vehicles.bodyshopId, s.id));
+    if (standing || owned || repairing) throw new HttpError(409, "station_in_use", { n: String(standing), m: String(owned), k: String(repairing) });
     const [open] = await db.select({ n: sql<number>`count(*)::int` }).from(repairBookings).where(and(eq(repairBookings.stationId, s.id), inArray(repairBookings.status, ["booked", "started"])));
     if (open.n) throw new HttpError(409, "station_has_bookings", { n: String(open.n) });
     await db.transaction(async (tx) => {

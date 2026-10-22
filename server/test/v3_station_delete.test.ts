@@ -51,6 +51,19 @@ describe("station: edit and delete", () => {
     expect(row.stationId).toBeNull();
   });
 
+  it("a car belongs to a body shop but may stand in a hall: deleting the OWNER or the PLACE is refused either way", async () => {
+    const owner = await mkStation("Taller Dueño");
+    const hall = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "hall", name: "Nave Aparte", capacite: 5 } })).body.id as string;
+    const vid = uuid();
+    expect(((await push(c, c.superToken, [op("vehicle.create", { vehicle: { id: vid, stationId: hall, clientStationId: owner, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 3 }) }, header: { land: "ES", kennzeichen: "DEL 2", modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0].status).toBe("ok");
+    const byOwner = await call(c, "DELETE", `/admin/stations/${owner}`, { token: c.superToken, org: c.orgES });
+    expect(byOwner.status).toBe(409);
+    expect(byOwner.body.error).toMatch(/0 .*1/); // 0 stand there, 1 belongs to it
+    const byPlace = await call(c, "DELETE", `/admin/stations/${hall}`, { token: c.superToken, org: c.orgES });
+    expect(byPlace.status).toBe(409);
+    expect(byPlace.body.error).toMatch(/1 .*0/);
+  });
+
   it("only people who manage stations can delete; another organisation's station is not found", async () => {
     const id = await mkStation("Taller Protegido");
     expect((await call(c, "DELETE", `/admin/stations/${id}`, { token: chef, org: c.orgES })).status).toBe(403);

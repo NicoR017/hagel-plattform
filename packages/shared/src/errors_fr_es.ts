@@ -1,6 +1,6 @@
 /** French and Spanish API error messages. Same codes and `{x}` placeholders as ERROR_MESSAGES (errors.ts). */
 export const ERRORS_FR: Record<string, string> = {
-  station_in_use: "La station ne peut pas être supprimée : {n} véhicule(s) y sont encore rattachés. Déplacez-les ou rendez-les d’abord (ou désactivez simplement la station).",
+  station_in_use: "La station ne peut pas être supprimée : {n} véhicule(s) s’y trouvent, {m} lui appartiennent comme client, {k} lui sont attribués comme carrosserie. Déplacez-les ou rendez-les d’abord (ou désactivez simplement la station).",
   station_has_bookings: "La station a encore {n} rendez-vous de réparation ouverts.",
   role_not_found: "Rôle introuvable",
   station_not_found: "Station introuvable",
@@ -82,7 +82,7 @@ export const ERRORS_FR: Record<string, string> = {
 };
 
 export const ERRORS_ES: Record<string, string> = {
-  station_in_use: "No se puede eliminar la estación: aún tiene {n} vehículo(s) asignados. Trasládelos o devuélvalos primero (o simplemente desactive la estación).",
+  station_in_use: "No se puede eliminar la estación: {n} vehículo(s) se encuentran en ella, {m} le pertenecen como cliente, {k} le están asignados como taller. Trasládelos o devuélvalos primero (o simplemente desactive la estación).",
   station_has_bookings: "La estación aún tiene {n} citas de reparación abiertas.",
   role_not_found: "Rol no encontrado",
   station_not_found: "Estación no encontrada",
