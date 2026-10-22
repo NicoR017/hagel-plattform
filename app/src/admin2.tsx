@@ -8,6 +8,36 @@ interface Insurer { id: string; name: string; reportEmails: string[]; sendReport
 
 const emails = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
 
+/**
+ * Searchable multi-select: the chosen ones as chips, a search field that opens a short scrolling list of the others. For long lists
+ * (an insurer works with many body shops): nothing but the chosen ones is on screen until you search.
+ */
+function SearchSelect({ options, selected, placeholder, onToggle }: { options: { id: string; name: string }[]; selected: string[]; placeholder: string; onToggle: (id: string, on: boolean) => void }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const chosen = options.filter((o) => selected.includes(o.id));
+  const found = options.filter((o) => !selected.includes(o.id) && matches(q, [o.name])).slice(0, 60);
+  return (
+    <div style={{ position: "relative" }}>
+      <div className="chips">
+        {chosen.map((o) => <span key={o.id} className="pill">{o.name} <button type="button" aria-label={t("delete")} onClick={() => onToggle(o.id, false)}>✕</button></span>)}
+        {!chosen.length && <span className="muted" style={{ fontSize: 13 }}>—</span>}
+      </div>
+      <input type="search" value={q} placeholder={placeholder} aria-label={placeholder} role="combobox" aria-expanded={open}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && (
+        <div role="listbox" style={{ position: "absolute", left: 0, right: 0, zIndex: 20, maxHeight: 240, overflowY: "auto", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 8px 24px rgba(10,18,35,.15)", marginTop: 2 }}>
+          {found.map((o) => (
+            <button key={o.id} type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => { onToggle(o.id, true); setQ(""); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", minHeight: 44, border: 0, borderBottom: "1px solid #EEF1F5", background: "#fff", font: "inherit", cursor: "pointer" }}>{o.name}</button>
+          ))}
+          {!found.length && <div className="muted" style={{ padding: 12, fontSize: 13 }}>{q ? t("noData") : "—"}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- insurers
 /** the calculation method of an insurer per country (— Standard — = the system method of the country) */
 function InsurerMethods({ insurerId, methods }: { insurerId: string; methods: { id: string; name: string; country: string; archived: boolean }[] }) {
@@ -60,15 +90,7 @@ export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
             </div>
             <div style={{ color: "var(--sub)", fontSize: 13, marginTop: 4 }}>{i.reportEmails.join(", ") || "—"}</div>
             {canMethods && methods.data && <InsurerMethods insurerId={i.id} methods={methods.data} />}
-            <div style={{ marginTop: 6 }}>
-              <span style={{ fontSize: 13, color: "var(--sub)" }}>{t("worksWith")}: </span>
-              {carros.map((s) => (
-                <label key={s.id} style={{ display: "inline-flex", gap: 6, alignItems: "center", marginRight: 14, fontSize: 14, color: "var(--text)" }}>
-                  <input type="checkbox" style={{ width: 20, height: 20, minHeight: 0 }} checked={i.stationIds.includes(s.id)} onChange={(e) => toggleLink(i.id, s.id, e.target.checked)} />{s.name}
-                </label>
-              ))}
-              {!carros.length && <span className="muted">—</span>}
-            </div>
+            <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>{t("worksWith")}: <b>{i.stationIds.filter((id) => carros.some((s) => s.id === id)).length}</b> / {carros.length} · {t("v6WorksWithHint")}</div>
           </div>
         ))}
         {!list.data?.length && <p className="muted">{t("noData")}</p>}
@@ -82,6 +104,10 @@ export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
           {f.azure && <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("azureNameMaster")}</div>}
           <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           <label>{t("reportEmails")}</label><input value={f.emails} onChange={(e) => setF({ ...f, emails: e.target.value })} />
+          <label>{t("worksWith")}</label>
+          {f.id
+            ? <SearchSelect options={carros.map((s) => ({ id: s.id, name: s.name }))} selected={list.data?.find((x) => x.id === f.id)?.stationIds ?? []} placeholder={t("v6SearchStations")} onToggle={(sid, on) => toggleLink(f.id!, sid, on)} />
+            : <div className="muted" style={{ fontSize: 13 }}>{t("v6SaveFirstInsurer")}</div>}
           <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}><input type="checkbox" style={{ width: 22, height: 22, minHeight: 0 }} checked={f.send} onChange={(e) => setF({ ...f, send: e.target.checked })} />{t("getsReports")}</label>
           {f.send && <><label>{t("whichReports")}</label>
             <select value={f.which} onChange={(e) => setF({ ...f, which: e.target.value })}>{["kva", "reparation", "both"].map((w) => <option key={w} value={w}>{t(("rep." + w) as never)}</option>)}</select></>}
