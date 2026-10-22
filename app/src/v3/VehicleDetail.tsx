@@ -237,7 +237,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {cur === "techniker" && <Techniker v={v} />}
           {cur === "planung" && <Planung v={v} />}
           {cur === "bilder" && embed(<Bilder v={v} />)}
-          {cur === "kva" && embed(<Kva v={v} />)}
+          {cur === "kva" && embed(<Kva v={v} technicians={false} />)}
           {cur === "kommunikation" && <Comments v={v} />}
           {cur === "gtmotive" && <GtMotive />}
           {cur === "verlauf" && <Verlauf id={id} />}

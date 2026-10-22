@@ -61,6 +61,7 @@ export const esV: Record<string, string> = {
   v5BlkTodos: "tareas abiertas", v5BlkTech: "ningún técnico asignado", v5BlkPhoto: "falta foto:",
   v5BlkCheck_pdr: "confirmar los trabajos PDR", v5BlkCheck_teile: "confirmar piezas / desmontaje y montaje", v5BlkCheck_chef: "recepción final por el Jefe de estación",
   v5BodyshopWhere: "Taller (¿dónde está el vehículo?)", v5BodyshopPick: "Elegir taller …", v5BodyshopNone: "No hay ningún taller en el tenant",
+  v5TechLater: "El técnico y el headliner se eligen cuando el vehículo pasa a reparación.", v5TechPick: "Elegir técnico …", v5HeadNone: "Sin headliner",
   v5Origin: "Procedencia", v5BcLink: "Vínculo BC–aseguradora (Colibri)", v5Insurer: "Aseguradora", v5Customer: "Pertenece a (cliente / taller)", v5Standing: "Se encuentra en (nave, aparcamiento, taller)", v5ColibriSite: "Sede Colibri", v5NotFromScan: "no procede de un escaneo", v5Claim: "N.º de siniestro",
   v5TabOverview: "Resumen", v5TabPhotos: "Fotos", v5TabClosing: "Cierre", v5VehicleData: "Datos del vehículo",
   v5Todos: "Tareas", v5NoTodos: "No hay tareas.", v5Part: "Recambio", v5DoneBy: "completada por", v5Done: "Hecha", v5ToDo: "Abierta", v5TodoPh: "Nueva tarea …",

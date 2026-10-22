@@ -82,7 +82,8 @@ function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () =>
   const [pick, setPick] = useState<string | null>(null);
   const [tech, setTech] = useState(""), [head, setHead] = useState("");
   const v = cands.find((x) => x.id === (pick ?? cands[0]?.id));
-  const tc = techs.find((x) => x.id === tech) ?? techs[0], hd = heads.find((x) => x.id === head) ?? heads[0];
+  // chosen here, on purpose: nobody is pre-selected (the technician is picked when the car goes into repair, not during the assessment)
+  const tc = techs.find((x) => x.id === tech), hd = heads.find((x) => x.id === head);
   const calc = v ? f.calcOf(v) : null;
   const sh = v && calc && split ? computeShares({ ...(v as object), techName: tc?.name ?? (v as Record<string, unknown>).techName, techPct: tc?.defaultPctPdr ?? (v as Record<string, unknown>).techPct, demTechName: hd?.name ?? "", demTechPct: hd?.defaultPctDemontage ?? 100 } as never, calc) : null;
   const apply = async () => {
@@ -115,10 +116,10 @@ function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () =>
       {split && v && (
         <>
           <Field label={t("v5TechPdr")}>
-            <select className="sel" value={tc?.id ?? ""} onChange={(e) => setTech(e.target.value)}>{!techs.length && <option value="">—</option>}{techs.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctPdr} %</option>)}</select>
+            <select className="sel" value={tc?.id ?? ""} onChange={(e) => setTech(e.target.value)}><option value="">{t("v5TechPick")}</option>{techs.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctPdr} %</option>)}</select>
           </Field>
           <Field label={t("v5Headliner")}>
-            <select className="sel" value={hd?.id ?? ""} onChange={(e) => setHead(e.target.value)}>{!heads.length && <option value="">—</option>}{heads.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctDemontage} % {t("v5DemShort")}</option>)}</select>
+            <select className="sel" value={hd?.id ?? ""} onChange={(e) => setHead(e.target.value)}><option value="">{t("v5HeadNone")}</option>{heads.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.defaultPctDemontage} % {t("v5DemShort")}</option>)}</select>
           </Field>
           {sh && (
             <div style={{ border: "1px solid #EEF1F5", borderRadius: 10, overflow: "hidden", fontSize: 14 }}>
@@ -131,7 +132,7 @@ function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () =>
           )}
         </>
       )}
-      <button className="pbtn" disabled={!v} onClick={() => void apply()}>{t("v5AddConfirm")}</button>
+      <button className="pbtn" disabled={!v || (split && techs.length > 0 && !tc)} onClick={() => void apply()}>{t("v5AddConfirm")}</button>
     </Dialog>
   );
 }

@@ -20,7 +20,8 @@ function Thumb({ p, land }: { p: LocalPhoto; land: "DE" | "ES" }) {
 }
 
 /** Internal split (technician / commission). Never part of the customer document. */
-export function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
+/** `technicians={false}` (assessment): no technician / headliner here, they are chosen when the car goes into repair; only the body shop commission stays. */
+export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: CalcResult; technicians?: boolean }) {
   const f = useField();
   const a = computeShares(v as never, c);
   const x = v as Record<string, any>;
@@ -48,6 +49,8 @@ export function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
   return (
     <div style={{ marginTop: 14, background: "#fff", border: "1px dashed var(--navy)", borderRadius: 14, padding: "12px 14px" }}>
       <div className="row"><b>{t("splitTitle")}</b><span className="muted" style={{ fontSize: 12 }}>{t("netWord")} {eur(a.basis)}</span></div>
+      {!technicians && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{t("v5TechLater")}</div>}
+      {technicians && <>
       {sec(`🧑‍🔧 ${t("techPdr")} · ${t("basis")} ${eur(a.pdrBasis)}`)}
       {names(a.techName, (s, pct) => void setShares(f.mut, v.id, { techName: s, ...(pct != null ? { techPct: pct } : {}) }), "tnIn", "pdr")}
       {pcts(a.techPct, [40, 45, 50, 55, 60], (n) => void setShares(f.mut, v.id, { techPct: n }))}
@@ -61,6 +64,7 @@ export function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
           {line(`${a.demTechName || t("technician")} · ${num(a.demTechPct, 1)} % ${t("ofDem")}`, eur(a.demTechEur))}
         </>
       ) : <div className="muted" style={{ fontSize: 11, marginTop: 10 }}>{t("demHintShares")}</div>}
+      </>}
       {sec(`🏭 ${t("commissionTitle")}`)}
       <div className="muted" style={{ fontSize: 11 }}>{f.can("commission.modifier") ? t("commissionEditHint") : t("commissionHint")}</div>
       {f.can("commission.modifier") && (
@@ -71,13 +75,13 @@ export function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
         </div>
       )}
       {line(`${f.stationName(v.clientStationId) || t("customer")} · ${num(a.werkPct, 1)} %${a.werkMode === "staffel" ? " (Staffel)" : ""}`, eur(a.werkEur))}
-      <div style={{ height: 1, background: "var(--line)", margin: "10px 0 4px" }} />
-      <div className="row"><b>{t("remainsPdr")}</b><b style={{ fontSize: 17, color: a.rest >= 0 ? "var(--greenDk)" : "var(--brick)" }}>{eur(a.rest)} · {num(a.basis ? (a.rest / a.basis) * 100 : 0, 1)} %</b></div>
+      {technicians && <><div style={{ height: 1, background: "var(--line)", margin: "10px 0 4px" }} />
+      <div className="row"><b>{t("remainsPdr")}</b><b style={{ fontSize: 17, color: a.rest >= 0 ? "var(--greenDk)" : "var(--brick)" }}>{eur(a.rest)} · {num(a.basis ? (a.rest / a.basis) * 100 : 0, 1)} %</b></div></>}
     </div>
   );
 }
 
-export function Kva({ v, beforeActions }: { v: LocalVehicle; beforeActions?: React.ReactNode }) {
+export function Kva({ v, beforeActions, technicians = true }: { v: LocalVehicle; beforeActions?: React.ReactNode; technicians?: boolean }) {
   const f = useField();
   const photos = usePhotos(v.id);
   const cv = v as unknown as CalcVehicle;
@@ -186,7 +190,7 @@ export function Kva({ v, beforeActions }: { v: LocalVehicle; beforeActions?: Rea
           <div className="row" style={{ fontSize: 20, fontWeight: 800, color: "var(--greenDk)" }}><span>{X.brutto}</span><span>{eur(c.brutto)}</span></div>
         </div>
       )}
-      {split && <SharesBox v={v} c={c} />}
+      {split && <SharesBox v={v} c={c} technicians={technicians} />}
       {String(x.notiz ?? "").trim() && <div style={{ marginTop: 14, background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}><div style={{ fontWeight: 700, marginBottom: 4 }}>{X.notiz}</div><div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{x.notiz}</div></div>}
       {photos.some((p) => p.inPdf) && (
         <div style={{ marginTop: 16 }}><h3 style={{ margin: "0 0 8px" }}>{X.fotos}</h3>

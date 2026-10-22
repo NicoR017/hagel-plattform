@@ -61,7 +61,7 @@ export function Expertise({ id, step, ctx }: { id: string; step: Step; ctx?: Ctx
             </>
           )}
           {step === "bilder" && <Bilder v={v} />}
-          {step === "kva" && <Kva v={v} beforeActions={f.can("termine.buchen") ? <section className="panel" style={{ padding: 14, marginTop: 16 }}><h3 style={{ margin: "0 0 8px" }}>📅 {t("v4BookTitle")}</h3><BookingForm v={v} /></section> : undefined} />}
+          {step === "kva" && <Kva v={v} technicians={false} beforeActions={f.can("termine.buchen") ? <section className="panel" style={{ padding: 14, marginTop: 16 }}><h3 style={{ margin: "0 0 8px" }}>📅 {t("v4BookTitle")}</h3><BookingForm v={v} /></section> : undefined} />}
         </div>
       </div>
 
