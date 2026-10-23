@@ -544,4 +544,19 @@ describe("load a scan into the station the user is in", () => {
     const notAllowed = (await call(c, "POST", "/azure/scans/import", { token: tech, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0];
     expect(notAllowed.status).toBe("not_allowed");
   });
+
+  it("v4: a scan of an unknown customer on an unmapped location is listed for an org-wide importer and can be loaded into a chosen station, without a customer (the mapping may or may not know a station)", async () => {
+    const all = (await call(c, "GET", "/azure/scans?all=1", { token: importer, org: c.orgES })).body as { rowKey: string; stationId: string | null; importable: boolean; warnings: string[] }[];
+    const unk = all.find((x) => x.rowKey === "UNKNOWN SHOP");
+    expect(unk).toMatchObject({ importable: true }); // station mapped or not (an earlier test aliased its location): either way it can be loaded
+    expect(unk!.warnings).toContain("no_link");
+    const r = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [{ partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" }], station_id: other } })).body.results[0];
+    expect(r.status).toBe("imported");
+    const v = (await pull(c, importer, c.orgES)).vehicles.find((x: any) => x.id === r.vehicleId);
+    expect(v).toMatchObject({ stationId: other, clientStationId: null, statut: "besichtigung" });
+    expect(v.campaignId ?? null).toBeNull();
+    // a technician (no importer right) still cannot take it
+    const nope = (await call(c, "POST", "/azure/scans/import", { token: tech, org: c.orgES, body: { keys: [{ partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" }], station_id: other } })).body.results[0];
+    expect(["already", "not_allowed"]).toContain(nope.status);
+  });
 });

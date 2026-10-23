@@ -111,7 +111,7 @@ export function Stations({ userName }: { userName: string }) {
         <div className="kpi"><div className="l">{t("v3KpiPresent")}</div><div className="n">{present}</div></div>
         <div className="kpi"><div className="l">{t("v3KpiCalc")}</div><div className="n">{kalk}</div></div>
         <div className="kpi"><div className="l">{t("v3KpiRep")}</div><div className="n">{rep}</div></div>
-        {scans.known && <div className="kpi"><div className="l">{t("v3KpiScans")}</div><div className="n">{scans.total}</div></div>}
+        {scans.known && <button className="kpi" onClick={() => go({ page: "scans" })} aria-label={`${t("v3KpiScans")}: ${scans.total}`}><span className="l">{t("v3KpiScans")} ›</span><span className="n">{scans.total}</span></button>}
       </section>
 
       <section aria-label={t("v3Stations")} style={{ display: "flex", flexDirection: "column", gap: 18 }}>

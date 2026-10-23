@@ -171,7 +171,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
       {dlg === "move" && <MoveDialog ids={target} from={stationId} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}
       {dlg === "shares" && <SharesDialog ids={target} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}
       {dlg === "assign" && <AssignDialog ids={target} vehicles={all} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}
-      {dlg === "scans" && <ScansDialog onClose={() => setDlg(null)} />}
+      {dlg === "scans" && <ScansDialog stationId={stationId} onClose={() => setDlg(null)} />}
     </main>
   );
 }

@@ -15,7 +15,8 @@ interface Result { partitionKey: string; rowKey: string; status: string; vehicle
 const keyOf = (s: { partitionKey: string; rowKey: string }) => `${s.partitionKey}|${s.rowKey}`;
 
 /** "Scans verfügbar": scans of the user's sites that were not imported yet (online only). Imported vehicles then arrive through the normal sync. */
-export function ScansDialog({ onClose }: { onClose: () => void }) {
+/** `stationId`: opened inside a station: also the scans that belong to no station (unknown body shop, location not mapped), they are loaded into THIS station. */
+export function ScansDialog({ onClose, stationId }: { onClose: () => void; stationId?: string }) {
   const f = useField();
   const [scans, setScans] = useState<Scan[] | null>(null);
   const [sortBy, setSortBy] = useState<ScanSort>(loadScanSort());
@@ -26,7 +27,7 @@ export function ScansDialog({ onClose }: { onClose: () => void }) {
 
   const load = async () => {
     try {
-      const l = await api<Scan[]>("GET", "/azure/scans");
+      const l = stationId ? (await api<(Scan & { stationId: string | null })[]>("GET", "/azure/scans?all=1")).filter((s) => s.stationId === stationId || !s.stationId) : await api<Scan[]>("GET", "/azure/scans");
       setScans(l); setErr("");
     } catch (e) { setErr((e as Error).message); setScans([]); }
   };
@@ -37,7 +38,7 @@ export function ScansDialog({ onClose }: { onClose: () => void }) {
     if (!list.length) return;
     setBusy(true);
     try {
-      const r = await api<{ results: Result[] }>("POST", "/azure/scans/import", { keys: list.map((s) => ({ partitionKey: s.partitionKey, rowKey: s.rowKey })) });
+      const r = await api<{ results: Result[] }>("POST", "/azure/scans/import", { keys: list.map((s) => ({ partitionKey: s.partitionKey, rowKey: s.rowKey })), ...(stationId ? { station_id: stationId } : {}) });
       setResults(r.results);
       setSel(new Set());
       void f.engine.syncNow(f.orgId);

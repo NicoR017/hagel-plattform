@@ -14,7 +14,7 @@ export function useNewScans(): { byStation: Map<string, number>; rows: ScanRow[]
   useEffect(() => {
     if (!allowed) { setRows(null); return; }
     let live = true;
-    api<ScanRow[]>("GET", "/azure/scans").then((r) => { if (live) setRows(r); }).catch(() => { if (live) setRows(null); });
+    api<ScanRow[]>("GET", "/azure/scans?all=1").then((r) => { if (live) setRows(r); }).catch(() => { if (live) setRows(null); });
     return () => { live = false; };
   }, [allowed, f.orgId, stamp]);
   const byStation = new Map<string, number>();

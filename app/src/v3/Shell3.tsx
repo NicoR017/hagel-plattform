@@ -6,6 +6,7 @@ import { SettingsDialog } from "../field/Dialogs";
 import { go, hrefOf, parentRoute, type Route } from "../field/route";
 import { useField } from "../field/store";
 import { setUiMode } from "../field/uiMode";
+import { GlobalSearch } from "./GlobalSearch";
 
 export interface Crumb { label: string; to?: Route }
 interface OrgRef { id: string; name: string }
@@ -60,6 +61,7 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
             </span>
           ))}
         </nav>
+        <GlobalSearch route={route} />
         <div className="right" ref={box}>
           <span className={"syncpill " + syncCls} aria-live="polite"><i />{syncText}</span>
           {orgs.length > 1 && (

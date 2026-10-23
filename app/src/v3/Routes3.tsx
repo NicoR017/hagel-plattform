@@ -10,6 +10,8 @@ import { Stations } from "./Stations";
 import { VehicleDetail } from "./VehicleDetail";
 import { RepairDetail } from "./RepairDetail";
 import { VehicleList } from "./VehicleList";
+import { NewScans } from "./NewScans";
+import { SearchResults } from "./SearchResults";
 import { modeTitle } from "./listActions";
 import "./v3.css";
 
@@ -29,7 +31,13 @@ export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg
   ];
   let crumbs: Crumb[] = [home];
   let body: React.ReactNode = <Stations userName={me.user.name || me.user.email} />;
-  if (route.page === "mode") {
+  if (route.page === "scans") {
+    crumbs = [home, { label: t("nsTitle") }];
+    body = <NewScans />;
+  } else if (route.page === "search") {
+    crumbs = [home, { label: t("srTitle") }];
+    body = <SearchResults q={route.q} />;
+  } else if (route.page === "mode") {
     crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…" }];
     body = <ModeChoice stationId={route.stationId} />;
   } else if (route.page === "list" && route.stationId) {

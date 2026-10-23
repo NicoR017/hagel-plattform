@@ -4,7 +4,7 @@ import { fmtDateTime, t } from "../i18n";
 
 export interface Scan {
   partitionKey: string; rowKey: string; scanDateTime: string | null; plate: string; brand: string; model: string; colibriNumber: string; businessCustomer: string;
-  claimNumber: string; dentsTotal: number | null; stationId: string | null; stationName: string; insurerName: string; warnings: string[]; importable: boolean;
+  claimNumber: string; clientName?: string; location?: string; tenant?: string; dentsTotal: number | null; stationId: string | null; stationName: string; insurerName: string; warnings: string[]; importable: boolean;
 }
 
 /** The Colibri scans waiting for import: those mapped to this station, or every one of the organisation (`all`: they are loaded into THIS station). */
@@ -15,7 +15,8 @@ export function useStationScans(stationId: string, enabled: boolean, all: boolea
     if (!enabled) { setScans([]); return; }
     let live = true;
     setScans(null);
-    api<Scan[]>("GET", all ? "/azure/scans?all=1" : "/azure/scans").then((r) => live && setScans(all ? r : r.filter((s) => s.stationId === stationId))).catch((e) => { if (live) { setScans([]); setErr((e as Error).message); } });
+    // always every scan the user may take (a user without the org-wide right only gets his own); without "all": this station's and those that belong to no station (no body shop, location not mapped), which are loaded into THIS station
+    api<Scan[]>("GET", "/azure/scans?all=1").then((r) => live && setScans(all ? r : r.filter((s) => s.stationId === stationId || !s.stationId))).catch((e) => { if (live) { setScans([]); setErr((e as Error).message); } });
     return () => { live = false; };
   }, [enabled, stationId, all]);
   return { scans, err };

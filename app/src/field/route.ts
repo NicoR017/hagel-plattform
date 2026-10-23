@@ -22,6 +22,10 @@ export type Route =
   /** station: choose Kalkulation / Reparatur / Alle Fahrzeuge */
   | { page: "mode"; stationId: string }
   | { page: "dashboard" }
+  /** every Colibri scan of the organisation without an assessment yet (new UI) */
+  | { page: "scans" }
+  /** global vehicle search: results */
+  | { page: "search"; q: string }
   /** step 0 of the assessment assistant: pick a scan (or start without one) */
   | { page: "newexp"; stationId: string; mode: Mode }
   /** start an expertise from a PDR Citas appointment (the day is the appointment's, in the station's time zone) */
@@ -47,6 +51,8 @@ export function parseRoute(hash: string): Route {
   const tabOf = (x: string | undefined): Tab => ((TABS as string[]).includes(x ?? "") ? (x as Tab) : "basis");
   const stepOf = (x: string | undefined): Step => ((STEPS as string[]).includes(x ?? "") ? (x as Step) : "basis");
   if (p[0] === "dashboard") return { page: "dashboard" };
+  if (p[0] === "scans") return { page: "scans" };
+  if (p[0] === "search") return { page: "search", q: new URLSearchParams(query).get("q") ?? "" };
   if (p[0] === "expertise" && p[1]) return { page: "expertise", id: p[1], step: stepOf(p[2]) };
   if (p[0] === "v" && p[1]) return { page: "vehicle", id: p[1], tab: tabOf(p[2]) };
   if (p[0] === "admin") return { page: "admin", tab: p[1] };
@@ -68,6 +74,8 @@ export const hrefOf = (r: Route): string => {
     case "vehicle": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/v/${r.id}/${r.tab}` : `#/v/${r.id}/${r.tab}`;
     case "admin": return `#/admin${r.tab ? "/" + r.tab : ""}`;
     case "dashboard": return "#/dashboard";
+    case "scans": return "#/scans";
+    case "search": return `#/search?q=${encodeURIComponent(r.q)}`;
     case "newexp": return `#/s/${r.stationId}/${r.mode}/neu`;
     case "citas": return `#/s/${r.stationId}/citas/${r.date}/${encodeURIComponent(r.appointmentId)}`;
     case "repair": return `#/s/${r.stationId}/rep/r/${r.id}/${r.tab}`;
@@ -101,6 +109,8 @@ export function parentRoute(r: Route, vehicleStationId?: string | null): Route |
     case "list": return r.stationId ? { page: "mode", stationId: r.stationId } : r.dash ? { page: "list" } : null;
     case "mode": return { page: "list" };
     case "dashboard":
+    case "scans":
+    case "search":
     case "admin": return { page: "list" };
   }
 }
