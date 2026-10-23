@@ -319,3 +319,26 @@
 .v3 .chour .hl,.v3 .chour.empty span{font-size:12px;font-weight:600;color:var(--sub);min-width:44px;padding-top:12px;}
 .v3 .chour.empty span{padding-top:0;opacity:.6;}
 .v3 .chour .rows{flex:1;min-width:0;}
+
+/* ---- v4: field interface (technician / headliner) ---- */
+.v3 .fv-legend{display:flex;flex-wrap:wrap;gap:6px;}
+.v3 .fv-card{padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;}
+.v3 .fv-card:focus-visible{outline:3px solid var(--blue);}
+.v3 .fv-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.v3 .fv-earn{display:flex;flex-direction:column;gap:2px;}
+.v3 .fv-earn small{color:var(--sub);font-size:12px;}
+.v3 .fv-move{display:flex;flex-direction:column;gap:8px;}
+.v3 .fv-move .btn{width:100%;justify-content:center;min-height:48px;}
+.v3 .fv-need{background:#FDF0E1;color:#8A4A06;border:1px solid #F0C98A;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600;}
+.v3 .fv-band{background:var(--navy);color:#fff;border-radius:14px;padding:16px 18px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 20px;align-items:flex-end;}
+.v3 .fv-band .fv-earn small{color:#C9D3E3;}
+.v3 .fv-step{font-size:11px;padding:3px 8px;border-radius:99px;background:#22375A;color:#C9D3E3;}
+.v3 .fv-step.on{background:#fff;color:var(--navy);font-weight:700;}
+.v3 .fv-two{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;}
+@media (min-width:820px){.v3 .fv-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}}
+.v3 .fv-counts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.v3 .fv-prow{all:unset;cursor:pointer;box-sizing:border-box;width:100%;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;}
+.v3 .fv-prow small{display:block;color:var(--sub);font-size:12px;}
+.v3 .fv-prow:focus-visible{outline:3px solid var(--blue);}
+.v3 .fv-todo{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;}
+.v3 .fv-todo input{width:22px;height:22px;accent-color:var(--green);}

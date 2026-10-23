@@ -193,10 +193,14 @@ function Shell() {
 }
 
 function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
-  const route = useRoute();
+  const rawRoute = useRoute();
   const f = useField();
   const cfg = useAppConfig();
-  const ui = useUiMode(cfg?.uiV3Default);
+  const uiMode = useUiMode(cfg?.uiV3Default);
+  // technician / headliner accounts only have the field interface: no administration, no dashboard, no old view
+  const fieldView = !!f.refs?.me.fieldView;
+  const route = fieldView && (rawRoute.page === "admin" || rawRoute.page === "dashboard" || rawRoute.page === "scans" || rawRoute.page === "calendar") ? { page: "list" as const } : rawRoute;
+  const ui = fieldView ? "v3" : uiMode;
   if (route.page === "vehicle" && ui === "legacy") return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={{ page: "list" }} />;
   if (route.page === "dashboard") {
     return ui === "v3"

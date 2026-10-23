@@ -23,6 +23,19 @@ export interface Principal {
   isSuperadmin: boolean;
   status: "active" | "disabled" | "invited";
   grants: Grant[];
+  /** the technician records (technicians.user_id) linked to this account, per organisation */
+  technicians?: { orgId: string; id: string; name: string; kind: "pdr" | "headliner" }[];
+}
+
+/**
+ * The field profile (technician / headliner view): an account linked to an active technician record that does not see the internal split.
+ * Such an account gets the restricted interface and the restricted rules (own cars, own moves, photo before moving, own earnings only).
+ */
+export function fieldProfile(u: Principal, orgId: string): { id: string; name: string; kind: "pdr" | "headliner" } | null {
+  if (u.isSuperadmin || u.status !== "active") return null;
+  const t = u.technicians?.find((x) => x.orgId === orgId);
+  if (!t) return null;
+  return u.grants.some((g) => g.orgId === orgId && g.permissions.includes("repartition_interne.voir")) ? null : t;
 }
 
 export interface VehicleRef {
@@ -132,7 +145,15 @@ export function filterFields<T extends Record<string, unknown>>(u: Principal, v:
   const shares = data.shares && typeof data.shares === "object" ? (data.shares as Record<string, unknown>) : null;
   if (!perms.has("repartition_interne.voir")) {
     delete out.shares;
-    if (shares && perms.has("ma_part.voir")) out.myShare = { techEur: shares.techEur, demTechEur: shares.demTechEur };
+    const fp = fieldProfile(u, v.orgId);
+    if (shares && fp) {
+      // a technician / headliner only ever receives HIS OWN share: the PDR part and / or the removal-refit part, with the car's percentages
+      const me = fp.name.trim().toLowerCase(), same = (x: unknown) => String(x ?? "").trim().toLowerCase() === me;
+      const pdr = same(shares.techName) || (!String(shares.techName ?? "").trim() && v.assigneeIds.includes(u.id)) ? { eur: Number(shares.techEur) || 0, pct: Number(shares.techPct) || 0 } : null;
+      const dem = same(shares.demTechName) && (Number(shares.demEur) || 0) > 0 ? { eur: Number(shares.demTechEur) || 0, pct: Number(shares.demTechPct) || 0 } : null;
+      out.myEarn = { pdr, dem, eur: (pdr?.eur ?? 0) + (dem?.eur ?? 0) };
+      out.myShare = { techEur: pdr?.eur ?? 0, demTechEur: dem?.eur ?? 0 };
+    } else if (shares && perms.has("ma_part.voir")) out.myShare = { techEur: shares.techEur, demTechEur: shares.demTechEur };
     if (shares && perms.has("ma_commission.voir")) out.myCommission = { werkEur: shares.werkEur };
   }
   return out as Partial<T>;

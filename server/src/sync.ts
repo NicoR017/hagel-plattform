@@ -12,7 +12,7 @@ import { applyRepairOp, isRepairOp, partsToTodos, repairDataFor } from "./repair
 import { recipientsOfVehicle } from "./reports";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
-import { can, canOrg, effectivePermissions, filterFields, type Principal, type VehicleRef } from "./permissions";
+import { can, canOrg, effectivePermissions, fieldProfile, filterFields, type Principal, type VehicleRef } from "./permissions";
 import {
   colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
@@ -166,13 +166,21 @@ export async function attachColibriSource(db: Pick<Db, "select" | "execute">, li
   for (const v of list) v.colibriSource = by.get(v.id) ?? null;
 }
 
+/** Field profile (technician / headliner): which kind of work he is assigned for on each car, so the app can show him only his own work. */
+export async function attachMyAssign(db: Pick<Db, "select">, u: Principal, list: ClientVehicle[]): Promise<void> {
+  const mine = list.filter((v) => fieldProfile(u, v.orgId));
+  if (!mine.length) return;
+  const rows = await db.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.userId, u.id), inArray(vehicleAssignments.vehicleId, mine.map((v) => v.id))));
+  for (const v of mine) v.myAssign = rows.filter((r) => r.vehicleId === v.id).map((r) => (r.type === "demontage" ? "demontage" : "pdr"));
+}
+
 export async function clientVehicleById(db: Db, u: Principal, id: string): Promise<ClientVehicle | null> {
   const [r] = await db.select().from(vehicles).where(eq(vehicles.id, id));
   if (!r || r.deletedAt) return null;
   const as = await assigneesOf(db, [id]);
   const names = await userNames(db, [r.updatedBy]);
   const cv = toClient(u, r, as.get(id) ?? [], names, await loadOrgSettings(db, r.orgId), await loadMethodMap(db, r.orgId));
-  if (cv) await attachColibriSource(db, [cv]);
+  if (cv) { await attachColibriSource(db, [cv]); await attachMyAssign(db, u, [cv]); }
   return cv;
 }
 
@@ -277,6 +285,7 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
     case "vehicle.status": {
       const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
       need(u, "vehicules.changer_statut", ref);
+      if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // a technician / headliner never changes a status ("Fertig" would skip the Finish checks)
       if (op.statut === "attente" && !(op.motif ?? "").trim()) throw new Reject("motif_required");
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.status ?? 0) > at) return commit(tx, u, row, {}, [], ["status"], op.type, {}, true);
@@ -548,6 +557,7 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   // repair data (to-dos, checks, comments, planning, booking) travels inside the vehicle, filtered by what this user may see
   const sent = new Set(outVehicles.map((x) => x.id));
   await attachColibriSource(db, outVehicles);
+  await attachMyAssign(db, u, outVehicles);
   const repair = await repairDataFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
   for (const cv of outVehicles) { const x = repair.get(cv.id); if (x) cv.repair = x; }
   const photoNames = await userNames(db, ps.map((p) => p.takenBy));
@@ -621,6 +631,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, orgId));
     people = rows.map((r) => ({ id: r.id, name: r.name || r.email, roles: [...(access.get(r.id)?.roles ?? [])], stationIds: [...(access.get(r.id)?.stationIds ?? [])] }));
   }
+  const fp = fieldProfile(u, orgId);
   const priceSafe = visibleSettings(u, orgId, settings);
   // master data for the pickers
   const internal = u.isSuperadmin || u.grants.some((g) => g.orgId === orgId && ["station", "assigne", "campagne"].includes(g.scope));
@@ -644,7 +655,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
       .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
     : [];
   return {
-    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

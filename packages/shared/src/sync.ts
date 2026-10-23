@@ -209,6 +209,10 @@ export interface ClientVehicle extends Record<string, unknown> {
   methodVersion?: number | null;
   /** where the car came from in Colibri (imported from an Azure scan): the BusinessCustomer–insurance link, the location and the tenant; null = not imported from a scan */
   colibriSource?: { businessCustomer: string; location: string; tenant: string } | null;
+  /** field profile only (technician / headliner): how the account is on this car (assigned for PDR work and / or for removal-refit) */
+  myAssign?: ("pdr" | "demontage")[];
+  /** field profile only: HIS OWN earnings on this car (PDR part and / or removal-refit part), never the amounts of others */
+  myEarn?: { pdr: { eur: number; pct: number } | null; dem: { eur: number; pct: number } | null; eur: number };
   /** body shop that repairs the car (a carrosserie site of the tenant), set in the "At Bodyshop" column */
   bodyshopId?: string | null;
   /** repair data, only for users who may see it (see ClientRepair) */
@@ -293,7 +297,11 @@ export interface PullResponse {
     /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
     occupancy: Record<string, number>;
     settings: OrgSettings;
-    me: { id: string; name: string; language: string; permissions: string[] };
+    me: {
+      id: string; name: string; language: string; permissions: string[];
+      /** set for a technician / headliner account that does not see the internal split: the app then shows the field interface (v4) */
+      fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[] } | null;
+    };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
     people: { id: string; name: string; roles?: string[]; stationIds?: string[] }[];
     insurers: ClientInsurer[];

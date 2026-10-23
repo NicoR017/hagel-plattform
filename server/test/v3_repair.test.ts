@@ -178,11 +178,11 @@ describe("repair board: stages, to-dos, checks, Finish rules (server side)", () 
     expect((await refresh()).repair.todos).toHaveLength(2);
   });
 
-  it("the technician moves the car along; 'Finish' is refused with the reasons while anything is open", async () => {
+  it("the station manager moves the car along (a linked technician only makes his own moves, see v4_field); 'Finish' is refused with the reasons while anything is open", async () => {
     await one(assessor, op("vehicle.assign", { vehicleId: id, kind: "pdr", userIds: [techUserId] }));
-    expect((await stage(id, tech, "pdr")).status).toBe("ok");
+    expect((await stage(id, chefA, "pdr")).status).toBe("ok");
     expect((await vrow(id)).repairStage).toBe("pdr");
-    const r = await stage(id, tech, "finish");
+    const r = await stage(id, chefA, "finish");
     expect(r.status).toBe("rejected");
     expect(r.code).toBe("finish_blocked");
     for (const reason of ["todos_open", "check:pdr", "check:teile", "check:chef", "photos:demontage", "photos:pdr", "photos:remontage"]) expect(r.message).toContain(reason);
@@ -224,12 +224,12 @@ describe("repair board: stages, to-dos, checks, Finish rules (server side)", () 
     expect(ph.map((p) => p.repairStage).sort()).toEqual(["demontage", "pdr", "remontage"]);
     expect((await pull(c, chefA, c.orgES)).photos.find((p: any) => p.vehicleId === id).role).toBe("Techniker");
     expect((await refresh()).repair.finishBlockers).toEqual([]);
-    expect((await stage(id, tech, "finish")).status).toBe("ok");
+    expect((await stage(id, chefA, "finish")).status).toBe("ok");
     expect(await vrow(id)).toMatchObject({ statut: "fertig", repairStage: "finish" });
     const ev = await c.h.db.select().from(repairEvents).where(eq(repairEvents.vehicleId, id));
     expect(ev.filter((e) => e.type === "finish")).toHaveLength(1);
     // asking again is a no-op (no second finish event: the future automatic report is sent once per Finish)
-    await stage(id, tech, "finish");
+    await stage(id, chefA, "finish");
     expect((await c.h.db.select().from(repairEvents).where(eq(repairEvents.vehicleId, id))).filter((e) => e.type === "finish")).toHaveLength(1);
     // back from Finish: the car is in repair again
     expect((await stage(id, chefA, "remontage")).status).toBe("ok");

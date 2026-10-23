@@ -7,7 +7,7 @@ import { audit } from "./audit";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
 import { bookingMail } from "./mails";
-import { effectivePermissions, type Principal, type VehicleRef } from "./permissions";
+import { effectivePermissions, fieldProfile, type Principal, type VehicleRef } from "./permissions";
 import { loadMethodMap, methodOf } from "./methods";
 import { autoRepairReport } from "./repair_report";
 import type { Storage } from "./storage";
@@ -21,6 +21,31 @@ import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, next
 /** stages that need at least one photo before the vehicle may reach "Finish" */
 const PHOTO_STAGES = ["demontage", "pdr", "remontage"] as const;
 const BOOKABLE = ["arrive", "besichtigung", "attente"] as const;
+
+// ------------------------------------------------------------------ technician / headliner rules
+
+/** the ONLY moves of the field profile: a technician takes a car from Disassembly into PDR; a headliner also from Reassembly to At body shop (never Finish) */
+export const FIELD_MOVES: Record<"pdr" | "headliner", readonly (readonly [string, string])[]> = {
+  pdr: [["demontage", "pdr"]],
+  headliner: [["demontage", "pdr"], ["remontage", "bodyshop"]],
+};
+
+/** is this car his: assigned to his account for his kind of work (PDR / removal-refit), or his name in the split */
+async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }): Promise<boolean> {
+  const [a] = await tx.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.vehicleId, row.id), eq(vehicleAssignments.userId, u.id), eq(vehicleAssignments.type, fp.kind === "headliner" ? "demontage" : "pdr")));
+  if (a) return true;
+  const sh = (row.shares ?? {}) as Record<string, unknown>;
+  const me = fp.name.trim().toLowerCase();
+  return String(fp.kind === "headliner" ? sh.demTechName ?? "" : sh.techName ?? "").trim().toLowerCase() === me;
+}
+
+/** The technician / headliner moves HIS car, from one of his steps to the next one, after taking a photo of that step himself. */
+async function checkFieldMove(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from: string, to: string) {
+  if (!FIELD_MOVES[fp.kind].some(([a, b]) => a === from && b === to)) throw new Reject("move_not_allowed");
+  if (!(await isHisCar(tx, row, u, fp))) throw new Reject("not_your_vehicle");
+  const mine = await tx.select({ id: photos.id }).from(photos).where(and(eq(photos.vehicleId, row.id), isNull(photos.deletedAt), eq(photos.repairStage, from), eq(photos.takenBy, u.id))).limit(1);
+  if (!mine.length) throw new Reject("photo_required");
+}
 
 // ------------------------------------------------------------------ dates (station time zone)
 
@@ -144,12 +169,14 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
     case "vehicle.repairStage": {
       const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
       need(u, "reparatur.board", ref);
+      const fp = fieldProfile(u, row.orgId);
       const inFlow = row.statut === "reparatur" || row.statut === "fertig" || (row.statut === "attente" && row.repairStage != null);
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.repairStage ?? 0) > at) return { status: "conflict", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
       stamps.repairStage = at;
       const now = new Date();
       if (!inFlow) {
+        if (fp) throw new Reject("move_not_allowed"); // the field profile never puts a car into repair
         // "+ Fahrzeug in Reparatur": only assessed vehicles, straight into "Bereit"
         if (op.stage !== "bereit") throw new Reject("vehicle_not_in_repair");
         need(u, "vehicules.changer_statut", ref);
@@ -164,6 +191,7 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       }
       const from = row.repairStage ?? "bereit";
       if (op.stage === from && !(op.stage !== "finish" && row.statut === "fertig")) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
+      if (fp) await checkFieldMove(tx, row, u, fp, from, op.stage);
       const set: Partial<typeof vehicles.$inferInsert> = { repairStage: op.stage, groupAt: stamps };
       if (op.stage === "finish") {
         const blockers = await finishBlockers(tx, row.id);
@@ -189,6 +217,7 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
     case "vehicle.bodyshop": {
       const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
       need(u, "reparatur.board", ref);
+      if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // not a technician's choice
       if (row.repairStage == null) throw new Reject("vehicle_not_in_repair");
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.bodyshopId ?? 0) > at) return { status: "conflict", orgId: row.orgId, seq: row.seq, vehicleId: row.id };

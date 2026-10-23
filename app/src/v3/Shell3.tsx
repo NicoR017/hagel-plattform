@@ -31,6 +31,9 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
   const syncCls = !f.status.online ? "off" : pending || f.status.syncing ? "pend" : "";
   const syncText = !f.status.online ? t("offline") : pending ? `${pending} ${t("pending")}` : f.status.syncing ? t("syncing") : t("synced");
   const name = user.name || user.email;
+  const fieldView = !!f.refs?.me.fieldView;
+  // the administration is for people who manage something; a technician or headliner does not see the button
+  const admin = !fieldView && ["utilisateurs.gerer", "roles.gerer", "stations.gerer", "parametres.gerer", "assurances.gerer", "methoden.gerer", "wochenbericht.voir", "audit.voir"].some((p) => f.can(p));
 
   useEffect(() => {
     if (!menu) return;
@@ -69,10 +72,10 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
               {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           )}
-          <a className="tool" href={hrefOf({ page: "admin" })} style={{ textDecoration: "none" }}>
+          {admin && <a className="tool" href={hrefOf({ page: "admin" })} style={{ textDecoration: "none" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
             <span className="t">{t("v3Admin")}</span>
-          </a>
+          </a>}
           <button className="avatar" onClick={() => setMenu(!menu)} aria-haspopup="menu" aria-expanded={menu} aria-label={`${t("v3Menu")}: ${name}`}>{initials(name)}</button>
           {menu && (
             <div className="menu" role="menu">
@@ -90,7 +93,7 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
               <hr />
               {f.can("dashboard.voir") && <a role="menuitem" href={hrefOf({ page: "dashboard" })} onClick={() => setMenu(false)}>📊 {t("v3Dashboard")}</a>}
               <button role="menuitem" onClick={() => { setMenu(false); setDlg("settings"); }}>⚙ {t("v3Settings")}</button>
-              <button role="menuitem" onClick={() => { setMenu(false); setUiMode("legacy"); }}>↩ {t("v3OldView")}</button>
+              {!fieldView && <button role="menuitem" onClick={() => { setMenu(false); setUiMode("legacy"); }}>↩ {t("v3OldView")}</button>}
               <hr />
               <button role="menuitem" onClick={async () => { try { await api("POST", "/me/logout"); } catch { /* already gone */ } setAuth(null); location.replace("/"); }}>⏻ {t("v3Logout")}</button>
             </div>

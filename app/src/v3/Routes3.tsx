@@ -12,6 +12,7 @@ import { RepairDetail } from "./RepairDetail";
 import { VehicleList } from "./VehicleList";
 import { NewScans } from "./NewScans";
 import { CitasCalendar } from "./CitasCalendar";
+import { fieldBody } from "./FieldView";
 import { SearchResults } from "./SearchResults";
 import { modeTitle } from "./listActions";
 import "./v3.css";
@@ -30,6 +31,22 @@ export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg
     home, { label: stationOf(stationId)?.name ?? "…", to: { page: "mode", stationId } },
     { label: modeTitle(mode), to: { page: "list", stationId, mode } }, ...(last ? [last] : []),
   ];
+  const fv = f.refs?.me.fieldView;
+  if (fv) {
+    // technician / headliner: stations → his cars → one car (see FieldView)
+    const who = { kind: fv.kind, meId: f.refs!.me.id, stationIds: fv.stationIds };
+    const mine: Crumb = { label: t("fvTitle"), to: { page: "list" } };
+    let fcrumbs: Crumb[] = [mine], fbody: React.ReactNode;
+    if (route.page === "search") { fcrumbs = [mine, { label: t("srTitle") }]; fbody = <SearchResults q={route.q} />; }
+    else {
+      const r = fieldBody(route, who, vehicle?.stationId as string | null | undefined);
+      fbody = r.body;
+      const sid = (route.page === "repair" || route.page === "vehicle" || route.page === "expertise" ? (vehicle?.stationId as string | undefined) : "stationId" in route ? route.stationId : undefined);
+      if (r.crumb === "station" && sid) fcrumbs = [mine, { label: stationOf(sid)?.name ?? "…" }];
+      if (r.crumb === "car") fcrumbs = [mine, ...(sid ? [{ label: stationOf(sid)?.name ?? "…", to: { page: "mode" as const, stationId: sid } }] : []), { label: plate }];
+    }
+    return <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={fcrumbs} vehicleStationId={vehicle?.stationId as string | null | undefined}>{fbody}</Shell3>;
+  }
   let crumbs: Crumb[] = [home];
   let body: React.ReactNode = <Stations userName={me.user.name || me.user.email} />;
   if (route.page === "scans") {
