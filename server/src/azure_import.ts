@@ -8,7 +8,7 @@ import { methodForInsurer } from "./methods";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, type Principal } from "./permissions";
-import { campaignStations, campaigns, colibriScans, companies, photos, stations, vehicleStatusHistory, vehicles } from "./schema";
+import { colibriScans, companies, photos, stations, vehicleStatusHistory, vehicles } from "./schema";
 import type { Storage } from "./storage";
 import { colibriKey, loadOrgSettings, nextSeq, photoKey } from "./sync";
 
@@ -72,7 +72,7 @@ const todayIso = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Imports scans as vehicles: PDF -> /packages/colibri (the v20 algorithm) -> vehicle (status "besichtigung", site, customer, insurer,
- * claim number, campaign if one is active for the site), the PDF attached, the overview photos copied (1280 px JPEG q0.6).
+ * claim number), the PDF attached, the overview photos copied (1280 px JPEG q0.6).
  * A scan is imported once: the claim is atomic and vehicles.colibri_scan_key is unique.
  */
 export async function importScans(d: ImportDeps, u: Principal, keys: { partitionKey: string; rowKey: string }[], callerOrgId: string, stationOverride: string | null = null): Promise<ImportResult[]> {
@@ -139,10 +139,6 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
     const [co] = await d.db.select().from(companies).where(and(eq(companies.orgId, m.orgId), eq(companies.active, true)));
     const withLogo = (await d.db.select().from(companies).where(and(eq(companies.orgId, m.orgId), eq(companies.active, true)))).find((x) => x.logoKey) ?? co;
     if (withLogo) header.companyId = withLogo.id;
-    // a campaign that is running for this site
-    const camps = await d.db.select({ c: campaigns }).from(campaigns).innerJoin(campaignStations, eq(campaignStations.campaignId, campaigns.id)).where(and(eq(campaigns.orgId, m.orgId), eq(campaignStations.stationId, m.stationId)));
-    const day = todayIso(now);
-    const campaign = camps.map((x) => x.c).find((c) => (!c.start || c.start <= day) && (!c.end || c.end >= day)) ?? null;
     const check = scanCheck(applied.colibri as never, scan.dentsTotal);
     const colibriMeta = { ...applied.colibri, azureTotal: scan.dentsTotal };
     const vehicleId = crypto.randomUUID();
@@ -187,7 +183,7 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
       // an imported vehicle is frozen on a calculation method like every other: its insurer's, else the system method of its country
       const method = await methodForInsurer(tx, m.orgId!, m.insurerId, (header as { land?: string }).land === "ES" ? "ES" : "DE");
       await tx.insert(vehicles).values({
-        id: vehicleId, orgId: m.orgId!, stationId: m.stationId, clientStationId: m.clientStationId, campaignId: campaign?.id ?? null, insurerId: m.insurerId,
+        id: vehicleId, orgId: m.orgId!, stationId: m.stationId, clientStationId: m.clientStationId, campaignId: null, insurerId: m.insurerId,
         statut: "besichtigung", statutDepuis: now, header: header as never, panels: applied.panels as never,
         panelsAt: Object.fromEntries(Object.keys(applied.panels).map((p) => [p, ts])), shares: shares as never, groupAt: stamps, colibri: colibriMeta as never,
         colibriFile: colibriFile as never, colibriScanKey: `${scan.partitionKey}|${scan.rowKey}`, seq, createdBy: u.id, updatedBy: u.id,

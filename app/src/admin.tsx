@@ -139,7 +139,7 @@ const GROUPS_DEF: { title: Key; keys: string[] }[] = [
   { title: "v6PermGroupMoney", keys: ["prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_commission.voir", "commission.modifier", "methoden.gerer", "wochenbericht.voir"] },
   { title: "v6PermGroupDocs", keys: ["kva.envoyer", "rapport_reparation.envoyer", "photos.ajouter", "photos.supprimer", "export.excel"] },
   { title: "v6PermGroupDash", keys: ["colibri.importer", "dashboard.voir"] },
-  { title: "v6PermGroupAdmin", keys: ["assurances.gerer", "campagnes.gerer", "stations.gerer", "parametres.gerer", "utilisateurs.gerer", "roles.gerer", "audit.voir"] },
+  { title: "v6PermGroupAdmin", keys: ["assurances.gerer", "stations.gerer", "parametres.gerer", "utilisateurs.gerer", "roles.gerer", "audit.voir"] },
 ];
 const PERM_GROUPS = (() => {
   const known = new Set(GROUPS_DEF.flatMap((g) => g.keys));
@@ -193,7 +193,7 @@ export function RolesPage() {
           <label>{t("name")}</label><input value={isDefaultName(edit.key, edit.name) ? roleLabel(edit.key, edit.name) : edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value, key: edit.key })} />
           <label>{t("description")}</label><input value={isDefaultName(edit.key, edit.name) ? roleDesc(edit.key, edit.name, edit.description ?? "") : edit.description ?? ""} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
           <label>{t("scope")}</label>
-          <select value={edit.scope} onChange={(e) => setEdit({ ...edit, scope: e.target.value })}>{SCOPES.map((s) => <option key={s} value={s}>{scopeLabel(s)}</option>)}</select>
+          <select value={edit.scope} onChange={(e) => setEdit({ ...edit, scope: e.target.value })}>{SCOPES.filter((s) => s !== "campagne" || edit.scope === "campagne").map((s) => <option key={s} value={s}>{scopeLabel(s)}</option>)}</select>
           <label>{t("permissions")}</label>
           {PERM_GROUPS.map((g) => (
             <div key={g.title} style={{ marginBottom: 8 }}>

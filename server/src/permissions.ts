@@ -44,7 +44,8 @@ function scopeMatches(g: Grant, u: Principal, v: VehicleRef): boolean {
   switch (g.scope) {
     case "assigne": return v.assigneeIds.includes(u.id);
     case "station": return true; // site match is checked by the caller
-    case "campagne": return !!g.scopeCampaignId && v.campaignId === g.scopeCampaignId;
+    // campaigns are no longer used (v4): a car that is assigned to the user counts like for "assigne"; the old campaign link keeps working for existing accounts
+    case "campagne": return v.assigneeIds.includes(u.id) || (!!g.scopeCampaignId && v.campaignId === g.scopeCampaignId);
     case "client": return !!g.scopeClientStationId && v.clientStationId === g.scopeClientStationId;
     case "assurance": return !!g.scopeInsurerId && v.insurerId === g.scopeInsurerId;
   }

@@ -4,7 +4,7 @@ import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } f
 import { Admin3 } from "./v3/Admin3";
 import { Shell3 } from "./v3/Shell3";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
-import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
+import { AzurePage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
 import { FieldProvider, useField } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
@@ -159,7 +159,7 @@ function AcceptInvite({ token }: { token: string }) {
 }
 
 
-type AdminTab = "users" | "roles" | "sites" | "azure" | "insurers" | "campaigns" | "letterheads" | "technicians" | "audit" | "orgs";
+type AdminTab = "users" | "roles" | "sites" | "azure" | "insurers" | "letterheads" | "technicians" | "audit" | "orgs";
 
 function Shell() {
   const [me, setMe] = useState<Me | null>(null);
@@ -226,7 +226,6 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
     { k: "sites", label: t("sites"), show: true },
     { k: "azure", label: "Azure", show: has("stations.gerer") },
     { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
-    { k: "campaigns", label: t("campaigns"), show: has("campagnes.gerer") },
     { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
     { k: "technicians", label: t("technicians"), show: has("parametres.gerer") },
     { k: "audit", label: t("audit"), show: has("audit.voir") },
@@ -255,7 +254,6 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
         {current === "sites" && <SitesPage canManage={has("stations.gerer")} />}
         {current === "azure" && <AzurePage />}
         {current === "insurers" && <InsurersPage />}
-        {current === "campaigns" && <CampaignsPage />}
         {current === "letterheads" && <CompaniesPage />}
         {current === "technicians" && <TechniciansPage canUsers={has("utilisateurs.gerer")} />}
         {current === "audit" && <AuditPage />}

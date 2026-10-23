@@ -59,6 +59,12 @@ describe("scopes", () => {
     expect(can(u, "vehicules.voir", veh({ campaignId: null }), now)).toBe(false);
     expect(can(u, "vehicules.voir", veh(), new Date("2026-11-02"))).toBe(false);
   });
+  it("campagne (v4): a car assigned to the freelancer is visible without any campaign; expiry still applies", () => {
+    const u = user("f", [grant("freelance", { expiresAt: new Date("2026-11-01") })]);
+    expect(can(u, "vehicules.voir", veh({ campaignId: null, assigneeIds: ["f"] }), new Date("2026-10-19"))).toBe(true);
+    expect(can(u, "vehicules.voir", veh({ campaignId: null, assigneeIds: ["x"] }), new Date("2026-10-19"))).toBe(false);
+    expect(can(u, "vehicules.voir", veh({ campaignId: null, assigneeIds: ["f"] }), new Date("2026-11-02"))).toBe(false);
+  });
   it("campagne without a campaign id never matches", () => {
     expect(can(user("f", [grant("freelance")]), "vehicules.voir", veh({ campaignId: null }))).toBe(false);
   });

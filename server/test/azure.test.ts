@@ -311,7 +311,7 @@ describe("import", () => {
     expect((await c.h.db.select().from(vehicles).where(eq(vehicles.colibriScanKey, `${PK}|${RK}`))).length).toBe(0);
   });
 
-  it("the importer creates the vehicle: PDF read with the v20 algorithm, site/customer/insurer/claim/campaign set, status 'besichtigung'", async () => {
+  it("the importer creates the vehicle: PDF read with the v20 algorithm, site/customer/insurer/claim set, no campaign (v4), status 'besichtigung'", async () => {
     const r = (await doImport(importer)).body.results[0];
     expect(r).toMatchObject({ status: "imported", photos: 5, photoErrors: 1 });
     expect(r.check).toMatchObject({ imported: 618, total: 618, azureTotal: 618, ok: true });
@@ -326,7 +326,7 @@ describe("import", () => {
     expect(v.panels.dachholm_l.kleber).toBe(true);
     expect(v.colibri).toMatchObject({ imported: 618, reportTotal: 618, azureTotal: 618 });
     expect(v.colibriFile).toMatchObject({ name: `${PK}.pdf` });
-    expect(v.campaignId).toBeTruthy();
+    expect(v.campaignId).toBeNull(); // campaigns are no longer written (v4)
     expect(v.companyId).toBeTruthy();
     // like every vehicle it is frozen on a calculation method (the system method of Spain, version 1)
     expect(v.methodId).toBeTruthy();

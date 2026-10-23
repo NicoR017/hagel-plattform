@@ -102,7 +102,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
   const f = useField();
   const [data, setData] = useState<Dash | null>(null);
   const [err, setErr] = useState("");
-  const [site, setSite] = useState(""), [campaign, setCampaign] = useState(""), [client, setClient] = useState(""), [insurer, setInsurer] = useState("");
+  const [site, setSite] = useState(""), [client, setClient] = useState(""), [insurer, setInsurer] = useState("");
   const [period, setPeriod] = useState<Period>("week");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [thr, setThr] = useState<Record<string, number> | null>(null);
@@ -113,13 +113,12 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
   const query = useCallback(() => {
     const q = new URLSearchParams();
     if (site) q.set("sites", site);
-    if (campaign) q.set("campaign", campaign);
     if (client) q.set("client", client);
     if (insurer) q.set("insurer", insurer);
     if (range.from) q.set("from", range.from);
     if (range.to) q.set("to", range.to);
     return q.size ? "?" + q : "";
-  }, [site, campaign, client, insurer, range]);
+  }, [site, client, insurer, range]);
 
   const load = useCallback(async () => {
     try { setData(await api<Dash>("GET", `/dashboard${query()}`)); setErr(""); }
@@ -178,12 +177,11 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
         <details style={{ marginBottom: 12 }}>
-          <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("filtersLabel")}{site || client || insurer || campaign ? " •" : ""}</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("filtersLabel")}{site || client || insurer ? " •" : ""}</summary>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
             {sel(site, setSite, t("allSites"), stations.filter((s) => s.active))}
             {sel(client, setClient, t("allClients"), stations.filter((s) => s.type === "carrosserie"))}
             {sel(insurer, setInsurer, t("allInsurers"), refs?.insurers ?? [])}
-            {sel(campaign, setCampaign, t("allCampaigns"), refs?.campaigns ?? [])}
           </div>
         </details>
         {err && <div className="err">{err}</div>}
