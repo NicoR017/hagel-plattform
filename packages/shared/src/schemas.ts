@@ -30,6 +30,8 @@ export const stationInput = z.object({
   repairs_per_day: z.number().int().min(0).max(100).default(3),
   /** automatic insurer addresses removed for this station */
   excluded_insurer_emails: z.array(emailSchema).max(100).default([]),
+  /** PDR Citas location of this station (null = none) */
+  citas_location_id: z.string().trim().min(1).max(80).nullable().default(null),
 });
 
 export const inviteInput = z.object({

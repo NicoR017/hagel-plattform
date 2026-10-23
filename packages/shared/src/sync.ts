@@ -25,6 +25,9 @@ export const headerFields = z.object({
   modell: z.string().max(120),
   kunde: z.string().max(160), // snapshot of the customer carrosserie name
   kundeEmail: z.string().max(254),
+  /** private customer taken over from a PDR Citas appointment */
+  kundeName: z.string().max(160),
+  kundeTel: z.string().max(40),
   leistungsdatum: z.string().max(10),
   teiler: z.number().int().min(10).max(12),
   stundensatz: z.number().min(0).max(1000),

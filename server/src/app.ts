@@ -22,6 +22,8 @@ import { weeklyRoutes } from "./weekly";
 import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./routes_master";
 import { azureRoutes } from "./routes_azure";
+import { citasRoutes } from "./routes_citas";
+import type { CitasSource } from "./citas";
 import type { AzureSource } from "./azure";
 import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
@@ -30,14 +32,14 @@ import { loadPrincipal } from "./principal";
 import { buildDashboard, buildTechSheets } from "./dashboard";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
-  auditLog, campaignStations, insurers, invitations, repairBookings, stationInsurers, vehicles, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
+  auditLog, campaignStations, citasLinks, insurers, invitations, repairBookings, stationInsurers, vehicles, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
 } from "./schema";
 
 export interface Limits { requestLink: number; verify: number; accept: number; refresh: number; login: number }
 export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60, login: 60 };
 export interface AppDeps {
   db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits>;
-  storage?: Storage; hub?: Hub; az?: AzureSource | null; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
+  storage?: Storage; hub?: Hub; az?: AzureSource | null; citas?: CitasSource | null; citasNow?: () => number; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
 }
 
 /** Tiny in-memory fixed-window limiter (single instance). Replace with Redis if the API is scaled out. */
@@ -59,7 +61,7 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
  */
 const ip = (c: Context) => c.req.header("x-real-ip")?.trim() || c.req.header("x-forwarded-for")?.split(",").pop()?.trim() || "local";
 
-export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, ocr }: AppDeps) {
+export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, citas = null, citasNow, ocr }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
   const app = new Hono<Env>();
 
@@ -223,6 +225,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
+  app.route("/", citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, validationHook, now: citasNow }));
 
   // ---------- admin ----------
   const admin = new Hono<Env>();
@@ -480,7 +483,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
       azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? bcIdsOf(b)[0] ?? null : null, azureBcIds: b.type === "carrosserie" ? bcIdsOf(b) : [],
       azureLinkIds: b.type === "carrosserie" ? b.azure_link_ids : [],
       reportEmails: b.type === "carrosserie" ? b.report_emails : [], commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
-      repairsPerDay: b.repairs_per_day, excludedInsurerEmails: b.excluded_insurer_emails,
+      repairsPerDay: b.repairs_per_day, excludedInsurerEmails: b.excluded_insurer_emails, citasLocationId: b.citas_location_id,
     }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "station", entityId: s.id, after: s });
     return c.json(s, 201);
@@ -498,6 +501,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.capacite !== undefined) set.capacite = b.capacite;
     if (b.azure_tenant !== undefined) set.azureTenant = b.azure_tenant;
     if (b.azure_location_aliases !== undefined) set.azureLocationAliases = b.azure_location_aliases;
+    if (b.citas_location_id !== undefined) set.citasLocationId = b.citas_location_id;
     if (b.azure_business_customer_ids !== undefined || b.azure_business_customer_id !== undefined) {
       const ids = bcIdsOf(b);
       set.azureBcIds = ids; set.azureBusinessCustomerId = ids[0] ?? null;
@@ -534,6 +538,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
       await tx.update(vehicles).set({ clientStationId: null }).where(eq(vehicles.clientStationId, s.id));
       await tx.update(vehicles).set({ bodyshopId: null }).where(eq(vehicles.bodyshopId, s.id));
       await tx.update(repairBookings).set({ originStationId: null }).where(eq(repairBookings.originStationId, s.id));
+      await tx.delete(citasLinks).where(eq(citasLinks.stationId, s.id));
       await tx.delete(repairBookings).where(eq(repairBookings.stationId, s.id));
       await tx.delete(stationInsurers).where(eq(stationInsurers.stationId, s.id));
       await tx.delete(campaignStations).where(eq(campaignStations.stationId, s.id));

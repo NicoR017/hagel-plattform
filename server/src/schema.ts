@@ -72,6 +72,8 @@ export const stations = pgTable("stations", {
   repairsPerDay: integer("repairs_per_day").notNull().default(3),
   /** automatic insurer report e-mails the admin removed for this station */
   excludedInsurerEmails: text("excluded_insurer_emails").array().notNull().default(sql`'{}'::text[]`),
+  /** id of the PDR Citas location whose appointments are shown on this station (null = not linked) */
+  citasLocationId: text("citas_location_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => ({ byOrg: index("stations_org_idx").on(t.orgId) }));
@@ -521,3 +523,15 @@ export const vehicleComments = pgTable("vehicle_comments", {
   text: text("text").notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (t) => ({ byVehicle: index("vehicle_comments_vehicle_idx").on(t.vehicleId) }));
+
+/** PDR Citas appointment -> vehicle: written only here, Citas itself is never modified. */
+export const citasLinks = pgTable("citas_links", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  appointmentId: text("appointment_id").notNull(),
+  locationId: text("location_id").notNull(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  stationId: uuid("station_id").notNull().references(() => stations.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => ({ byAppt: uniqueIndex("citas_links_appt_uq").on(t.orgId, t.appointmentId), byVehicle: index("citas_links_vehicle_idx").on(t.vehicleId) }));

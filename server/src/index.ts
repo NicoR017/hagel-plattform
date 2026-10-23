@@ -12,6 +12,7 @@ import { seed } from "./seed";
 import { seedStaging } from "./scripts/seed_staging";
 import { storageFromEnv } from "./storage";
 import { azureFromEnv } from "./azure";
+import { citasFromConfig } from "./citas";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
@@ -26,7 +27,7 @@ if (cfg.appEnv === "staging" && process.env.STAGING_SEED === "1" && process.env.
 }
 
 const api = createApp({
-  db: h.db, cfg, mailer, storage, az: azureFromEnv(),
+  db: h.db, cfg, mailer, storage, az: azureFromEnv(), citas: citasFromConfig(cfg),
   ocr: { apiKey: process.env.ANTHROPIC_API_KEY ?? null, model: process.env.OCR_MODEL ?? "claude-sonnet-5-5", fetch: (url, init) => fetch(url, init) },
 });
 const root = new Hono();
