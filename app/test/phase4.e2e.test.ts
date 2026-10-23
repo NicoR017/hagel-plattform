@@ -4,6 +4,8 @@ import { LocalDb, type Refs } from "../src/sync/db";
 import { SyncEngine, type Http } from "../src/sync/engine";
 import { createVehicle, sendReport, setHeader, type MutCtx } from "../src/sync/mutations";
 import { letterheadFor, toDoc } from "../src/field/docs";
+import { isNotNull } from "drizzle-orm";
+import { technicians } from "../../server/src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
 let c: Ctx, A: string, n = 0, ins: string;
@@ -37,6 +39,8 @@ beforeAll(async () => {
   await call(c, "POST", "/admin/technicians", { token: c.superToken, org: c.orgES, body: { name: "Luis", default_pct_pdr: 55, default_pct_demontage: 80 } });
   tokens.assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   tokens.tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
+  await c.h.db.delete(technicians).where(isNotNull(technicians.email));
 });
 afterAll(async () => { await c.h.close(); });
 

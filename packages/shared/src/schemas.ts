@@ -43,6 +43,8 @@ export const inviteInput = z.object({
   scope_campaign_id: uuid.nullable().default(null),
   expires_at: z.string().datetime().nullable().default(null),
   language: z.enum(LANGS).default("de"),
+  /** only used with the Technician role: the invited person appears in the technicians list at once, as a PDR technician or a headliner */
+  technician_kind: z.enum(["pdr", "headliner"]).default("pdr"),
 });
 
 export const passwordSchema = z.string().min(10).max(200);

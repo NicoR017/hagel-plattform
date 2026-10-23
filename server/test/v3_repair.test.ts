@@ -46,6 +46,7 @@ beforeAll(async () => {
   chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
   tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
   techUserId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
+  await c.h.db.delete(technicians); // the invitation created a record of its own
   techRowId = (await c.h.db.insert(technicians).values({ orgId: c.orgES, name: "Test Tech", userId: techUserId, kind: "pdr" }).returning())[0].id;
   carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
   insurerTok = await inviteAndAccept(c, c.orgES, "ins@example.test", { role_id: c.roleId.assureur, scope_insurer_id: insurerId });

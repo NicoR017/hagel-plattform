@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { JPEG, PDF, call, dentsPanel, inviteAndAccept, op, pull, push, setup, tick, uuid, type Ctx } from "./helpers";
-import { auditLog, insurers, photos, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles, users } from "../src/schema";
+import { auditLog, insurers, photos, technicians, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles, users } from "../src/schema";
 
 let c: Ctx;
 let A: string, B: string, MINI: string; // sites: A = carrosserie (customer + current site), B = hall, MINI = capacity 1
@@ -28,6 +28,8 @@ beforeAll(async () => {
   chefB = await inviteAndAccept(c, c.orgES, "chefb@example.test", { role_id: c.roleId.chef_site, station_id: B });
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
+  await c.h.db.delete(technicians);
   techId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
   carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
   insurerTok = await inviteAndAccept(c, c.orgES, "ins@example.test", { role_id: c.roleId.assureur, scope_insurer_id: insurerId });

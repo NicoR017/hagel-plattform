@@ -52,6 +52,7 @@ beforeAll(async () => {
   head = await inviteAndAccept(c, c.orgES, "head@example.test", { role_id: c.roleId.technicien, station_id: A });
   const uid = async (e: string) => (await c.h.db.select().from(users).where(eq(users.email, e)))[0].id;
   techUser = await uid("tech@example.test"); tech2User = await uid("tech2@example.test"); headUser = await uid("head@example.test");
+  await c.h.db.delete(technicians); // the invitations created technician records of their own; this file sets up its own
   await c.h.db.insert(technicians).values([
     { orgId: c.orgES, name: "Test Tech", userId: techUser, kind: "pdr" },
     { orgId: c.orgES, name: "Other Tech", userId: tech2User, kind: "pdr" },

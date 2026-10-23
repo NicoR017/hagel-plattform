@@ -4,7 +4,7 @@ import { JPEG, PDF, call, inviteAndAccept, op, pull, push, setup, tick, uuid, ty
 import { recipientsFor } from "../src/reports";
 import { imageInfo } from "../src/routes_master";
 import { reportMail } from "../src/mails";
-import { reportSends, users, vehicleAssignments } from "../src/schema";
+import { reportSends, technicians, users, vehicleAssignments } from "../src/schema";
 
 let c: Ctx, A: string, B: string, assessor: string, chefA: string, tech: string, carro: string, admin: string;
 let techUserId: string;
@@ -24,6 +24,8 @@ beforeAll(async () => {
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
   tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
+  await c.h.db.delete(technicians);
   techUserId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
   carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
 });

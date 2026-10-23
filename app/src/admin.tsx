@@ -45,7 +45,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
   const sites = useLoad<Station[]>("/admin/stations");
   const [err, setErr] = useState("");
   const [editU, setEditU] = useState<{ id: string; name: string; language: string } | null>(null);
-  const [form, setForm] = useState({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() as Lang });
+  const [form, setForm] = useState({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() as Lang, kind: "pdr" });
   const role = roles.data?.find((r) => r.id === form.role_id);
   const reload = () => { void users.reload(); void invs.reload(); };
   const siteName = (id: string | null) => (id ? sites.data?.find((s) => s.id === id)?.name ?? "?" : t("allSites"));
@@ -69,6 +69,12 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
                 <option value="">—</option>{sites.data?.filter((s) => s.type === "carrosserie").map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select></div>
           )}
+          {role?.key === "technicien" && (
+            <div className="grow"><label>{t("v6TechKind")}</label>
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+                <option value="pdr">{t("v6TechPdr")}</option><option value="headliner">{t("v6TechHeadliner")}</option>
+              </select></div>
+          )}
           <div><label>{t("expires")}</label><input type="date" value={form.expires} onChange={(e) => setForm({ ...form, expires: e.target.value })} /></div>
           <div><label>{t("invitationLanguage")}</label>
             <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value as Lang })}>{LANG_LIST.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}</select></div>
@@ -77,8 +83,8 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
         <p><button className="btn" disabled={!form.email || !form.role_id} onClick={() => act(
           () => api("POST", "/admin/invitations", {
             email: form.email, role_id: form.role_id, station_id: form.station_id || null,
-            scope_client_station_id: form.client || null, language: form.language, expires_at: form.expires ? new Date(form.expires + "T23:59:59Z").toISOString() : null,
-          }), setErr, () => { setForm({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() }); reload(); })}>{t("invite")}</button></p>
+            scope_client_station_id: form.client || null, language: form.language, ...(role?.key === "technicien" ? { technician_kind: form.kind } : {}), expires_at: form.expires ? new Date(form.expires + "T23:59:59Z").toISOString() : null,
+          }), setErr, () => { setForm({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang(), kind: "pdr" }); reload(); })}>{t("invite")}</button></p>
       </Card>
 
       {!!invs.data?.length && (

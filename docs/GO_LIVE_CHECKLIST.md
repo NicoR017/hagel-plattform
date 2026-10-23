@@ -54,6 +54,7 @@ La v4 **n'ajoute aucune migration** (`git diff feature/ui-v3 -- server/migration
 - [ ] Golden 22/22 et suite complète verte (658 tests au dernier passage).
 - [ ] Les quatre langues complètes (test i18n vert) ; dates dans la langue de l'utilisateur.
 - [ ] **Rôle Freelancer** : lancer `npm run freelancers -w @hagel/server` contre la copie de la prod (lecture seule) et noter les comptes : ils voient désormais leurs véhicules assignés en plus de leur ancienne campagne ; l'accès limité dans le temps est conservé. Les nouveaux véhicules n'ont plus de campagne.
+- [ ] Inviter une personne avec le rôle Technicien (choix PDR ou Headliner dans le formulaire) : elle apparaît **tout de suite** dans « Techniciens & headliners » (e-mail renseigné, sans compte) ; à l'acceptation la même fiche est liée au compte et prend son vrai nom (jamais de doublon : une fiche existante avec le même e-mail est reprise).
 - [ ] Technicien et headliner : fiches **Techniciens et headliners** liées à un compte (champ Compte) ; le compte a le rôle Technicien. Sans cette liaison, le compte garde l'interface habituelle.
 
 ## H. Décisions v4 à valider

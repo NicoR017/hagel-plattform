@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { PDFArray, PDFDocument, PDFRawStream, decodePDFRawStream } from "pdf-lib";
-import { insurers, repairEvents, reportSends, users, vehicles } from "../src/schema";
+import { insurers, repairEvents, reportSends, technicians, users, vehicles } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 const JPG = new Uint8Array(readFileSync(resolve(__dirname, "../../assets/pdr-team-logo.jpg")));
@@ -70,6 +70,8 @@ beforeAll(async () => {
   const tokAll = await inviteAndAccept(c, c.orgES, "techall@example.test", { role_id: c.roleId.technicien });
   techAll = { token: tokAll, userId: (await c.h.db.select().from(users).where(eq(users.email, "techall@example.test")))[0].id };
   carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
+  await c.h.db.delete(technicians);
 });
 afterAll(async () => { await c.h.close(); });
 

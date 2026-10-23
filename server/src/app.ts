@@ -291,7 +291,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const r = await inviteUser(db, cfg, mailer, {
       orgId, email: b.email, roleId: b.role_id, stationId: b.station_id, scopeClientStationId: b.scope_client_station_id,
       scopeInsurerId: b.scope_insurer_id, scopeCampaignId: b.scope_campaign_id,
-      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id, language: b.language,
+      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id, language: b.language, technicianKind: b.technician_kind,
     });
     return c.json(r, 201);
   });
