@@ -11,7 +11,7 @@ PDR Citas est le second site où les clients réservent une expertise dans un **
 ## Configuration (serveur uniquement)
 | Variable | Rôle |
 |---|---|
-| `CITAS_API_URL` | adresse de base de Citas, sans `/` final (ex. `https://citas.example`) |
+| `CITAS_API_URL` | adresse de base de Citas (ex. `https://citas.example`). L'adresse complète de l'API (`…/api/v1/external`) est acceptée aussi : le suffixe est retiré |
 | `CITAS_API_KEY` | clé de l'API en lecture seule, envoyée en `Authorization: Bearer` |
 
 - Si l'une manque : fonctionnalité **masquée**, aucune erreur (`/citas/status` → `configured:false`).

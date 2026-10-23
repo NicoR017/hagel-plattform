@@ -61,6 +61,8 @@ describe("configuration", () => {
     expect(loadConfig({ CITAS_API_URL: "https://citas.example/" }).citasApiKey).toBeNull();
     const cfg = loadConfig({ CITAS_API_URL: "https://citas.example/", CITAS_API_KEY: "SECRET-KEY-123" });
     expect(cfg.citasApiUrl).toBe("https://citas.example");
+    // the full API address (…/api/v1/external) is accepted too and gives the same base
+    expect(loadConfig({ CITAS_API_URL: "https://www.citas.example/api/v1/external/", CITAS_API_KEY: "k" }).citasApiUrl).toBe("https://www.citas.example");
     const app = createApp({ db: c.h.db, cfg, mailer: new MemoryMailer(), citas: null });
     const res = await app.request("/config");
     expect(await res.text()).not.toContain("SECRET-KEY-123");
