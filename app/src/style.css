@@ -27,9 +27,24 @@ button.danger { background:#fff; color:var(--red); border:1px solid var(--red); 
 .grid label { display:flex; gap:8px; align-items:center; margin:2px 0; font-size:14px; color:var(--text); }
 .grid input { width:auto; min-height:auto; }
 .center { max-width:420px; margin:12vh auto; padding:0 16px; }
-@media (max-width:640px){ th:nth-child(n+4), td:nth-child(n+4){ display:none; } }
+/* old administration screens only (header + main directly in #root): their tables drop columns on a phone. Never the v3 interface, the estimate or the dashboard. */
+@media (max-width:640px){ #root > main :is(th, td):nth-child(n+4):not(.fld *, .v3 *) { display:none; } }
 
 .langsw { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
 .langsw button { min-height:44px; min-width:48px; border:none; background:#fff; color:var(--navy); font-weight:700; }
 .langsw button.on { background:var(--navy); color:#fff; }
 header .langsw { border-color:#fff; }
+
+/* ---- search picker (field/Picker.tsx): used inside .fld, the dialogs and the administration ---- */
+.pk{position:relative;}
+.pk-in{width:100%;box-sizing:border-box;min-height:48px;border:1px solid #d5dbe4;border-radius:12px;padding:12px 14px;font-size:16px;background:#fff;color:#16233f;}
+.pk-chosen{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.pk-val{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:48px;box-sizing:border-box;padding:6px 6px 6px 14px;border:1px solid #5e8c63;background:#e4eee5;color:#16233f;border-radius:12px;}
+.pk-val small,.pk-list small{display:block;font-size:12px;font-weight:400;color:#6b7585;}
+.pk-val button{min-width:44px;min-height:44px;border:0;background:transparent;font-size:18px;color:#5e8c63;cursor:pointer;}
+.pk-list{position:absolute;left:0;right:0;z-index:30;margin:4px 0 0;padding:0;list-style:none;max-height:340px;overflow-y:auto;background:#fff;border:1px solid #d5dbe4;border-radius:12px;box-shadow:0 8px 24px rgba(10,18,35,.15);}
+.pk-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;box-sizing:border-box;padding:8px 14px;border-bottom:1px solid #eef1f5;cursor:pointer;font-size:15px;}
+.pk-list li.act{background:#eef3fa;}
+.pk-list li.free b{color:#5e8c63;}
+.pk-list li.none,.pk-list li.hint{cursor:default;font-size:13px;color:#6b7585;min-height:0;}
+.pk-list li em{font-style:normal;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:#e3ebf4;color:#16233f;white-space:nowrap;}

@@ -1,6 +1,6 @@
 // Verwaltung in the new interface: left menu + content, like the vehicle detail. The existing screens (users, roles, stations, insurers,
 // letterheads, Azure, audit, organisations) are reused inside it; new here: overview, calculation methods, weekly report.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { computeVehicle, DEFAULT_AW_PARAMS, DEFAULT_SETTINGS, ES_MATRIX_DEFAULT, type CalcMethodDef, type CalcVehicle, type EsMatrix } from "@hagel/calc";
 import { generateTechnicianWorksheets, techPdfFileName, eur, type TechSheetData } from "@hagel/documents";
 import type { ClientMethod } from "@hagel/shared";
@@ -63,6 +63,17 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
   const current: Section = all.includes(cur) ? cur : "overview";
   // on a phone the menu is a row you scroll: keep the open section in view
   useEffect(() => { document.querySelector(".admmenu button.on")?.scrollIntoView?.({ inline: "center", block: "nearest" }); }, [current]);
+  // phone: every table of the section becomes a list of cards (the column name goes in front of each value)
+  const body$ = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = body$.current;
+    if (!root) return;
+    const run = () => stackTables(root);
+    run();
+    const mo = new MutationObserver(run);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [org, current]);
   const open = (k: Section) => { setCur(k); history.replaceState(null, "", hrefOf({ page: "admin", tab: k === "overview" ? undefined : k })); };
 
   let body: ReactNode;
@@ -84,6 +95,9 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
   return (
     <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("v6AdminTitle") }]}>
       <div className="adm">
+        <select className="admsel" aria-label={t("v7AdminSection")} value={current} onChange={(e) => open(e.target.value as Section)}>
+          {visible.map((g) => <optgroup key={g.title} label={t(g.title)}>{g.items.map((i) => <option key={i.k} value={i.k}>{i.label}</option>)}</optgroup>)}
+        </select>
         <aside className="admmenu" aria-label={t("v6AdminTitle")}>
           {visible.map((g) => (
             <div key={g.title} className="grp">
@@ -92,10 +106,30 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
             </div>
           ))}
         </aside>
-        <div className="admbody" key={org + current}>{body}</div>
+        <div className="admbody" key={org + current} ref={body$}>{body}</div>
       </div>
     </Shell3>
   );
+}
+
+/** Labels the cells of every table of the section with their column name (CSS shows them as cards on a phone); the calculation grids (`mtab`) stay tables. */
+function stackTables(root: HTMLElement) {
+  root.querySelectorAll("table").forEach((tb) => {
+    if (tb.classList.contains("mtab")) return;
+    tb.classList.add("stack");
+    const heads = Array.from(tb.querySelectorAll("thead th")).map((th) => (th.textContent ?? "").trim());
+    tb.querySelectorAll("tr").forEach((tr) => {
+      if (tr.parentElement?.tagName === "THEAD") return;
+      let col = 0;
+      Array.from(tr.children).forEach((c, i, all) => {
+        const el = c as HTMLElement, span = Number(el.getAttribute("colspan") ?? 1);
+        if (span > 1) el.classList.add("wide");
+        else if (heads[col] && el.getAttribute("data-label") !== heads[col]) el.setAttribute("data-label", heads[col]);
+        if (i === all.length - 1 && i > 0 && el.querySelector("button, a.btn")) el.classList.add("act");
+        col += span;
+      });
+    });
+  });
 }
 
 // ------------------------------------------------------------------ overview

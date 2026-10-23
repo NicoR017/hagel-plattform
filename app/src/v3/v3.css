@@ -255,3 +255,32 @@
 .v3 .cappt b{font-size:15px;}
 .v3 .cactions{display:flex;flex-wrap:wrap;gap:10px;}
 @media (max-width:560px){.v3 .citas{padding:14px;}.v3 .crow .ctime{min-width:0;}}
+
+/* ---- v4: administration on a phone ---- */
+.v3 .admsel{display:none;}
+@media (max-width:820px){
+  .v3 .admmenu{display:none;}
+  .v3 .admsel{display:block;position:sticky;top:calc(var(--envbar,0px) + 8px);z-index:15;width:100%;box-sizing:border-box;min-height:48px;font-size:16px;font-weight:600;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:#fff;color:var(--text);box-shadow:0 2px 8px rgba(10,18,35,.10);}
+}
+@media (max-width:640px){
+  .v3 .admbody table.stack,.v3 .admbody table.stack tbody,.v3 .admbody table.stack tfoot,.v3 .admbody table.stack tr,.v3 .admbody table.stack td{display:block;width:100%;box-sizing:border-box;}
+  .v3 .admbody table.stack thead{display:none;}
+  .v3 .admbody table.stack tr{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;}
+  .v3 .admbody table.stack td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:4px 0;text-align:right;white-space:normal;}
+  .v3 .admbody table.stack td[data-label]::before{content:attr(data-label);color:var(--sub);font-size:12px;text-align:left;flex:none;max-width:45%;}
+  .v3 .admbody table.stack td:first-child{display:block;font-weight:700;font-size:15px;text-align:left;padding-bottom:6px;}
+  .v3 .admbody table.stack td:first-child::before{display:none;}
+  .v3 .admbody table.stack td.wide{display:block;text-align:left;}
+  .v3 .admbody table.stack td.act{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:10px;border-top:1px solid #EEF1F5;white-space:normal;}
+  .v3 .admbody table.stack td.act .btn{flex:1 1 40%;min-height:44px;justify-content:center;}
+  .v3 .admbody table.stack tfoot tr{background:#F2F4F7;}
+  .v3 .admbody .tscroll{overflow:visible;}
+  .v3 .admbody .row{flex-direction:column;align-items:stretch;}
+  .v3 .admbody input:not([type=checkbox]):not([type=radio]),.v3 .admbody select,.v3 .admbody textarea{width:100%;box-sizing:border-box;}
+  .v3 .kpis{grid-template-columns:1fr 1fr;}
+}
+/* ---- v4: estimate and dashboard tables keep every column at 390 px ---- */
+@media (max-width:640px){
+  .fld table{font-size:12px;}
+  .fld table th,.fld table td{padding-left:3px;padding-right:3px;}
+}
