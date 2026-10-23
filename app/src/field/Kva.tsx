@@ -4,6 +4,7 @@ import { dentBreak, docText, eur, esFormula, esLines, fmtDateL, h1, kvaFileName,
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
+import { TechPicker } from "./TechPicker";
 import { assignVehicle, setShares, setStatus } from "../sync/mutations";
 import { buildRepairReport, buildSendPdf, shareOrDownload, toDoc } from "./docs";
 import { StatusDialog } from "./Dialogs";
@@ -26,7 +27,6 @@ export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: Ca
   const a = computeShares(v as never, c);
   const x = v as Record<string, any>;
   const canEdit = f.can("vehicules.modifier");
-  const people = f.refs?.people ?? [];
   const sec = (s: string) => <div style={{ marginTop: 14, fontSize: 13, fontWeight: 700, color: "var(--navy)" }}>{s}</div>;
   const line = (l: string, val: string) => <div className="row" style={{ marginTop: 6 }}><span className="muted" style={{ fontSize: 13 }}>{l}</span><b>{val}</b></div>;
   const pcts = (cur: number, vals: number[], on: (n: number) => void) => (
@@ -35,20 +35,14 @@ export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: Ca
       <NumInput value={cur} onChange={on} max={100} style={{ width: 84 }} /> %
     </div>
   );
-  const techs = f.refs?.technicians ?? [];
-  const choices = techs.length ? techs.map((tc) => ({ key: tc.id, name: tc.name, pdr: tc.defaultPctPdr, dem: tc.defaultPctDemontage, userId: tc.userId as string | null, headliner: tc.kind === "headliner" })) : people.map((p) => ({ key: p.id, name: p.name, pdr: undefined as number | undefined, dem: undefined as number | undefined, userId: p.id as string | null, headliner: false }));
-  /** the offered people per role: PDR technicians for the PDR work, headliners (if there are any) for de-/re-mounting */
-  const offered = (kind: "pdr" | "dem") => (kind === "pdr" ? choices.filter((p) => !p.headliner) : choices.some((p) => p.headliner) ? choices.filter((p) => p.headliner) : choices);
   /** also gives the person's account the car (needed to finish it); picking the same person again clears it */
   const assignTo = (kind: "pdr" | "dem", userId: string | null, on: boolean) => { if (userId && f.can("vehicules.assigner")) void assignVehicle(f.mut, v.id, kind === "pdr" ? "pdr" : "demontage", on ? [userId] : []); };
   /** Picking a technician copies his default percentage onto THIS vehicle (editable; later changes of the default do not touch it). */
   const names = (cur: string, on: (s: string, pct?: number) => void, id: string, kind: "pdr" | "dem") => (
-    <>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-        {offered(kind).map((p) => <button key={p.key} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => { const was = cur.toLowerCase() === p.name.toLowerCase(); on(was ? "" : p.name, was ? undefined : kind === "pdr" ? p.pdr : p.dem); assignTo(kind, p.userId, !was); }}>{p.name}</button>)}
-      </div>
-      <input id={id} className="inp" style={{ marginTop: 6, fontWeight: 700 }} disabled={!canEdit} placeholder={t("techNameHint")} value={cur} onChange={(e) => on(e.target.value)} />
-    </>
+    <div style={{ marginTop: 6 }}>
+      <TechPicker id={id} kind={kind} name={cur} stationId={v.stationId} disabled={!canEdit}
+        onChange={(s, pct, tech, prev) => { on(s, pct); if (tech) assignTo(kind, tech.userId, true); else if (prev) assignTo(kind, prev.userId, false); }} />
+    </div>
   );
   return (
     <div style={{ marginTop: 14, background: "#fff", border: "1px dashed var(--navy)", borderRadius: 14, padding: "12px 14px" }}>

@@ -272,7 +272,7 @@ export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defau
 export interface ClientInsurer { id: string; name: string }
 export interface ClientCampaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
 export interface ClientCompany { id: string; name: string; address: string; taxId: string; email: string; footer: string; hasLogo: boolean; logo: { kind: "jpg" | "png"; width: number; height: number } | null }
-export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number; kind?: "pdr" | "headliner" }
+export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number; kind?: "pdr" | "headliner"; /** stations where the linked account has a role (the picker puts "works here" first) */ stationIds?: string[] }
 
 export interface PullResponse {
   /** identifies the user's grants; when it changed since the last pull the client must replace its local set */
@@ -295,7 +295,7 @@ export interface PullResponse {
     settings: OrgSettings;
     me: { id: string; name: string; language: string; permissions: string[] };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
-    people: { id: string; name: string }[];
+    people: { id: string; name: string; roles?: string[]; stationIds?: string[] }[];
     insurers: ClientInsurer[];
     /** which insurers work with which carrosserie (pickers on a vehicle only offer the linked ones) */
     stationInsurers: { stationId: string; insurerId: string }[];

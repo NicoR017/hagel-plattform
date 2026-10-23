@@ -9,6 +9,8 @@ import { Dialog, Field, NumInput, Seg } from "./ui";
 import { useField, useIssues, useVehicle } from "./store";
 import { toast } from "./toast";
 import { Occ } from "./occupancy";
+import { Picker, type PickItem } from "./Picker";
+import { TechPicker } from "./TechPicker";
 import { snapshotVehicles, undoMove, undoStatus } from "./undo";
 import { resolveUi, setUiMode, useUiMode } from "./uiMode";
 import { useAppConfig } from "../env";
@@ -71,13 +73,22 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
   // the server warns when the site is already full before the move; show the same warning as soon as the move would fill it
   const full = !!dest && dest.capacite > 0 && (occ[dest.id] ?? 0) + ids.length > dest.capacite;
   const tenantDiffers = !!dest && !!src?.azureTenant && !!dest.azureTenant && src.azureTenant !== dest.azureTenant;
+  const typeWord = (ty: string) => (ty === "hall" ? t("v3TypeHall") : ty === "parc" ? t("v3TypeParc") : t("v3TypeCarrosserie"));
+  const items: PickItem[] = sites.map((s) => {
+    const n = occ[s.id] ?? 0, isFull = s.capacite > 0 && n + ids.length > s.capacite;
+    const other = !!src?.azureTenant && !!s.azureTenant && src.azureTenant !== s.azureTenant;
+    return {
+      id: s.id, title: s.name, search: [typeWord(s.type), s.address],
+      sub: [typeWord(s.type), s.capacite ? t("pkPlaces").replace("{n}", String(n)).replace("{cap}", String(s.capacite)) : "", s.address].filter(Boolean).join(" · "),
+      tag: isFull ? t("pkFull") : other ? t("pkOtherTenant") : undefined,
+    };
+  });
   return (
     <Dialog title={t("moveTitle")} onClose={onClose}>
       <Field label={t("moveTo")}>
-        <select className="sel" value={to} onChange={(e) => setTo(e.target.value)}>
-          <option value="">—</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}{s.capacite ? ` (${occ[s.id] ?? 0}/${s.capacite})` : ""}</option>)}
-        </select>
+        <Picker items={items} multi={false} placeholder={t("pkStationPh")} hint={t("pkStationHint").replace("{n}", String(sites.length))}
+          chosen={dest ? [{ id: dest.id, label: dest.name, sub: items.find((i) => i.id === dest.id)?.sub }] : []}
+          onAdd={(it) => setTo(it.id)} onRemove={() => setTo("")} />
         {dest && (
           <div style={{ marginTop: 8 }}>
             <Occ present={(occ[dest.id] ?? 0) + ids.length} capacity={dest.capacite} /> <span className="muted" style={{ fontSize: 12 }}>{t("occupancy")} {t("afterMove")}</span>
@@ -105,14 +116,14 @@ export function SharesDialog({ ids, onClose, onDone }: { ids: string[]; onClose:
   return (
     <Dialog title={`${t("sharesFor")} ${ids.length}`} onClose={onClose}>
       <Field label={t("techPdr")}>
-        <input className="inp" value={tn} placeholder={t("nameKeep")} onChange={(e) => setTn(e.target.value)} />
+        <TechPicker kind="pdr" name={tn} placeholder={t("pkKeepPh")} onChange={(s, pct) => { setTn(s); if (pct != null) setTp(pct); }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
           {[40, 45, 50, 55, 60].map((p) => <button key={p} className={"chip" + (tp === p ? " on" : "")} onClick={() => setTp(p)}>{p}</button>)}
           <NumInput value={tp} onChange={setTp} max={100} style={{ width: 84 }} /> %
         </div>
       </Field>
       <Field label={t("techDem")}>
-        <input className="inp" value={dn} placeholder={t("nameSameAsPdr")} onChange={(e) => setDn(e.target.value)} />
+        <TechPicker kind="dem" name={dn} placeholder={t("pkSamePh")} onChange={(s, pct) => { setDn(s); if (pct != null) setDp(pct); }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
           {[50, 70, 80, 100].map((p) => <button key={p} className={"chip" + (dp === p ? " on" : "")} onClick={() => setDp(p)}>{p}</button>)}
           <NumInput value={dp} onChange={setDp} max={100} style={{ width: 84 }} /> %
@@ -132,13 +143,15 @@ export function AssignDialog({ ids, vehicles, onClose, onDone }: { ids: string[]
   const f = useField();
   const people = f.refs?.people ?? [];
   const first = vehicles.find((v) => v.id === ids[0]);
+  const stationName = new Map((f.refs?.stations ?? []).map((s) => [s.id, s.name]));
+  const items: PickItem[] = people.map((p) => ({ id: p.id, title: p.name, sub: [(p.roles ?? []).join(", "), (p.stationIds ?? []).map((s) => stationName.get(s)).filter(Boolean).join(", ")].filter(Boolean).join(" · ") }));
   const [sel, setSel] = useState<string[]>(ids.length === 1 ? first?.assigneeIds ?? [] : []);
   return (
     <Dialog title={t("assignTitle")} onClose={onClose}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {people.map((p) => <button key={p.id} className={"chip" + (sel.includes(p.id) ? " on" : "")} onClick={() => setSel((s) => (s.includes(p.id) ? s.filter((x) => x !== p.id) : [...s, p.id]))}>{p.name}</button>)}
-        {!people.length && <span className="muted">{t("noData")}</span>}
-      </div>
+      <Picker multi items={items} placeholder={t("pkPeoplePh")} hint={t("pkPeopleHint").replace("{n}", String(people.length))}
+        chosen={sel.map((id) => ({ id, label: people.find((p) => p.id === id)?.name ?? id, sub: items.find((i) => i.id === id)?.sub }))}
+        onAdd={(it) => setSel((s) => (s.includes(it.id) ? s : [...s, it.id]))} onRemove={(id) => setSel((s) => s.filter((x) => x !== id))} />
+      {!people.length && <span className="muted">{t("noData")}</span>}
       <button className="pbtn" onClick={async () => {
         for (const id of ids) await assignVehicle(f.mut, id, "pdr", sel);
         toast(t("assigned"));

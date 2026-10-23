@@ -14,7 +14,7 @@ import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, effectivePermissions, filterFields, type Principal, type VehicleRef } from "./permissions";
 import {
-  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
+  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import type { Storage } from "./storage";
 
@@ -454,7 +454,7 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
     if (exists.createdBy === u.id && exists.orgId === dest.orgId) return { status: "ok", orgId: exists.orgId, seq: exists.seq };
     throw new Reject("vehicle_exists");
   }
-  const ref: VehicleRef = { id: v.id, orgId: dest.orgId, stationId: v.stationId, clientStationId: v.clientStationId, campaignId: v.campaignId, insurerId: v.insurerId, assigneeIds: [] };
+  const ref: VehicleRef = { id: v.id, orgId: dest.orgId, stationId: v.stationId, clientStationId: v.clientStationId, campaignId: v.campaignId, insurerId: v.insurerId, assigneeIds: [u.id] };
   if (!can(u, "vehicules.creer", ref)) throw new Reject("not_allowed");
   if (v.clientStationId) await assertStationOrInsurer(tx, "clientStationId", v.clientStationId, dest.orgId);
   if (v.insurerId) await assertStationOrInsurer(tx, "insurerId", v.insurerId, dest.orgId);
@@ -483,6 +483,8 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
     methodId: chosen?.id ?? null, methodVersion: chosen?.version ?? null,
   });
   await tx.insert(vehicleStatusHistory).values({ vehicleId: v.id, statut: v.statut, userId: u.id });
+  // an account that only sees the cars assigned to it (technician, freelancer) is assigned to the car it creates, or it would vanish
+  if (u.grants.some((g) => g.orgId === dest.orgId && (g.scope === "assigne" || g.scope === "campagne"))) await tx.insert(vehicleAssignments).values({ vehicleId: v.id, userId: u.id, type: "pdr" }).onConflictDoNothing();
   await audit(tx as unknown as Db, { orgId: dest.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: v.id, after: { stationId: v.stationId, ...pick(header, ["kennzeichen", "land"]) } });
   const warnings: string[] = [];
   if (dest.capacite > 0) {
@@ -610,10 +612,14 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const perms = new Set<string>();
   u.grants.filter((g) => g.orgId === orgId).forEach((g) => g.permissions.forEach((p) => perms.add(p)));
   if (u.isSuperadmin) PERMISSIONS.forEach((p) => perms.add(p));
-  let people: { id: string; name: string }[] = [];
+  let people: PullResponse["refs"]["people"] = [];
+  // roles and stations of the people of the organisation (sub-line of the pickers; an assignment without a station = all stations)
+  const accessRows = await db.select({ userId: roleAssignments.userId, stationId: roleAssignments.stationId, role: roles.name }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId)).where(eq(roleAssignments.orgId, orgId));
+  const access = new Map<string, { roles: Set<string>; stationIds: Set<string> }>();
+  for (const r of accessRows) { const e = access.get(r.userId) ?? { roles: new Set<string>(), stationIds: new Set<string>() }; e.roles.add(r.role); if (r.stationId) e.stationIds.add(r.stationId); access.set(r.userId, e); }
   if (canOrg(u, "vehicules.assigner", orgId)) {
     const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, orgId));
-    people = rows.map((r) => ({ id: r.id, name: r.name || r.email }));
+    people = rows.map((r) => ({ id: r.id, name: r.name || r.email, roles: [...(access.get(r.id)?.roles ?? [])], stationIds: [...(access.get(r.id)?.stationIds ?? [])] }));
   }
   const priceSafe = visibleSettings(u, orgId, settings);
   // master data for the pickers
@@ -643,7 +649,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),
     companies: compRows.map((co) => ({ id: co.id, name: co.name, address: co.address, taxId: co.taxId, email: co.email, footer: co.footer, hasLogo: !!co.logoKey, logo: (co.logoMeta as { kind: "jpg" | "png"; width: number; height: number } | null) ?? null })),
-    technicians: techRows.map((tc) => ({ id: tc.id, name: tc.name, userId: tc.userId, defaultPctPdr: Number(tc.defaultPctPdr), defaultPctDemontage: Number(tc.defaultPctDemontage), kind: (tc.kind === "headliner" ? "headliner" : "pdr") as "pdr" | "headliner" })),
+    technicians: techRows.map((tc) => ({ id: tc.id, name: tc.name, userId: tc.userId, defaultPctPdr: Number(tc.defaultPctPdr), defaultPctDemontage: Number(tc.defaultPctDemontage), kind: (tc.kind === "headliner" ? "headliner" : "pdr") as "pdr" | "headliner", stationIds: tc.userId ? [...(access.get(tc.userId)?.stationIds ?? [])] : [] })),
     methods: await clientMethods(db, orgId, u.isSuperadmin || perms.has("prix.voir")),
     insurerMethods: (await db.select().from(insurerMethods).innerJoin(insurers, eq(insurers.id, insurerMethods.insurerId)).where(eq(insurers.orgId, orgId))).map((x) => ({ insurerId: x.insurer_methods.insurerId, country: x.insurer_methods.country, methodId: x.insurer_methods.methodId })),
   };

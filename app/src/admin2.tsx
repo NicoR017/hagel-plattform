@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Picker } from "./field/Picker";
 import { api, httpFetch } from "./api";
 import { act, Card, Err, matches, useLoad } from "./admin";
 import { fmtDateTime, t, tOr } from "./i18n";
@@ -13,28 +14,10 @@ const emails = (s: string) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boo
  * (an insurer works with many body shops): nothing but the chosen ones is on screen until you search.
  */
 function SearchSelect({ options, selected, placeholder, onToggle }: { options: { id: string; name: string }[]; selected: string[]; placeholder: string; onToggle: (id: string, on: boolean) => void }) {
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const chosen = options.filter((o) => selected.includes(o.id));
-  const found = options.filter((o) => !selected.includes(o.id) && matches(q, [o.name])).slice(0, 60);
   return (
-    <div style={{ position: "relative" }}>
-      <div className="chips">
-        {chosen.map((o) => <span key={o.id} className="pill">{o.name} <button type="button" aria-label={t("delete")} onClick={() => onToggle(o.id, false)}>✕</button></span>)}
-        {!chosen.length && <span className="muted" style={{ fontSize: 13 }}>—</span>}
-      </div>
-      <input type="search" value={q} placeholder={placeholder} aria-label={placeholder} role="combobox" aria-expanded={open}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} />
-      {open && (
-        <div role="listbox" style={{ position: "absolute", left: 0, right: 0, zIndex: 20, maxHeight: 240, overflowY: "auto", background: "#fff", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 8px 24px rgba(10,18,35,.15)", marginTop: 2 }}>
-          {found.map((o) => (
-            <button key={o.id} type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => { onToggle(o.id, true); setQ(""); }}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", minHeight: 44, border: 0, borderBottom: "1px solid #EEF1F5", background: "#fff", font: "inherit", cursor: "pointer" }}>{o.name}</button>
-          ))}
-          {!found.length && <div className="muted" style={{ padding: 12, fontSize: 13 }}>{q ? t("noData") : "—"}</div>}
-        </div>
-      )}
-    </div>
+    <Picker multi placeholder={placeholder} items={options.map((o) => ({ id: o.id, title: o.name }))}
+      chosen={options.filter((o) => selected.includes(o.id)).map((o) => ({ id: o.id, label: o.name }))}
+      onAdd={(it) => onToggle(it.id, true)} onRemove={(id) => onToggle(id, false)} />
   );
 }
 
@@ -116,55 +99,6 @@ export function InsurersPage({ canMethods = false }: { canMethods?: boolean }) {
             <button className="btn" onClick={() => {
               const body = { name: f.name, report_emails: emails(f.emails), send_reports: f.send, reports_to_send: f.which, azure_insurance_id: f.azure || null };
               void act(() => (f.id ? api("PUT", `/admin/insurers/${f.id}`, body) : api("POST", "/admin/insurers", body)), setErr, () => { setF(null); void list.reload(); });
-            }}>{t("save")}</button>
-            <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
-          </p>
-        </Card>
-      )}
-    </>
-  );
-}
-
-// ---------------------------------------------------------------- campaigns
-interface Campaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
-export function CampaignsPage() {
-  const list = useLoad<Campaign[]>("/admin/campaigns");
-  const sites = useLoad<Station[]>("/admin/stations");
-  const [f, setF] = useState<{ id?: string; name: string; country: string; start: string; end: string; stationIds: string[] } | null>(null);
-  const [err, setErr] = useState("");
-  return (
-    <>
-      <Card title={t("campaigns")} actions={<button className="btn" onClick={() => setF({ name: "", country: "ES", start: "", end: "", stationIds: [] })}>{t("newCampaign")}</button>}>
-        <Err msg={list.err || err} />
-        <table><tbody>{(list.data ?? []).map((cp) => (
-          <tr key={cp.id}>
-            <td><b>{cp.name}</b><div style={{ color: "var(--sub)", fontSize: 13 }}>{cp.country} · {cp.start ?? "…"} → {cp.end ?? "…"}</div></td>
-            <td>{cp.stationIds.map((id) => <span key={id} className="pill">{sites.data?.find((s) => s.id === id)?.name ?? "?"}</span>)}</td>
-            <td style={{ whiteSpace: "nowrap" }}>
-              <button className="btn sec" onClick={() => setF({ id: cp.id, name: cp.name, country: cp.country, start: cp.start ?? "", end: cp.end ?? "", stationIds: cp.stationIds })}>{t("edit")}</button>{" "}
-              <button className="btn danger" onClick={() => { if (window.confirm(`${t("delete")}: ${cp.name}?`)) void act(() => api("DELETE", `/admin/campaigns/${cp.id}`), setErr, list.reload); }}>{t("delete")}</button>
-            </td>
-          </tr>
-        ))}</tbody></table>
-        {!list.data?.length && <p className="muted">{t("noData")}</p>}
-      </Card>
-      {f && (
-        <Card title={f.id ? f.name : t("newCampaign")}>
-          <label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Talavera Allianz Okt 2026" />
-          <div className="row">
-            <div className="grow"><label>{t("country")}</label><select value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })}><option>DE</option><option>ES</option></select></div>
-            <div className="grow"><label>{t("from")}</label><input type="date" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
-            <div className="grow"><label>{t("to")}</label><input type="date" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>
-          </div>
-          <label>{t("sites")}</label>
-          <div className="grid">{(sites.data ?? []).filter((s) => s.active).map((s) => (
-            <label key={s.id}><input type="checkbox" checked={f.stationIds.includes(s.id)} onChange={(e) => setF({ ...f, stationIds: e.target.checked ? [...f.stationIds, s.id] : f.stationIds.filter((x) => x !== s.id) })} />{s.name}</label>
-          ))}</div>
-          <Err msg={err} />
-          <p className="row">
-            <button className="btn" onClick={() => {
-              const body = { name: f.name, country: f.country, start: f.start || null, end: f.end || null, station_ids: f.stationIds };
-              void act(() => (f.id ? api("PUT", `/admin/campaigns/${f.id}`, body) : api("POST", "/admin/campaigns", body)), setErr, () => { setF(null); void list.reload(); });
             }}>{t("save")}</button>
             <button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button>
           </p>
