@@ -41,3 +41,52 @@
 - [ ] Journal d'audit et logs : pas d'erreur `unsupported_op` répétée, pas d'envoi de rapport en « failed ».
 - [ ] Capacité du calendrier de réparation et envoi des rappels : un jour réel passé sans accroc.
 - [ ] Retirer `?ui=legacy` seulement après plusieurs semaines sans retour de ce côté.
+
+---
+
+# Ajouts v4 (branche `feature/ui-v4`, créée depuis `feature/ui-v3`)
+
+La v4 **n'ajoute aucune migration** (`git diff feature/ui-v3 -- server/migrations server/src/schema.ts` est vide) : le schéma de la base est celui de la v3, l'ancien code tourne donc sur la même base. Elle se fusionne **après** `feature/ui-v3` (ou avec elle) ; si `feature/ui-v3` est fusionnée avant, rebaser `feature/ui-v4` sur `main`.
+
+## G. Prérequis v4 (staging)
+- [ ] `feature/ui-v4` déployée sur le staging Render (`hagel-staging-api` et `hagel-staging-worker`, branche changée de `feature/ui-v3` à `feature/ui-v4`, jamais sur les services de production).
+- [ ] `render_integrity.ps1 -Compare` après le déploiement → **IDENTICAL** (avant : `netDigest` `dc6fa5b7…`, 12 véhicules vivants, net 20 872,17 € en Espagne ; aucune table ajoutée par la v4).
+- [ ] Golden 22/22 et suite complète verte (658 tests au dernier passage).
+- [ ] Les quatre langues complètes (test i18n vert) ; dates dans la langue de l'utilisateur.
+- [ ] **Rôle Freelancer** : lancer `npm run freelancers -w @hagel/server` contre la copie de la prod (lecture seule) et noter les comptes : ils voient désormais leurs véhicules assignés en plus de leur ancienne campagne ; l'accès limité dans le temps est conservé. Les nouveaux véhicules n'ont plus de campagne.
+- [ ] Technicien et headliner : fiches **Techniciens et headliners** liées à un compte (champ Compte) ; le compte a le rôle Technicien. Sans cette liaison, le compte garde l'interface habituelle.
+
+## H. Décisions v4 à valider
+- [ ] Un technicien ou headliner lié à une fiche **ne peut plus changer un statut ni choisir la carrosserie** (sinon « Fertig » contournait les contrôles de Finish). Ligne à retirer dans `sync.ts` (`vehicle.status`) et `repair.ts` (`vehicle.bodyshop`) si ce n'est pas voulu.
+- [ ] Déplacements : technicien Démontage → PDR ; headliner Démontage → PDR et Remontage → At Bodyshop. Rien d'autre.
+- [ ] Photo de l'étape courante prise par lui-même, obligatoire avant ces déplacements (pas pour le chef de station).
+- [ ] « Annuler » après un déplacement : le déplacement n'est envoyé qu'après 6 secondes sans annulation (le serveur refuse les retours en arrière du profil terrain).
+- [ ] Calendrier PDR Citas : appels jour par jour (≈ 31 par mois, budget de 90 requêtes par minute) ; demander à l'équipe Citas une route par période (`from`/`to`) pour passer à l'option (b) : une seule fonction à changer (`monthCounts`).
+- [ ] La recherche assureur ne cherche pas par e-mail (les e-mails d'assureurs ne sont pas envoyés aux téléphones).
+
+## I. Liste de tests manuels pour Nicolas (staging, à faire sur téléphone)
+Comptes : un compte **technicien** (fiche pdr) et un compte **headliner** (fiche headliner), créés par Nicolas ; 2–3 jours d'usage réel.
+
+Téléphone (390 px), tous profils :
+- [ ] Administration : le sélecteur de section en haut, tableaux en cartes ; tous les boutons (Modifier / Désactiver / Supprimer) atteignables ; montants du rapport hebdomadaire visibles.
+- [ ] Estimation et tableau de bord : toutes les colonnes visibles, pas de défilement latéral.
+- [ ] Recherche assureur, technicien, personnes et station de destination : clavier, accents, « travaille ici », « complète », « autre tenant ».
+- [ ] Plus aucune campagne dans l'interface (Généralités, filtres, rôles).
+- [ ] Champ de recherche d'en-tête : « 7731kbr » trouve « 7731 KBR » ; véhicules rendus compris ; un clic ouvre le détail réparation ou la fiche.
+- [ ] Nouveaux scans : ligne d'un scan sans carrosserie et sans station → choix de la station → l'expertise s'ouvre sur Généralités.
+- [ ] Calendrier PDR Citas : mois, jour par heure, démarrage d'une expertise depuis un rendez-vous, état « PDR Citas injoignable ».
+
+Technicien :
+- [ ] Il ne voit ni Administration, ni tableau de bord, ni scans, ni prix ; sa liste ne contient que ses voitures.
+- [ ] « Tu gagnes » = seulement sa part (PDR %), jamais net ni brut.
+- [ ] Voiture en Démontage : sans photo, bouton grisé + encadré orange ; après la photo : « Passer à PDR » ; Annuler dans les 6 secondes ; le déplacement arrive.
+- [ ] Hors ligne : photo puis déplacement ; après reconnexion, accepté ou refus affiché clairement.
+- [ ] Il ne peut déplacer aucune autre voiture, ni vers une autre colonne (le serveur refuse).
+
+Headliner :
+- [ ] Seulement ses voitures (Aus-/Einbau) ; pièces à poser (barrées une fois faites) ; pièces remplacées en rouge sur le schéma.
+- [ ] Déplacements Démontage → PDR et Remontage → At Bodyshop, chacun après sa photo ; jamais vers Finish.
+
+## J. Retour arrière v4
+- Redéployer la branche précédente sur le service concerné (aucune migration à défaire).
+- Les téléphones gardent leurs opérations en file ; un serveur plus ancien répond `409 unsupported_op` pour les opérations qu'il ne connaît pas.
