@@ -288,11 +288,12 @@ export const matches = (q: string, fields: (string | null | undefined)[]): boole
   return norm(q).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
 };
 
-const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", capacite: 0, azure_tenant: "", commission_pct: 0, report_emails: [] as string[], excluded: [] as string[], rpd: 3, bcs: [] as string[], links: [] as string[], bcFilter: "", aliases: "" };
+const emptySite = { type: "carrosserie", name: "", address: "", country: "ES", capacite: 0, azure_tenant: "", commission_pct: 0, report_emails: [] as string[], excluded: [] as string[], rpd: 3, bcs: [] as string[], links: [] as string[], bcFilter: "", aliases: "", citas: "" };
 
 export function SitesPage({ canManage, canInsurers = true }: { canManage: boolean; canInsurers?: boolean }) {
   const sites = useLoad<Station[]>("/admin/stations");
   const tenants = useLoad<string[]>("/admin/tenants");
+  const citasLocs = useLoad<{ id: string; name: string; active: boolean }[]>(canManage ? "/citas/locations" : "");
   const azBc = useLoad<{ id: string; name: string; links?: { id: string; name: string }[] }[]>(canManage ? "/admin/azure/business-customers" : "");
   const [f, setF] = useState<(typeof emptySite & { id?: string }) | null>(null);
   const [q, setQ] = useState("");
@@ -317,7 +318,7 @@ export function SitesPage({ canManage, canInsurers = true }: { canManage: boolea
             <tr key={s.id}>
               <td>{s.name}{!s.active && <span className="pill off">{t("inactive")}</span>}</td><td>{typeLabel(s.type)}</td><td>{s.type === "carrosserie" && !s.capacite ? "—" : <Occ present={s.present ?? 0} capacity={s.capacite} />}</td><td>{s.country}</td><td>{s.azureTenant ?? "—"}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
-                <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails, excluded: s.excludedInsurerEmails ?? [], rpd: s.repairsPerDay ?? 3, bcs: (s as unknown as { azureBcIds?: string[] }).azureBcIds ?? [], bcFilter: "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", ") })}>{t("edit")}</button>{" "}
+                <button className="btn sec" onClick={() => setF({ id: s.id, type: s.type, name: s.name, address: s.address, country: s.country, capacite: s.capacite, azure_tenant: s.azureTenant ?? "", commission_pct: Number(s.commissionPct), report_emails: s.reportEmails, excluded: s.excludedInsurerEmails ?? [], rpd: s.repairsPerDay ?? 3, bcs: (s as unknown as { azureBcIds?: string[] }).azureBcIds ?? [], bcFilter: "", links: (s as unknown as { azureLinkIds?: string[] }).azureLinkIds ?? [], aliases: ((s as unknown as { azureLocationAliases?: string[] }).azureLocationAliases ?? []).join(", "), citas: (s as unknown as { citasLocationId?: string | null }).citasLocationId ?? "" })}>{t("edit")}</button>{" "}
                 <button className="btn danger" onClick={() => act(() => api("POST", `/admin/stations/${s.id}/active`, { active: !s.active }), setErr, sites.reload)}>{s.active ? t("deactivate") : t("reactivate")}</button>{" "}
                 <button className="btn danger" onClick={() => { if (confirmDialog(`${t("v6DeleteStationQ")}
 
@@ -374,10 +375,19 @@ ${s.name}`)) void act(() => api("DELETE", `/admin/stations/${s.id}`), setErr, ()
             <label>{t("locationAliases")}</label><input value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} />
             <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("locationAliasesHint")}</div>
           </>}
+          {canManage && (!!citasLocs.data?.length || !!f.citas) && <>
+            <label>{t("ciLocation")}</label>
+            <select value={f.citas} onChange={(e) => setF({ ...f, citas: e.target.value })}>
+              <option value="">{t("ciNoLocation")}</option>
+              {(citasLocs.data ?? []).filter((l) => l.active || l.id === f.citas).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              {!!f.citas && !(citasLocs.data ?? []).some((l) => l.id === f.citas) && <option value={f.citas}>{f.citas}</option>}
+            </select>
+            <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("ciLocationHint")}</div>
+          </>}
           <Err msg={err} />
           <p className="row"><button className="btn" onClick={() => {
             const body = { type: f.type, name: f.name, address: f.address, country: f.country, capacite: f.capacite, azure_tenant: f.azure_tenant || null,
-              commission_pct: f.commission_pct, report_emails: f.report_emails, excluded_insurer_emails: f.excluded, repairs_per_day: f.rpd,
+              commission_pct: f.commission_pct, report_emails: f.report_emails, excluded_insurer_emails: f.excluded, repairs_per_day: f.rpd, ...(canManage ? { citas_location_id: f.citas || null } : {}),
               azure_business_customer_ids: f.type === "carrosserie" ? f.bcs : [], azure_link_ids: f.type === "carrosserie" ? f.links : [], azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
             void act(() => (f.id ? api("PUT", `/admin/stations/${f.id}`, body) : api("POST", "/admin/stations", body)), setErr, () => { setF(null); void sites.reload(); });
           }}>{t("save")}</button><button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button></p>

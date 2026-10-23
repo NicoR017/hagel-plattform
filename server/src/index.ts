@@ -13,6 +13,7 @@ import { seedStaging } from "./scripts/seed_staging";
 import { storageFromEnv } from "./storage";
 import { azureFromEnv } from "./azure";
 import { citasFromConfig } from "./citas";
+import { FakeCitas } from "./citas_fake";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
@@ -26,8 +27,14 @@ if (cfg.appEnv === "staging" && process.env.STAGING_SEED === "1" && process.env.
   console.log("staging seed:", await seedStaging(h.db, { password: process.env.STAGING_TEST_PASSWORD, superadminEmail: process.env.SEED_SUPERADMIN_EMAIL }));
 }
 
+function demoCitas() {
+  const day = (add: number) => new Date(Date.now() + add * 86400_000).toLocaleDateString("en-CA", { timeZone: "Europe/Madrid" });
+  console.log("citas: FAKE appointments (CITAS_FAKE=1)");
+  return new FakeCitas().demo(day(0), day(1));
+}
+
 const api = createApp({
-  db: h.db, cfg, mailer, storage, az: azureFromEnv(), citas: citasFromConfig(cfg),
+  db: h.db, cfg, mailer, storage, az: azureFromEnv(), citas: process.env.CITAS_FAKE === "1" && cfg.appEnv !== "production" ? demoCitas() : citasFromConfig(cfg),
   ocr: { apiKey: process.env.ANTHROPIC_API_KEY ?? null, model: process.env.OCR_MODEL ?? "claude-sonnet-5-5", fetch: (url, init) => fetch(url, init) },
 });
 const root = new Hono();

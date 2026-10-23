@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, httpFetch } from "./api";
 import { act, Card, Err, matches, useLoad } from "./admin";
-import { fmtDateTime, t } from "./i18n";
+import { fmtDateTime, t, tOr } from "./i18n";
 
 interface Station { id: string; type: string; name: string; active: boolean }
 interface Insurer { id: string; name: string; reportEmails: string[]; sendReports: boolean; reportsToSend: string; stationIds: string[] }
@@ -299,6 +299,27 @@ interface AzStatus {
   lastRuns: { at: string; finishedAt: string | null; ok: boolean | null; error: string | null; stats: Record<string, number> | null }[];
   unmappedCustomers: { name: string; tenant: string; scans: number }[]; unmappedLocations: { location: string; tenant: string; scans: number }[];
 }
+/** Connection to PDR Citas (appointments): status, and a button that tests it (health, then locations). */
+function CitasCard() {
+  const [st, setSt] = useState<{ configured: boolean; ok: boolean; locations?: number; error?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const test = async () => {
+    setBusy(true); setErr("");
+    try { setSt(await api("GET", "/citas/status")); } catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  };
+  useEffect(() => { void test(); }, []);
+  return (
+    <Card title={t("ciAdminTitle")} actions={<button className="btn" disabled={busy || st?.configured === false} onClick={() => void test()}>{t("ciTest")}</button>}>
+      <Err msg={err} />
+      {st && (!st.configured ? <p className="muted">{t("ciNotConfigured")}</p>
+        : st.ok ? <p><span className="ok">✓ {t("ciConnected").replace("{n}", String(st.locations ?? 0))}</span></p>
+        : <p><span className="err">{t("ciFailed")}: {tOr("ciErr_" + (st.error ?? "unreachable"), t("ciErr_unreachable"))}</span></p>)}
+    </Card>
+  );
+}
+
 export function AzurePage() {
   const st = useLoad<AzStatus>("/admin/azure/status");
   const sites = useLoad<(Station & { azureTenant: string | null; type: string })[]>("/admin/stations");
@@ -331,6 +352,7 @@ export function AzurePage() {
           </>
         )}
       </Card>
+      <CitasCard />
       {!!d?.unmappedCustomers.length && (
         <Card title={t("unmappedCustomers")}>
           <p className="muted" style={{ marginTop: 0 }}>{t("unmappedCustomersHint")}</p>

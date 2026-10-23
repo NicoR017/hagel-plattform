@@ -5,6 +5,7 @@ import { useField, useVehicles } from "../field/store";
 import { setPrefs } from "../sync/mutations";
 import { stationCounts } from "./modes";
 import { OccLine, typeLabel } from "./Stations";
+import { CitasDayBlock } from "./CitasDay";
 import { useNewScans } from "./useScans";
 
 const ICON: Record<Mode, ReactNode> = {
@@ -46,6 +47,8 @@ export function ModeChoice({ stationId }: { stationId: string }) {
         <div style={{ flex: "0 1 260px", minWidth: 200 }}><OccLine present={present} capacity={st.capacite} /></div>
         <button className="btn" onClick={() => { try { sessionStorage.setItem("hagel.v3.autoStation", "1"); } catch { /* ignore */ } go({ page: "list" }); }}>{t("v3SwitchStation")}</button>
       </section>
+
+      <CitasDayBlock stationId={st.id} />
 
       <h2 style={{ fontSize: 17, fontWeight: 600, marginTop: 4 }}>{t("v3WorkOn")}</h2>
       <div className="modes">

@@ -30,6 +30,15 @@ export class FakeCitas implements CitasSource {
     return a;
   }
 
+  /** A few appointments today and tomorrow for local development (CITAS_FAKE=1, never in production). */
+  demo(today: string, tomorrow: string): this {
+    this.addLocation({ id: "demo-1", name: "Nave demo Madrid" });
+    this.add({ id: "demo-a", date: today, time: "09:00", plate: "1234 ABC", insurance: "Mutua Madrileña", caseNumber: "SIN-2026-1" });
+    this.add({ id: "demo-b", date: today, time: "10:30", plate: "5678 DEF", make: "Seat", model: "Leon", first: "Luis", last: "Pérez", status: "cancel_requested" });
+    this.add({ id: "demo-c", date: tomorrow, time: "11:00", plate: "9012 GHI", make: "Renault", model: "Clio", first: "Marta", last: "Ruiz" });
+    return this;
+  }
+
   private check(call: string) {
     this.calls.push(call);
     if (this.failWith) throw new CitasError(this.failWith);

@@ -2,6 +2,7 @@ import { t } from "../i18n";
 import { type Route } from "../field/route";
 import { useField, useVehicle } from "../field/store";
 import { Expertise } from "./Expertise";
+import { CitasStart } from "./CitasStart";
 import { ModeChoice } from "./ModeChoice";
 import { NewExpertise } from "./NewExpertise";
 import { Shell3, type Crumb } from "./Shell3";
@@ -37,6 +38,9 @@ export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg
   } else if (route.page === "newexp") {
     crumbs = trail(route.stationId, route.mode, { label: t("v4NewTitle") });
     body = <NewExpertise stationId={route.stationId} mode={route.mode} />;
+  } else if (route.page === "citas") {
+    crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…", to: { page: "mode", stationId: route.stationId } }, { label: t("ciCrumb") }];
+    body = <CitasStart key={route.appointmentId} stationId={route.stationId} date={route.date} appointmentId={route.appointmentId} />;
   } else if (route.page === "expertise") {
     const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "kalk" as const } : undefined);
     crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: `${t("v4Expertise")} · ${plate}` }) : [home, { label: `${t("v4Expertise")} · ${plate}` }];

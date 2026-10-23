@@ -9,6 +9,7 @@ import { deV3, enV3 } from "./i18n_v3";
 import { deV4, enV4 } from "./i18n_v4";
 import { deV5, enV5 } from "./i18n_v5";
 import { deV6, enV6 } from "./i18n_v6";
+import { deCitas, enCitas, esCitas, frCitas } from "./i18n_citas";
 import { frBase } from "./i18n_fr_base";
 import { frField } from "./i18n_fr_field";
 import { frV } from "./i18n_fr_v";
@@ -83,7 +84,7 @@ const deBase = {
   "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
-const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6 };
+const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6, ...deCitas };
 export type Key = keyof typeof de;
 
 const enBase: Record<keyof typeof deBase, string> = {
@@ -150,10 +151,10 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
-const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6 };
+const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6, ...enCitas };
 
-const fr = { ...frBase, ...frField, ...frV } as Record<Key, string>;
-const es = { ...esBase, ...esField, ...esV } as Record<Key, string>;
+const fr = { ...frBase, ...frField, ...frV, ...frCitas } as Record<Key, string>;
+const es = { ...esBase, ...esField, ...esV, ...esCitas } as Record<Key, string>;
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en, fr, es };
 
