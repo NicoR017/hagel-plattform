@@ -13,6 +13,7 @@ export const deCitas = {
   ciStartWith: "Mit diesem Scan starten", ciStartWithout: "Ohne Scan starten", ciStarting: "Startet …",
   ciPlateMismatch: "Das Kennzeichen des Scans ({scan}) weicht vom Termin ({appt}) ab. Trotzdem starten?",
   ciAlready: "Für diesen Termin wurde schon eine Expertise gestartet.", ciOpen: "Expertise öffnen", ciNotFound: "Termin nicht gefunden.",
+  ciMonthBtn: "Monat", ciCalTitle: "Terminkalender", ciPrevMonth: "Vormonat", ciNextMonth: "Folgemonat", ciNoExpertise: "Keine Expertise", ciNotLinked: "Diese Station ist keinem PDR-Citas-Standort zugeordnet.", ciRateLimited: "Zu viele Anfragen an PDR Citas. Bitte in einer Minute erneut versuchen.", ciRetry: "Erneut versuchen", ciApptCount: "{n} Termine", ciDayTitle: "Termine am {d}", ciPickDay: "Tag antippen, um die Termine nach Uhrzeit zu sehen.",
 } as const;
 
 export const enCitas: Record<keyof typeof deCitas, string> = {
@@ -29,6 +30,7 @@ export const enCitas: Record<keyof typeof deCitas, string> = {
   ciStartWith: "Start with this scan", ciStartWithout: "Start without a scan", ciStarting: "Starting …",
   ciPlateMismatch: "The plate of the scan ({scan}) differs from the appointment ({appt}). Start anyway?",
   ciAlready: "An expertise was already started for this appointment.", ciOpen: "Open expertise", ciNotFound: "Appointment not found.",
+  ciMonthBtn: "Month", ciCalTitle: "Appointments calendar", ciPrevMonth: "Previous month", ciNextMonth: "Next month", ciNoExpertise: "No expertise", ciNotLinked: "This station is not linked to a PDR Citas location.", ciRateLimited: "Too many requests to PDR Citas. Please try again in a minute.", ciRetry: "Try again", ciApptCount: "{n} appointments", ciDayTitle: "Appointments on {d}", ciPickDay: "Tap a day to see its appointments by hour.",
 };
 
 export const frCitas: Record<keyof typeof deCitas, string> = {
@@ -45,6 +47,7 @@ export const frCitas: Record<keyof typeof deCitas, string> = {
   ciStartWith: "Démarrer avec ce scan", ciStartWithout: "Démarrer sans scan", ciStarting: "Démarrage …",
   ciPlateMismatch: "La plaque du scan ({scan}) diffère de celle du RDV ({appt}). Démarrer quand même ?",
   ciAlready: "Une expertise a déjà été démarrée pour ce RDV.", ciOpen: "Ouvrir l'expertise", ciNotFound: "Rendez-vous introuvable.",
+  ciMonthBtn: "Mois", ciCalTitle: "Calendrier des rendez-vous", ciPrevMonth: "Mois précédent", ciNextMonth: "Mois suivant", ciNoExpertise: "Pas d'expertise", ciNotLinked: "Cette station n'est liée à aucun site PDR Citas.", ciRateLimited: "Trop de requêtes vers PDR Citas. Réessayez dans une minute.", ciRetry: "Réessayer", ciApptCount: "{n} rendez-vous", ciDayTitle: "Rendez-vous du {d}", ciPickDay: "Touchez un jour pour voir ses rendez-vous par heure.",
 };
 
 export const esCitas: Record<keyof typeof deCitas, string> = {
@@ -61,4 +64,5 @@ export const esCitas: Record<keyof typeof deCitas, string> = {
   ciStartWith: "Iniciar con este escaneo", ciStartWithout: "Iniciar sin escaneo", ciStarting: "Iniciando …",
   ciPlateMismatch: "La matrícula del escaneo ({scan}) difiere de la de la cita ({appt}). ¿Iniciar de todos modos?",
   ciAlready: "Ya se inició una peritación para esta cita.", ciOpen: "Abrir la peritación", ciNotFound: "Cita no encontrada.",
+  ciMonthBtn: "Mes", ciCalTitle: "Calendario de citas", ciPrevMonth: "Mes anterior", ciNextMonth: "Mes siguiente", ciNoExpertise: "Sin peritaje", ciNotLinked: "Esta estación no está vinculada a ninguna sede de PDR Citas.", ciRateLimited: "Demasiadas solicitudes a PDR Citas. Inténtelo de nuevo en un minuto.", ciRetry: "Reintentar", ciApptCount: "{n} citas", ciDayTitle: "Citas del {d}", ciPickDay: "Toque un día para ver sus citas por hora.",
 };

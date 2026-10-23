@@ -26,6 +26,15 @@ interface Deps {
 }
 
 const CACHE_MS = 60_000;
+/** the Citas API allows 120 requests per minute for the whole key: the calendar never uses more than this many of them per minute */
+const CALL_BUDGET = 90;
+const CALENDAR_CONCURRENCY = 4;
+const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const monthDays = (m: string): string[] => {
+  const [y, mo] = m.split("-").map(Number);
+  const n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return Array.from({ length: n }, (_, i) => `${m}-${String(i + 1).padStart(2, "0")}`);
+};
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const startInput = z.object({
   station_id: z.string().uuid(),
@@ -65,11 +74,15 @@ export function citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, va
     return zoneCache.byId.get(locationId) || zoneOfCountry(country);
   };
 
+  const callTimes: number[] = []; // when the API was really called (the budget of the last minute)
+  const callsLastMinute = () => { while (callTimes.length && now() - callTimes[0] >= 60_000) callTimes.shift(); return callTimes.length; };
+
   /** One day of one location: cached for 60 s (`fresh` skips the cache: the refresh button). */
   const dayOf = async (locationId: string, date: string, fresh: boolean): Promise<CitasDay> => {
     const k = `${locationId}|${date}`;
     const hit = cache.get(k);
     if (hit && !fresh && now() - hit.at < CACHE_MS) return hit.day;
+    callTimes.push(now());
     try {
       const d = await citas!.appointments({ date, location: locationId });
       cache.set(k, { at: now(), day: d });
@@ -77,6 +90,61 @@ export function citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, va
       return d;
     } catch (e) { return gone(e); }
   };
+
+  // ------------------------------------------------------------------ the month calendar
+  const monthCache = new Map<string, { at: number; days: Record<string, number> }>();
+  const monthBusy = new Map<string, Promise<Record<string, number>>>();
+
+  /**
+   * Appointments per day of one month (cancelled ones not counted).
+   * THE ONE FUNCTION TO CHANGE when Citas gets a period route (option (b)): `citas.counts` is used as soon as the source has it.
+   * Today (option (a)) it asks the API for every day of the month, a few at a time, through the 60 s day cache.
+   */
+  const monthCounts = async (locationId: string, m: string): Promise<Record<string, number>> => {
+    const days = monthDays(m);
+    if (citas!.counts) {
+      try { const c = await citas!.counts({ from: days[0], to: days[days.length - 1], location: locationId }); return Object.fromEntries(days.map((d) => [d, c[d] ?? 0])); } catch (e) { return gone(e); }
+    }
+    const missing = days.filter((d) => { const h = cache.get(`${locationId}|${d}`); return !(h && now() - h.at < CACHE_MS); });
+    if (missing.length > CALL_BUDGET - callsLastMinute()) throw new HttpError(429, "too_many_requests");
+    const out: Record<string, number> = {};
+    let next = 0;
+    const worker = async () => {
+      while (next < days.length) {
+        const d = days[next++];
+        out[d] = (await dayOf(locationId, d, false)).appointments.filter((a) => a.status !== "cancelled").length;
+      }
+    };
+    await Promise.all(Array.from({ length: CALENDAR_CONCURRENCY }, worker));
+    return out;
+  };
+
+  r.get("/citas/calendar", needAuth, needOrg, async (c) => {
+    const q = c.req.query();
+    if (!z.string().uuid().safeParse(q.station_id).success || (q.month && !month.safeParse(q.month).success)) throw new HttpError(400, "invalid_input");
+    const st = await stationFor(c, q.station_id, "vehicules.voir");
+    if (!citas) return c.json({ configured: false, linked: false, days: {} });
+    if (!st.citasLocationId) return c.json({ configured: true, linked: false, days: {} });
+    const zone = await zoneOf(st.citasLocationId, st.country);
+    const today = dayInZone(now(), zone);
+    const m = q.month || today.slice(0, 7);
+    // a month far from today is of no use (and each one costs ~30 calls)
+    const gap = (Number(m.slice(0, 4)) - Number(today.slice(0, 4))) * 12 + Number(m.slice(5)) - Number(today.slice(5, 7));
+    if (Math.abs(gap) > 24) throw new HttpError(400, "invalid_input");
+    const k = `${st.citasLocationId}|${m}`;
+    const hit = monthCache.get(k);
+    // a month that is over changes rarely: 10 minutes; the current and future ones: as long as the day cache (60 s)
+    const ttl = m < today.slice(0, 7) ? 600_000 : CACHE_MS;
+    let days: Record<string, number>;
+    if (hit && q.refresh !== "1" && now() - hit.at < ttl) days = hit.days;
+    else {
+      let p = monthBusy.get(k); // two users opening the same month at once share one run
+      if (!p) { p = monthCounts(st.citasLocationId, m).finally(() => monthBusy.delete(k)); monthBusy.set(k, p); }
+      try { days = await p; } catch (e) { if (hit) days = hit.days; else throw e; } // a failure still shows the last known numbers
+      if (days !== hit?.days) monthCache.set(k, { at: now(), days });
+    }
+    return c.json({ configured: true, linked: true, month: m, today, timezone: zone, days });
+  });
 
   // ------------------------------------------------------------------ admin: status and locations
   r.get("/citas/status", needAuth, needOrg, manage, async (c) => {

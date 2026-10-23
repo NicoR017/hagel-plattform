@@ -40,6 +40,25 @@ export function useOnline(): boolean {
   return on;
 }
 
+export interface CitasMonth { configured: boolean; linked: boolean; month?: string; today?: string; timezone?: string; days: Record<string, number> }
+
+/** Number of appointments per day of a month (online only). `error`: "rate" when Citas' request budget is used up, "down" when it cannot be reached. */
+export function useCitasMonth(stationId: string, month: string | undefined, enabled: boolean) {
+  const [data, setData] = useState<CitasMonth | null>(null);
+  const [error, setError] = useState<null | "rate" | "down">(null);
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async (fresh: boolean) => {
+    setLoading(true);
+    try {
+      setData(await api<CitasMonth>("GET", `/citas/calendar?station_id=${stationId}${month ? `&month=${month}` : ""}${fresh ? "&refresh=1" : ""}`));
+      setError(null);
+    } catch (e) { setError((e as { status?: number }).status === 429 ? "rate" : "down"); }
+    setLoading(false);
+  }, [stationId, month]);
+  useEffect(() => { if (enabled) void load(false); }, [enabled, load]);
+  return { data, error, loading, refresh: () => load(true) };
+}
+
 /** Stations known to be linked to a Citas location (so that offline the block can say "online only" instead of vanishing). */
 export const linkedStations = new Set<string>();
 

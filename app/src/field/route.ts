@@ -30,6 +30,8 @@ export type Route =
   | { page: "newexp"; stationId: string; mode: Mode }
   /** start an expertise from a PDR Citas appointment (the day is the appointment's, in the station's time zone) */
   | { page: "citas"; stationId: string; date: string; appointmentId: string }
+  /** PDR Citas month calendar of a station: #/s/:station/cal[/YYYY-MM[/YYYY-MM-DD]] */
+  | { page: "calendar"; stationId: string; month?: string; date?: string }
   /** the assessment assistant: Basis · Erfassung · Bilder · KVA */
   | { page: "expertise"; id: string; step: Step; ctx?: Ctx }
   | { page: "vehicle"; id: string; tab: Tab; ctx?: Ctx }
@@ -59,6 +61,7 @@ export function parseRoute(hash: string): Route {
   if (p[0] === "s" && p[1]) {
     const stationId = p[1];
     if (p[2] === "rep" && p[3] === "r" && p[4]) return { page: "repair", id: p[4], tab: (RTABS as string[]).includes(p[5] ?? "") ? (p[5] as RTab) : "uebersicht", stationId };
+    if (p[2] === "cal") return { page: "calendar", stationId, month: /^d{4}-d{2}$/.test(p[3] ?? "") ? p[3] : undefined, date: /^d{4}-d{2}-d{2}$/.test(p[4] ?? "") ? p[4] : undefined };
     if (p[2] === "citas" && /^\d{4}-\d{2}-\d{2}$/.test(p[3] ?? "") && p[4]) return { page: "citas", stationId, date: p[3], appointmentId: decodeURIComponent(p[4]) };
     if (isMode(p[2]) && p[3] === "neu") return { page: "newexp", stationId, mode: p[2] };
     if (isMode(p[2]) && p[3] === "exp" && p[4]) return { page: "expertise", id: p[4], step: stepOf(p[5]), ctx: { stationId, mode: p[2] } };
@@ -79,6 +82,7 @@ export const hrefOf = (r: Route): string => {
     case "newexp": return `#/s/${r.stationId}/${r.mode}/neu`;
     case "citas": return `#/s/${r.stationId}/citas/${r.date}/${encodeURIComponent(r.appointmentId)}`;
     case "repair": return `#/s/${r.stationId}/rep/r/${r.id}/${r.tab}`;
+    case "calendar": return `#/s/${r.stationId}/cal${r.month ? "/" + r.month + (r.date ? "/" + r.date : "") : ""}`;
     case "expertise": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/exp/${r.id}/${r.step}` : `#/expertise/${r.id}/${r.step}`;
     case "mode": return `#/s/${r.stationId}`;
     case "list": return r.stationId ? `#/s/${r.stationId}/${r.mode}` : r.dash ? "#/?f=dash" : "#/";
@@ -105,6 +109,7 @@ export function parentRoute(r: Route, vehicleStationId?: string | null): Route |
       return vehicleStationId ? { page: "list", stationId: vehicleStationId, mode: "kalk" } : { page: "list" };
     case "newexp": return { page: "list", stationId: r.stationId, mode: r.mode };
     case "citas": return { page: "mode", stationId: r.stationId };
+    case "calendar": return { page: "mode", stationId: r.stationId };
     case "repair": return { page: "list", stationId: r.stationId, mode: "rep" };
     case "list": return r.stationId ? { page: "mode", stationId: r.stationId } : r.dash ? { page: "list" } : null;
     case "mode": return { page: "list" };

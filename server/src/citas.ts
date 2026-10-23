@@ -27,6 +27,11 @@ export interface CitasSource {
   locations(): Promise<CitasLocation[]>;
   appointments(o: { date: string; location: string; includeCancelled?: boolean }): Promise<CitasDay>;
   appointment(id: string): Promise<CitasAppointment>;
+  /**
+   * Appointments per day over a period (YYYY-MM-DD, both ends included). OPTIONAL: the Citas API does not have such a route yet
+   * (option (b) of the calendar: a period route added to Citas). When a source has it, the calendar uses it instead of one call per day.
+   */
+  counts?(o: { from: string; to: string; location: string }): Promise<Record<string, number>>;
 }
 
 /** What went wrong, without any detail that could leak the URL or the key. */

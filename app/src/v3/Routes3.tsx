@@ -11,6 +11,7 @@ import { VehicleDetail } from "./VehicleDetail";
 import { RepairDetail } from "./RepairDetail";
 import { VehicleList } from "./VehicleList";
 import { NewScans } from "./NewScans";
+import { CitasCalendar } from "./CitasCalendar";
 import { SearchResults } from "./SearchResults";
 import { modeTitle } from "./listActions";
 import "./v3.css";
@@ -49,6 +50,9 @@ export function V3Routes({ me, org, onOrg, route }: { me: Me; org: string; onOrg
   } else if (route.page === "citas") {
     crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…", to: { page: "mode", stationId: route.stationId } }, { label: t("ciCrumb") }];
     body = <CitasStart key={route.appointmentId} stationId={route.stationId} date={route.date} appointmentId={route.appointmentId} />;
+  } else if (route.page === "calendar") {
+    crumbs = [home, { label: stationOf(route.stationId)?.name ?? "…", to: { page: "mode", stationId: route.stationId } }, { label: t("ciCalTitle") }];
+    body = <CitasCalendar key={route.stationId} stationId={route.stationId} month={route.month} date={route.date} />;
   } else if (route.page === "expertise") {
     const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "kalk" as const } : undefined);
     crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: `${t("v4Expertise")} · ${plate}` }) : [home, { label: `${t("v4Expertise")} · ${plate}` }];

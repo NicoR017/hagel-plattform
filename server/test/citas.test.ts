@@ -230,6 +230,82 @@ describe("appointments of a station", () => {
   });
 });
 
+describe("month calendar (appointments per day)", () => {
+  const cal = (month: string, o: { token?: string; station?: string; refresh?: boolean } = {}) =>
+    call(c, "GET", `/citas/calendar?station_id=${o.station ?? HALL}&month=${month}${o.refresh ? "&refresh=1" : ""}`, { token: o.token ?? importer, org: c.orgES });
+  // (an earlier test moved the clock back, so jump a whole day forward to be clear of every cache and of the budget window)
+  const dayCalls = () => c.citas.calls.filter((x) => x.startsWith("appointments:")).length;
+
+  it("counts the appointments of every day of the month, cancelled ones not counted", async () => {
+    c.citasClock.t += 86_400_000;
+    const before = dayCalls();
+    const r = await cal("2026-10");
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ configured: true, linked: true, month: "2026-10", timezone: "Europe/Madrid" });
+    expect(Object.keys(r.body.days)).toHaveLength(31);
+    expect(r.body.days["2026-10-19"]).toBe(2 + 1); // a-plate, a-other, a-cancel-req (asked for cancellation, still there); a-gone is cancelled
+    expect(r.body.days["2026-10-20"]).toBe(0);
+    expect(dayCalls() - before).toBe(31);
+    expect(JSON.stringify(r.body)).not.toMatch(/customer|plate|email/i); // only numbers
+  });
+
+  it("is cached (60 s), refresh asks again, and two users at once share one run", async () => {
+    const before = dayCalls();
+    await cal("2026-10");
+    expect(dayCalls()).toBe(before);
+    c.citasClock.t += 61_000;
+    await Promise.all([cal("2026-10"), cal("2026-10")]);
+    expect(dayCalls() - before).toBe(31);
+  });
+
+  it("stays under the Citas rate limit: a month that would exceed the budget of the minute is refused with 429", async () => {
+    c.citasClock.t += 86_400_000;
+    expect((await cal("2026-11")).status).toBe(200); // 30 calls
+    expect((await cal("2026-12")).status).toBe(200); // 31 calls
+    const r = await cal("2027-01"); // would be the 92nd call within the minute
+    expect(r.status).toBe(429);
+    expect(r.body.code).toBe("too_many_requests");
+    c.citasClock.t += 61_000;
+    expect((await cal("2027-01")).status).toBe(200);
+  });
+
+  it("shows the last known numbers when Citas is down, 502 when there are none", async () => {
+    c.citasClock.t += 86_400_000;
+    await cal("2026-10");
+    c.citasClock.t += 61_000;
+    c.citas.failWith = "unreachable";
+    const stale = await cal("2026-10");
+    const none = await cal("2026-09");
+    c.citas.failWith = null;
+    expect(stale.status).toBe(200);
+    expect(stale.body.days["2026-10-19"]).toBe(3);
+    expect(none.status).toBe(502);
+    expect(none.body.code).toBe("citas_unreachable");
+  });
+
+  it("uses a period route as soon as the source has one (option b): no call per day", async () => {
+    c.citasClock.t += 86_400_000;
+    const before = dayCalls();
+    (c.citas as any).counts = async () => ({ "2026-08-05": 7 });
+    const r = await cal("2026-08");
+    delete (c.citas as any).counts;
+    expect(r.body.days["2026-08-05"]).toBe(7);
+    expect(r.body.days["2026-08-06"]).toBe(0);
+    expect(dayCalls()).toBe(before);
+  });
+
+  it("checks the input, the station and the right on it; an unlinked station has no calendar", async () => {
+    expect((await cal("2026-13")).status).toBe(400);
+    expect((await cal("2030-01")).status).toBe(400); // too far from today
+    expect((await cal("2026-10", { token: techA })).status).toBe(403);
+    expect((await cal("2026-10", { station: "00000000-0000-4000-8000-000000000000" })).status).toBe(404);
+    await link(null);
+    const r = await cal("2026-10");
+    await link("loc-1");
+    expect(r.body).toEqual({ configured: true, linked: false, days: {} });
+  });
+});
+
 describe("start an expertise from an appointment", () => {
   it("is refused to somebody without the right on the station, for an unknown appointment, and for another location's one", async () => {
     expect((await start("a-other", { station_id: HALL }, techA)).status).toBe(403);

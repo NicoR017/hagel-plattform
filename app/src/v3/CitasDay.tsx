@@ -31,6 +31,7 @@ export function CitasDayBlock({ stationId }: { stationId: string }) {
           <button className="btn icon" aria-label={t("ciPrevDay")} disabled={!day} onClick={() => day && setDate(addDays(day, -1))}>‹</button>
           <button className="btn" disabled={!date} onClick={() => setDate(undefined)}>{day ? fmtDay(day) : t("ciToday")}{!date ? ` · ${t("ciToday")}` : ""}</button>
           <button className="btn icon" aria-label={t("ciNextDay")} disabled={!day} onClick={() => day && setDate(addDays(day, 1))}>›</button>
+          <button className="btn" onClick={() => go({ page: "calendar", stationId })}>📅 {t("ciMonthBtn")}</button>
           <button className="btn icon" aria-label={t("ciRefresh")} title={t("ciRefresh")} disabled={loading} onClick={() => void refresh()}>↻</button>
         </div>
       </div>
