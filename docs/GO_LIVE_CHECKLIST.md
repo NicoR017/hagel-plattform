@@ -136,7 +136,7 @@ Une quatrième étape **n'est pas une migration** et se lance à la main : le sc
 ## O. À faire juste après la mise en ligne (Nicolas)
 - [ ] **Affecter les scanners Colibri aux stations** (menu Scanners Colibri, S40) : tant qu'un scanner n'est pas affecté, ses scans apparaissent « sans station » (visibles seulement des administrateurs). Proposition Espagne : COLIBRI-028 → Chapauto ; l'Allemagne n'a pas encore de stations.
 - [ ] Contrôler la liste des **Carrosseries** (S39) : contacts, commissions, comptes externes ; aucune carrosserie ne doit rester choisie comme lieu.
-- [ ] Contrôler **Chapauto** (station de type parc ou hall, active) et les voitures déplacées (historique du véhicule : « déplacé par la migration v5 »).
+- [ ] Contrôler **Chapauto** (station de type parc ou hall, active) et les voitures déplacées (historique du véhicule : note « moved to Chapauto – body shops are no longer stations »).
 - [ ] Vérifier que les chefs de station ont bien le droit « Scanners Colibri » / « Carrosseries » voulu (rôles personnalisés : à cocher à la main).
 
 ## P. Retour arrière v5
