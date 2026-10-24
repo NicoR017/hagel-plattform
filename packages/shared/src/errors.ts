@@ -18,6 +18,7 @@ export const ERROR_MESSAGES = {
   account_disabled: { de: "Konto deaktiviert", en: "Account deactivated" },
   account_disabled_reactivate: { de: "Konto ist deaktiviert – bitte reaktivieren", en: "Account is deactivated – please reactivate it first" },
   too_many_requests: { de: "Zu viele Anfragen – bitte später erneut versuchen", en: "Too many requests – please try again later" },
+  role_last_admin: { de: "Die letzte Rolle, die Rollen verwalten darf, kann nicht gelöscht werden", en: "The last role that can manage roles cannot be deleted" },
   system_role_undeletable: { de: "Standardrollen können nicht gelöscht werden", en: "Default roles cannot be deleted" },
   role_in_use: { de: "Rolle ist noch zugewiesen", en: "Role is still assigned" },
   cannot_grant: { de: "Sie dürfen diese Rechte nicht vergeben: {missing}", en: "You are not allowed to grant these permissions: {missing}" },

@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, inArray, isNull, or, sql, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, isNotNull, ne } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
@@ -431,7 +431,11 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const b = parsed.data;
     const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id") ?? ""), eq(roles.orgId, orgId)));
     if (!r) throw new HttpError(404, "role_not_found");
-    if (r.isSystem) throw new HttpError(409, "system_role_undeletable");
+    // default roles can go too (they are only created with a new organisation, never re-created); the organisation must keep one role that manages roles
+    if (r.permissions.includes("roles.gerer")) {
+      const others = (await db.select({ p: roles.permissions }).from(roles).where(and(eq(roles.orgId, orgId), ne(roles.id, r.id)))).filter((x) => x.p.includes("roles.gerer"));
+      if (!others.length) throw new HttpError(409, "role_last_admin");
+    }
     const used = await db.select({ n: sql<number>`count(*)::int` }).from(roleAssignments).where(eq(roleAssignments.roleId, r.id));
     const inv = await db.select({ n: sql<number>`count(*)::int` }).from(invitations).where(and(eq(invitations.roleId, r.id), sql`${invitations.usedAt} is null`));
     let moved = 0;

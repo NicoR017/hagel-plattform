@@ -263,10 +263,13 @@ describe("invitation flow", () => {
 });
 
 describe("roles", () => {
-  it("system roles are seeded per organisation and cannot be deleted", async () => {
+  it("system roles are seeded per organisation; they can be deleted like the others, except the last role that manages roles", async () => {
     const r = await call("GET", "/admin/roles", { token: superToken, org: orgES });
     expect(r.body.filter((x: any) => x.isSystem).length).toBe(7);
-    expect((await call("DELETE", `/admin/roles/${roleId.technicien}`, { token: superToken, org: orgES })).status).toBe(409);
+    expect((await call("DELETE", `/admin/roles/${roleId.org_admin}`, { token: superToken, org: orgES })).status).toBe(409); // the only role with roles.gerer
+    expect((await call("DELETE", `/admin/roles/${roleId.freelance}`, { token: superToken, org: orgES })).status).toBe(200); // nobody holds it
+    const after = await call("GET", "/admin/roles", { token: superToken, org: orgES });
+    expect(after.body.some((x: any) => x.id === roleId.freelance)).toBe(false);
   });
   it("roles of one org are not visible/usable in another", async () => {
     const de = await roleIdsOf(orgDE);

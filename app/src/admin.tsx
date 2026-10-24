@@ -180,7 +180,7 @@ export function RolesPage() {
             <td><b>{roleLabel(r.key, r.name)}</b>{r.isSystem && <span className="pill">{t("system")}</span>}<div style={{ color: "var(--sub)", fontSize: 13 }}>{roleDesc(r.key, r.name, r.description)}</div></td>
             <td>{scopeLabel(r.scope)}</td><td>{r.permissions.length} / {PERMISSIONS.length}</td>
             <td style={{ whiteSpace: "nowrap" }}><button className="btn sec" onClick={() => setEdit({ ...r })}>{t("permissions")}</button>{" "}
-              {!r.isSystem && <button className="btn danger" onClick={() => void startDelete(r)}>{t("v6DeleteRole")}</button>}</td>
+              <button className="btn danger" onClick={() => void startDelete(r)}>{t("v6DeleteRole")}</button></td>
           </tr>
         ))}</tbody></table>
       </Card>
