@@ -18,6 +18,11 @@ export const deV8 = {
   v8ScannersNoStation: "Colibri-Scanner ohne Station", v8ScannersNoStationHint: "Diese Scanner haben keine Station: Ihre Scans sehen nur Administratoren. Station zuordnen unter Verwaltung → Colibri-Scanner.", v8OpenScanners: "Scanner verwalten",
   "w.scanner_unknown": "Scanner nicht angelegt", "w.scanner_no_station": "Scanner ohne Station an diesem Tag",
   nsStartHere: "Hier starten", nsBannerNoStation: "{n} Scans stammen von Colibri-Scannern ohne Station. Nur Administratoren sehen sie.", nsBannerLink: "Scanner zuordnen",
+  ciHintMany: "{n} Termine · 3 sichtbar, Liste scrollen ↕", ciHintOne: "{n} Termin", ciHintFew: "{n} Termine", ciEarlierLater: "{a} früher · {b} später",
+  ciNowWord: "jetzt", ciNowAt: "jetzt {t}",
+  ciSearchScans: "Scan suchen (Kennzeichen, Marke/Modell, Body Shop, Versicherung, Colibri-Nr., Station)", ciAllScansAdmin: "Alle Scans zeigen (andere Tage, andere Stationen, Scanner ohne Station)",
+  ciSearching: "Suche …", ciNoMatch: "Kein Scan passt zu „{q}“", ciScanHint: "{n} Scans · 3 sichtbar, Liste scrollen ↕", ciOtherStation: "Andere Station",
+  ciSelectedLine: "Gewählt: {plate} · Colibri #{num} · {n} Dellen", ciNoSelected: "Kein Scan gewählt",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -39,6 +44,11 @@ export const enV8: Record<keyof typeof deV8, string> = {
   v8ScannersNoStation: "Colibri scanners without a station", v8ScannersNoStationHint: "These scanners have no station: only administrators see their scans. Assign a station under Administration → Colibri scanners.", v8OpenScanners: "Manage scanners",
   "w.scanner_unknown": "Scanner not set up", "w.scanner_no_station": "Scanner without a station on that day",
   nsStartHere: "Start here", nsBannerNoStation: "{n} scans come from Colibri scanners without a station. Only administrators see them.", nsBannerLink: "Assign scanners",
+  ciHintMany: "{n} appointments · 3 shown, scroll the list ↕", ciHintOne: "{n} appointment", ciHintFew: "{n} appointments", ciEarlierLater: "{a} earlier · {b} later",
+  ciNowWord: "now", ciNowAt: "now {t}",
+  ciSearchScans: "Search a scan (plate, make/model, body shop, insurer, Colibri no., station)", ciAllScansAdmin: "Show all scans (other days, other stations, scanners without a station)",
+  ciSearching: "Searching …", ciNoMatch: "No scan matches “{q}”", ciScanHint: "{n} scans · 3 shown, scroll the list ↕", ciOtherStation: "Other station",
+  ciSelectedLine: "Selected: {plate} · Colibri #{num} · {n} dents", ciNoSelected: "No scan selected",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -60,6 +70,11 @@ export const frV8: Record<keyof typeof deV8, string> = {
   v8ScannersNoStation: "Scanners Colibri sans station", v8ScannersNoStationHint: "Ces scanners n'ont pas de station : seuls les administrateurs voient leurs scans. Affectez une station dans Administration → Scanners Colibri.", v8OpenScanners: "Gérer les scanners",
   "w.scanner_unknown": "Scanner non enregistré", "w.scanner_no_station": "Scanner sans station ce jour-là",
   nsStartHere: "Démarrer ici", nsBannerNoStation: "{n} scans viennent de scanners Colibri sans station. Seuls les administrateurs les voient.", nsBannerLink: "Affecter les scanners",
+  ciHintMany: "{n} RDV · 3 affichés, faites défiler la liste ↕", ciHintOne: "{n} RDV", ciHintFew: "{n} RDV", ciEarlierLater: "{a} avant · {b} après",
+  ciNowWord: "maintenant", ciNowAt: "maintenant {t}",
+  ciSearchScans: "Chercher un scan (plaque, marque/modèle, body shop, assurance, n° Colibri, station)", ciAllScansAdmin: "Afficher tous les scans (autres jours, autres stations, scanners sans station)",
+  ciSearching: "Recherche …", ciNoMatch: "Aucun scan ne correspond à « {q} »", ciScanHint: "{n} scans · 3 affichés, faites défiler la liste ↕", ciOtherStation: "Autre station",
+  ciSelectedLine: "Choisi : {plate} · Colibri n° {num} · {n} bosses", ciNoSelected: "Aucun scan choisi",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -81,4 +96,9 @@ export const esV8: Record<keyof typeof deV8, string> = {
   v8ScannersNoStation: "Escáneres Colibri sin estación", v8ScannersNoStationHint: "Estos escáneres no tienen estación: solo los administradores ven sus escaneos. Asigne una estación en Administración → Escáneres Colibri.", v8OpenScanners: "Gestionar escáneres",
   "w.scanner_unknown": "Escáner no dado de alta", "w.scanner_no_station": "Escáner sin estación ese día",
   nsStartHere: "Empezar aquí", nsBannerNoStation: "{n} escaneos proceden de escáneres Colibri sin estación. Solo los administradores los ven.", nsBannerLink: "Asignar escáneres",
+  ciHintMany: "{n} citas · 3 visibles, desplace la lista ↕", ciHintOne: "{n} cita", ciHintFew: "{n} citas", ciEarlierLater: "{a} antes · {b} después",
+  ciNowWord: "ahora", ciNowAt: "ahora {t}",
+  ciSearchScans: "Buscar un escaneo (matrícula, marca/modelo, body shop, aseguradora, n.º Colibri, estación)", ciAllScansAdmin: "Mostrar todos los escaneos (otros días, otras estaciones, escáneres sin estación)",
+  ciSearching: "Buscando …", ciNoMatch: "Ningún escaneo coincide con «{q}»", ciScanHint: "{n} escaneos · 3 visibles, desplace la lista ↕", ciOtherStation: "Otra estación",
+  ciSelectedLine: "Elegido: {plate} · Colibri n.º {num} · {n} abolladuras", ciNoSelected: "Ningún escaneo elegido",
 };

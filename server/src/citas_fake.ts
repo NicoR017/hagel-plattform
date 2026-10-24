@@ -35,6 +35,10 @@ export class FakeCitas implements CitasSource {
     this.addLocation({ id: "demo-1", name: "Nave demo Madrid" });
     this.add({ id: "demo-a", date: today, time: "09:00", plate: "1234 ABC", insurance: "Mutua Madrileña", caseNumber: "SIN-2026-1" });
     this.add({ id: "demo-b", date: today, time: "10:30", plate: "5678 DEF", make: "Seat", model: "Leon", first: "Luis", last: "Pérez", status: "cancel_requested" });
+    // more of them over the whole day: the list of the day shows 3 rows and scrolls, positioned on the current time
+    const more: [string, string, string, string, string][] = [["demo-d", "07:30", "2468 JKL", "Ford", "Focus"], ["demo-e", "08:15", "1357 MNP", "Opel", "Corsa"], ["demo-f", "12:00", "8642 QRS", "Toyota", "Yaris"],
+      ["demo-g", "14:00", "9753 TVW", "Kia", "Ceed"], ["demo-h", "16:30", "1597 XYZ", "Fiat", "500"]];
+    for (const [id, time, plate, make, model] of more) this.add({ id, date: today, time, plate, make, model, first: "Cliente", last: id.slice(-1).toUpperCase() });
     this.add({ id: "demo-c", date: tomorrow, time: "11:00", plate: "9012 GHI", make: "Renault", model: "Clio", first: "Marta", last: "Ruiz" });
     return this;
   }

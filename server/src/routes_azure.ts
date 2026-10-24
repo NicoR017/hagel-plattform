@@ -21,6 +21,11 @@ interface Deps {
   validationHook: (r: { success: boolean }, c: Context) => Response | undefined;
 }
 
+/** lower case, no accents, only letters and digits ("AB-123" = "ab 123") */
+const fold = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+/** the words of a search text, each folded the same way (empty words dropped) */
+const foldWords = (q: string) => q.split(/\s+/).map(fold).filter(Boolean);
+
 const keyInput = z.object({ station_id: z.string().uuid().optional(), keys: z.array(z.object({ partitionKey: z.string().min(1).max(300), rowKey: z.string().max(300) })).min(1).max(50) });
 
 export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }: Deps) {
@@ -56,10 +61,19 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
         withoutStation, importable: !s.scanFailed && (!!mine || (isAdmin && withoutStation)),
       });
     }
+    // search (from 2 characters): every word must match one of plate, brand / model, body shop, insurer, Colibri number or station.
+    // Case, accents, spaces and hyphens do not matter ("ab 123" finds "AB-123"). Done AFTER the visibility rule: it never widens what a user may see.
+    const words = foldWords(c.req.query("q") ?? "");
+    const found = words.length && words.join("").length >= 2
+      ? out.filter((x) => {
+          const hay = fold([x.plate, x.brand, x.model, `${x.brand} ${x.model}`, x.businessCustomer, x.clientName, x.insurerName, x.colibriNumber, x.stationName].join(" "));
+          return words.every((w) => hay.includes(w));
+        })
+      : out;
     // newest first, by the real time (a Date compared as text is not chronological)
     const at = (x: { scanDateTime: Date | string | null; partitionKey: string }) => (x.scanDateTime ? new Date(x.scanDateTime).getTime() : 0);
-    out.sort((a, b) => at(b) - at(a) || b.partitionKey.localeCompare(a.partitionKey));
-    return c.json(out.slice(0, 300));
+    found.sort((a, b) => at(b) - at(a) || b.partitionKey.localeCompare(a.partitionKey));
+    return c.json(found.slice(0, 300));
   });
 
   r.post("/azure/scans/import", needAuth, needOrg, zValidator("json", keyInput, validationHook), async (c) => {

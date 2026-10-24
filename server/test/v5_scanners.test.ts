@@ -229,6 +229,50 @@ describe("who sees which scans (server side)", () => {
   });
 });
 
+describe("scan search (S09): all scans the user may see, from 2 characters", () => {
+  const find = (token: string, q: string, org = c.orgES) => call(c, "GET", `/azure/scans?q=${encodeURIComponent(q)}`, { token, org });
+  beforeAll(async () => {
+    // two more scanners (H2 "Nave PDR Madrid", H3 "Nave Tres") and a scan each; the earlier tests imported some of the AT-* scans
+    await dev(c.superToken, "POST", "", { tenant: "TenantA", number: "COLIBRI-050", station_id: H2, from: "2026-01-01" });
+    await dev(c.superToken, "POST", "", { tenant: "TenantA", number: "COLIBRI-051", station_id: H3, from: "2026-01-01" });
+    c.az.add("AllScanResults", scan({ ColibriNumber: "COLIBRI-050", LicensePlate: "SX-AB 123", CarBrand: "SEAT", CarModel: "IBIZA", ScanDateTime: "2026-10-20T10:00:00Z" }));
+    c.az.add("AllScanResults", scan({ ColibriNumber: "COLIBRI-051", LicensePlate: "SX-CD 456", CarBrand: "RENAULT", CarModel: "CLIO", BusinessCustomer: "Otro Cliente - Mapfre", ScanDateTime: "2026-10-21T10:00:00Z" }));
+    await syncAzure(c.h.db, c.az);
+  });
+
+  it("plate (case, spaces, hyphens ignored), Colibri number, station, accents, make / model, customer; several words must all match", async () => {
+    for (const q of ["sx-ab 123", "SX AB 123", "sxab123", "ibiza"]) expect(plates(await find(admin, q)), q).toEqual(["SX-AB 123"]);
+    expect(plates(await find(admin, "colibri 051"))).toEqual(["SX-CD 456"]);           // by scanner number
+    expect(plates(await find(admin, "nave tres"))).toEqual(["AT-H3", "SX-CD 456"]);    // by station
+    expect(plates(await find(admin, "MÁDRID"))).toEqual(["SX-AB 123"]);                 // accents and case: "Nave PDR Madrid"
+    expect(plates(await find(admin, "renault clio sx"))).toEqual(["SX-CD 456"]);        // every word must match
+    expect(plates(await find(admin, "otro cliente"))).toEqual(["SX-CD 456"]);           // BusinessCustomer
+    expect(plates(await find(admin, "seat clio"))).toEqual([]);
+    expect(plates(await find(admin, "zzzz"))).toEqual([]);
+  });
+
+  it("below 2 characters it is no search at all", async () => {
+    const all = (await scansOf(admin)).body.length;
+    expect((await find(admin, "a")).body).toHaveLength(all);
+    expect((await find(admin, " ")).body).toHaveLength(all);
+  });
+
+  it("it never widens what a user may see (station manager, org-wide assessor, technician)", async () => {
+    expect(plates(await find(chef1, "SX"))).toEqual([]);                  // his station H1 has none of them
+    expect(plates(await find(chef2, "SX"))).toEqual(["SX-AB 123"]);       // H2
+    expect(plates(await find(assessor, "SX"))).toEqual(["SX-AB 123", "SX-CD 456"]);
+    expect(plates(await find(assessor, "AT-UNKNOWN"))).toEqual([]);       // no station: administrators only
+    expect(plates(await find(admin, "AT-UNKNOWN"))).toEqual(["AT-UNKNOWN"]);
+    expect(plates(await find(tech, "SX"))).toEqual([]);                   // no colibri.importer
+  });
+
+  it("the other organisation finds only its own tenant's scans, and nobody finds theirs", async () => {
+    expect(plates(await find(deAdmin, "SX", c.orgDE))).toEqual([]);
+    expect(plates(await find(deAdmin, "DE-1", c.orgDE))).toEqual(["DE-1"]);
+    expect(plates(await find(admin, "DE-1"))).toEqual([]);
+  });
+});
+
 describe("Administration → Colibri scanners (S40)", () => {
   it("rights: assessor and technician cannot open it; an administrator and a station manager can", async () => {
     expect((await dev(assessor, "GET", "")).status).toBe(403);
