@@ -37,6 +37,10 @@ export const deV8 = {
   lkClient: "Carrosserie", lkInsurer: "Versicherung", lkVehicles: "Fahrzeuge", lkWaiting: "Begutachtung / Wartend", lkRepair: "In Reparatur", lkFinished: "Fertig",
   lkAvgDays: "Ø Tage Ankunft → Rückgabe", lkNet: "Netto", lkNoClient: "— keine Carrosserie —", lkNoInsurer: "— keine Versicherung —", lkEmpty: "Keine Fahrzeuge im Zeitraum.",
   allClients: "Alle Carrosserien", revByClient: "Nach Carrosserie", splitComm: "Provision Carrosserien",
+  dcTab: "Dokumente", dcMake: "Dokument erstellen und senden", dcList: "Dokumente dieses Vorgangs", dcNone: "Noch kein Dokument erstellt.", dcEstimate: "Kostenvoranschlag", dcRepairReport: "Fotobericht Reparatur",
+  dcReceiptDrop: "Quittung Annahme", dcReceiptPick: "Quittung Rückgabe", dcScan: "Colibri-Scan (PDF)", dcDownload: "Herunterladen", dcSend: "Per E-Mail senden", dcTo: "an",
+  dcSent: "gesendet", dcFailed: "Senden fehlgeschlagen", dcNoRecipients: "keine Empfänger", dcWaiting: "wartet auf Versand",
+  v4SecDocs: "Kostenvoranschlag", v4SecDocsRep: "Kostenvoranschlag",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -77,6 +81,10 @@ export const enV8: Record<keyof typeof deV8, string> = {
   lkClient: "Body shop", lkInsurer: "Insurer", lkVehicles: "Vehicles", lkWaiting: "In assessment / on hold", lkRepair: "In repair", lkFinished: "Finished",
   lkAvgDays: "Avg days arrival → returned", lkNet: "Net", lkNoClient: "— no body shop —", lkNoInsurer: "— no insurer —", lkEmpty: "No vehicles in the period.",
   allClients: "All body shops", revByClient: "By body shop", splitComm: "Body shop commissions",
+  dcTab: "Documents", dcMake: "Create and send a document", dcList: "Documents of this case", dcNone: "No document yet.", dcEstimate: "Estimate", dcRepairReport: "Repair photo report",
+  dcReceiptDrop: "Drop-off receipt", dcReceiptPick: "Pick-up receipt", dcScan: "Colibri scan (PDF)", dcDownload: "Download", dcSend: "Send by e-mail", dcTo: "to",
+  dcSent: "sent", dcFailed: "sending failed", dcNoRecipients: "no recipients", dcWaiting: "waiting to be sent",
+  v4SecDocs: "Estimate", v4SecDocsRep: "Estimate",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -117,6 +125,10 @@ export const frV8: Record<keyof typeof deV8, string> = {
   lkClient: "Carrosserie", lkInsurer: "Assurance", lkVehicles: "Véhicules", lkWaiting: "Expertise / en attente", lkRepair: "En réparation", lkFinished: "Terminés",
   lkAvgDays: "Moy. jours arrivée → rendu", lkNet: "Net", lkNoClient: "— sans carrosserie —", lkNoInsurer: "— sans assurance —", lkEmpty: "Aucun véhicule sur la période.",
   allClients: "Toutes les carrosseries", revByClient: "Par carrosserie", splitComm: "Commissions des carrosseries",
+  dcTab: "Documents", dcMake: "Créer et envoyer un document", dcList: "Documents de ce dossier", dcNone: "Aucun document pour l'instant.", dcEstimate: "Devis", dcRepairReport: "Rapport photo de réparation",
+  dcReceiptDrop: "Reçu de dépôt", dcReceiptPick: "Reçu de retrait", dcScan: "Scan Colibri (PDF)", dcDownload: "Télécharger", dcSend: "Envoyer par e-mail", dcTo: "à",
+  dcSent: "envoyé", dcFailed: "échec de l'envoi", dcNoRecipients: "aucun destinataire", dcWaiting: "en attente d'envoi",
+  v4SecDocs: "Devis", v4SecDocsRep: "Devis",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -157,4 +169,8 @@ export const esV8: Record<keyof typeof deV8, string> = {
   lkClient: "Taller", lkInsurer: "Aseguradora", lkVehicles: "Vehículos", lkWaiting: "Peritación / en espera", lkRepair: "En reparación", lkFinished: "Terminados",
   lkAvgDays: "Media días llegada → entregado", lkNet: "Neto", lkNoClient: "— sin taller —", lkNoInsurer: "— sin aseguradora —", lkEmpty: "Ningún vehículo en el periodo.",
   allClients: "Todos los talleres", revByClient: "Por taller", splitComm: "Comisiones de los talleres",
+  dcTab: "Documentos", dcMake: "Crear y enviar un documento", dcList: "Documentos de este expediente", dcNone: "Aún no hay documentos.", dcEstimate: "Presupuesto", dcRepairReport: "Informe fotográfico de reparación",
+  dcReceiptDrop: "Comprobante de recepción", dcReceiptPick: "Comprobante de devolución", dcScan: "Escaneo Colibri (PDF)", dcDownload: "Descargar", dcSend: "Enviar por correo", dcTo: "a",
+  dcSent: "enviado", dcFailed: "falló el envío", dcNoRecipients: "sin destinatarios", dcWaiting: "pendiente de envío",
+  v4SecDocs: "Presupuesto", v4SecDocsRep: "Presupuesto",
 };

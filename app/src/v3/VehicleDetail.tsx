@@ -14,22 +14,23 @@ import { bookableStatus, dayLabel, todayIn, tzOfCountry } from "../field/calenda
 import { go, type Ctx, type Mode, type Tab } from "../field/route";
 import { useField, usePhotos, useVehicle } from "../field/store";
 import { STATUS_STYLE } from "./modes";
+import { Documents } from "./Documents";
 
 interface Repair { comments: { id: string; userName: string; at: string; text: string }[]; appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[]; booking: unknown }
 
 /** sections of the vehicle detail, by mode (Alle Fahrzeuge shows all of them) */
 export function sectionsFor(mode: Mode, v: { statut: string; repairStage?: unknown }, can: (p: string) => boolean): Tab[] {
   const booking = can("termine.buchen") && bookableStatus(v);
-  const kalk: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "bilder", "kva", "kommunikation", "gtmotive", "verlauf"];
-  const rep: Tab[] = ["basis", "techniker", "planung", "bilder", "kva", "kommunikation", "verlauf"];
-  const all: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "techniker", "planung", "bilder", "kva", "kommunikation", "gtmotive", "verlauf"];
+  const kalk: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];
+  const rep: Tab[] = ["basis", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "verlauf"];
+  const all: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];
   return mode === "kalk" ? kalk : mode === "rep" ? rep : all;
 }
 
 const SECTION_LABEL = (tab: Tab, mode: Mode) =>
   ({
     basis: t("v4SecGeneral"), termin: t("v4SecBooking"), erfassung: t("v4SecCapture"), techniker: t("v4SecTech"), planung: t("v4SecPlanning"), bilder: t("tabPhotos"),
-    kva: mode === "rep" ? t("v4SecDocsRep") : t("v4SecDocs"), kommunikation: t("v4SecComm"), gtmotive: "GT Motive", verlauf: t("v4SecHistory"),
+    kva: t("v4SecDocs"), dokumente: t("dcTab"), kommunikation: t("v4SecComm"), gtmotive: "GT Motive", verlauf: t("v4SecHistory"),
   })[tab];
 
 function Comments({ v }: { v: LocalVehicle }) {
@@ -238,6 +239,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {cur === "planung" && <Planung v={v} />}
           {cur === "bilder" && embed(<Bilder v={v} />)}
           {cur === "kva" && embed(<Kva v={v} technicians={false} />)}
+          {cur === "dokumente" && <Documents v={v} />}
           {cur === "kommunikation" && <Comments v={v} />}
           {cur === "gtmotive" && <GtMotive />}
           {cur === "verlauf" && <Verlauf id={id} />}

@@ -225,6 +225,16 @@ describe("report sending by e-mail", () => {
     const hist = await call(c, "GET", `/reports?vehicleId=${vid}`, { token: assessor });
     expect(hist.body[0]).toMatchObject({ id: rid, type: "kva", status: "sent", sentBy: "assessor" });
     expect(hist.body[0].recipients.length).toBe(3);
+    expect(hist.body[0]).toMatchObject({ lang: "es", hasFile: true });
+    // Documents tab: the stored PDF can be downloaded by the people who may send it, nobody else
+    const dl = await call(c, "GET", `/reports/${rid}/file`, { token: assessor });
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get("content-type")).toBe("application/pdf");
+    expect([...dl.bytes]).toEqual([...PDF]);
+    expect((await call(c, "GET", `/reports/${rid}/file`, { token: carro })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${rid}/file`, { token: tech })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${uuid()}/file`, { token: assessor })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${rid}/file`, {})).status).toBe(401);
     // the same upload again does not send twice
     c.mailer.sent.length = 0;
     expect((await call(c, "PUT", `/files/report/${rid}`, { token: assessor, raw: PDF, contentType: "application/pdf" })).body.status).toBe("sent");

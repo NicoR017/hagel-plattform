@@ -156,7 +156,19 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const ref = refOf(v, as.map((a) => a.userId));
     if (!can(c.get("principal"), "kva.envoyer", ref) && !can(c.get("principal"), "rapport_reparation.envoyer", ref)) throw new HttpError(403, "forbidden");
     const rows = await db.select({ r: reportSends, name: users.name, email: users.email }).from(reportSends).leftJoin(users, eq(users.id, reportSends.sentBy)).where(eq(reportSends.vehicleId, v.id));
-    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, lang: x.lang, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email, hasFile: !!x.fileKey })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+  });
+
+  /** The stored PDF of a report that was sent from the server (same permission as the history). */
+  r.get("/reports/:id/file", needAuth, async (c) => {
+    const [rep] = await db.select().from(reportSends).where(eq(reportSends.id, c.req.param("id")));
+    if (!rep || !rep.fileKey || (rep.type !== "kva" && rep.type !== "reparation")) throw new HttpError(404, "vehicle_not_found");
+    const v = await vehicleFor(c.get("principal"), rep.vehicleId, "vehicules.voir");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    if (!can(c.get("principal"), reportPerm(rep.type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(404, "vehicle_not_found");
+    const f = await storage.get(rep.fileKey);
+    if (!f) throw new HttpError(404, "vehicle_not_found");
+    return new Response(f.bytes as BodyInit, { headers: { "content-type": "application/pdf", "cache-control": "private, no-store" } });
   });
 
   /** The PDF of a queued report: stored, then e-mailed to the recipients computed when the op was accepted. */

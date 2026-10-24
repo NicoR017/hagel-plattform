@@ -215,17 +215,6 @@ export function Kva({ v, beforeActions, technicians = true }: { v: LocalVehicle;
         </button>
       )}
       {prices && <button className="pbtn sec" onClick={() => { const txt = kvaPlainText(doc, c); (navigator.clipboard?.writeText(txt) ?? Promise.reject()).then(() => toast(t("copiedText")), () => window.alert(txt)); }}>📋 {t("copyText")}</button>}
-      {prices && photos.length > 0 && (
-        <button className="pbtn sec" disabled={!!busy} onClick={async () => {
-          setBusy(t("preparing"));
-          try { await shareOrDownload(await buildRepairReport(f.db, f.engine, v, f.refs), `${land === "ES" ? "Informe_reparacion" : "Fotobericht_Reparatur"}_${String(x.kennzeichen || "").replace(/[^A-Za-z0-9]+/g, "-")}.pdf`, "application/pdf"); }
-          catch (err) { toast(`${t("pdfFailed")}: ${(err as Error).message}`); }
-          setBusy("");
-        }}>📷 {t("repairReport")}</button>
-      )}
-      {prices && photos.length > 0 && f.can("rapport_reparation.envoyer") && (
-        <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("reparation")}>✉️ {t("sendRepairByServer")}</button>
-      )}
       {sendDlg && <SendReportDialog v={v} c={c} type={sendDlg} onClose={() => setSendDlg(null)} />}
       {statusDlg && <StatusDialog ids={[v.id]} current={v.statut} onClose={() => setStatusDlg(false)} />}
     </div>

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { auditLog, vehicleAssignments, vehicles, users } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
+import { berlinDate } from "../src/dashboard";
 
 let c: Ctx;
 let A: string, B: string, MINI: string, CARRO: string; // A = hall, B = other hall, CARRO = customer carrosserie
@@ -160,7 +161,7 @@ describe("dashboard", () => {
 });
 
 describe("weekly technician sheets (pay per technician)", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = berlinDate(new Date()); // the dashboard days are Berlin days (UTC differs between 22:00 and 24:00)
   const sheets = (token: string, q = "") => call(c, "GET", `/dashboard/technician-sheets${q}`, { token, org: c.orgES });
 
   it("cars that became 'fertig' in the period are listed per technician with the technician's share", async () => {

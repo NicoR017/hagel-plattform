@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /** the four tabs of the old vehicle screen … */
 export type Tab4 = "basis" | "erfassung" | "bilder" | "kva";
 /** … and the sections of the new vehicle detail (basis = "Allgemeine Daten"; the old screen shows any extra one as basis) */
-export type Tab = Tab4 | "termin" | "techniker" | "planung" | "kommunikation" | "gtmotive" | "verlauf";
+export type Tab = Tab4 | "termin" | "techniker" | "planung" | "dokumente" | "kommunikation" | "gtmotive" | "verlauf";
 export type Step = Tab4;
 /** tabs of the repair detail (the card of the Kanban board) */
 export type RTab = "uebersicht" | "fotos" | "abschluss" | "verlauf";
@@ -39,7 +39,7 @@ export type Route =
   | { page: "repair"; id: string; tab: RTab; stationId: string }
   | { page: "admin"; tab?: string };
 
-export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
+export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "dokumente", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
 const STEPS: Step[] = ["basis", "erfassung", "bilder", "kva"];
 const isMode = (x: string | undefined): x is Mode => x === "kalk" || x === "rep" || x === "all";
 
