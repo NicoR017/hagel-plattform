@@ -2,9 +2,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AzureSource, TableRow } from "./azure";
 import { colStr } from "./azure";
 import type { Db } from "./db";
+import { assignmentAt, localDay, tzOfOrgCountry, type AssignmentRow } from "./colibri_rules";
 import {
-  azureBcInsuranceLinks, azureBusinessCustomers, azureInsurances, azureSyncRuns, azureSyncState, azureTenants, colibriScans, insurers, orgTenants,
-  stationInsurers, stations,
+  azureBcInsuranceLinks, azureBusinessCustomers, azureInsurances, azureSyncRuns, azureSyncState, azureTenants, colibriDeviceAssignments, colibriDevices, colibriScans,
+  insurers, orgTenants, organizations, stationInsurers, stations,
 } from "./schema";
 
 export const normalizeName = (s: unknown) => String(s ?? "").normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
@@ -135,26 +136,44 @@ export async function reconcileLinks(db: Db): Promise<{ linked: number; renamed:
 
 // ------------------------------------------------------------------ mapping of a scan to our records
 
-export interface MappingContext {
-  links: (typeof azureBcInsuranceLinks.$inferSelect)[];
-  stations: (typeof stations.$inferSelect)[];
-  insurers: (typeof insurers.$inferSelect)[];
-}
-export async function loadMappingContext(db: Db): Promise<MappingContext> {
-  return {
-    links: await db.select().from(azureBcInsuranceLinks),
-    stations: await db.select().from(stations).where(eq(stations.active, true)),
-    insurers: await db.select().from(insurers),
-  };
-}
-
 /** A site takes every link of its customers, plus the individually ticked links. */
 export const siteTakesLink = (s: Pick<typeof stations.$inferSelect, "azureLinkIds" | "azureBcIds">, l: Pick<typeof azureBcInsuranceLinks.$inferSelect, "id" | "businessCustomerId">) =>
   s.azureLinkIds.includes(l.id) || s.azureBcIds.includes(l.businessCustomerId);
 
-export type ScanWarning = "no_link" | "no_site" | "tenant_mismatch" | "location_unmapped" | "no_insurer" | "scan_failed";
+export interface MappingContext {
+  links: (typeof azureBcInsuranceLinks.$inferSelect)[];
+  stations: (typeof stations.$inferSelect)[];
+  insurers: (typeof insurers.$inferSelect)[];
+  /** Colibri scanners and the dated assignments that put them into stations */
+  devices: { id: string; orgId: string; tenant: string; number: string }[];
+  assignments: AssignmentRow[];
+  /** organisations that own a Colibri tenant (assigned by the super-admin, or through the tenant of one of their stations) */
+  tenantOwners: Map<string, string[]>;
+  orgCountry: Map<string, string>;
+}
+export async function loadMappingContext(db: Db): Promise<MappingContext> {
+  const owners = new Map<string, Set<string>>();
+  const own = (tenant: string | null, orgId: string) => { if (tenant) owners.set(tenant, (owners.get(tenant) ?? new Set()).add(orgId)); };
+  for (const t of await db.select().from(orgTenants)) own(t.azureTenant, t.orgId);
+  const allStations = await db.select().from(stations);
+  for (const s of allStations) own(s.azureTenant, s.orgId);
+  return {
+    links: await db.select().from(azureBcInsuranceLinks),
+    stations: allStations.filter((s) => s.active),
+    insurers: await db.select().from(insurers),
+    devices: await db.select({ id: colibriDevices.id, orgId: colibriDevices.orgId, tenant: colibriDevices.tenant, number: colibriDevices.number }).from(colibriDevices),
+    assignments: await db.select({ deviceId: colibriDeviceAssignments.deviceId, stationId: colibriDeviceAssignments.stationId, validFrom: colibriDeviceAssignments.validFrom, validTo: colibriDeviceAssignments.validTo }).from(colibriDeviceAssignments),
+    tenantOwners: new Map([...owners].map(([k, v]) => [k, [...v]])),
+    orgCountry: new Map((await db.select({ id: organizations.id, country: organizations.country }).from(organizations)).map((o) => [o.id, o.country])),
+  };
+}
+
+export type ScanWarning = "no_link" | "no_site" | "tenant_mismatch" | "scanner_unknown" | "scanner_no_station" | "no_insurer" | "scan_failed";
 export interface ScanMapping {
+  /** organisation of the STATION the scan belongs to (null while the scanner has no station on that day) */
   orgId: string | null;
+  /** organisations that own the scan's Colibri tenant: the only ones whose administrators may see a scan without a station */
+  tenantOrgIds: string[];
   clientStationId: string | null;
   stationId: string | null;
   insurerId: string | null;
@@ -165,39 +184,48 @@ export interface ScanMapping {
 }
 
 /**
- * HARD RULE: a scan can only point to sites of ITS OWN tenant (scan.Tenant = site.azure_tenant), even if the names are identical.
- * Customer: scan.BusinessCustomer (normalised) -> BusinessCustomersInsurance row -> BusinessCustomerId -> carrosserie site with that
- * azure_business_customer_id AND the same tenant. Current site: the customer, unless the Location (free text) is an alias of a
- * hall / yard of the same tenant. Insurer: InsuranceId -> insurer of the same organisation.
+ * HARD RULE: a scan only ever points to records of ITS OWN tenant (scan.Tenant), even if the names are identical.
+ * STATION (V5): the Colibri number of the scan is a scanner; the station is the one that scanner was assigned to on the day of the scan
+ * (the local day of the organisation that owns the scanner). The Colibri `Location` text is no longer used.
+ * Customer: scan.BusinessCustomer (normalised) -> BusinessCustomersInsurance row -> BusinessCustomerId -> body shop with that customer in
+ * the same tenant. Insurer: InsuranceId -> insurer of the same organisation.
  */
-export function mapScan(scan: Pick<typeof colibriScans.$inferSelect, "tenant" | "location" | "businessCustomer" | "scanFailed">, ctx: MappingContext): ScanMapping {
+export function mapScan(scan: Pick<typeof colibriScans.$inferSelect, "tenant" | "businessCustomer" | "scanFailed"> & Partial<Pick<typeof colibriScans.$inferSelect, "colibriNumber" | "scanDateTime">>, ctx: MappingContext): ScanMapping {
   const warnings: ScanWarning[] = [];
   if (scan.scanFailed) warnings.push("scan_failed");
   const norm = normalizeName(scan.businessCustomer);
   const link = norm ? ctx.links.find((l) => normalizeName(l.name) === norm) : undefined;
   if (!link) warnings.push("no_link");
   const sameTenant = ctx.stations.filter((s) => s.azureTenant === scan.tenant && !!scan.tenant);
-  let client = link ? sameTenant.find((s) => s.type === "carrosserie" && siteTakesLink(s, link)) ?? null : null;
-  if (link && !client) {
-    warnings.push(ctx.stations.some((s) => siteTakesLink(s, link)) ? "tenant_mismatch" : "no_site");
+  const client = link ? sameTenant.find((s) => s.type === "carrosserie" && siteTakesLink(s, link)) ?? null : null;
+  if (link && !client) warnings.push(ctx.stations.some((s) => siteTakesLink(s, link)) ? "tenant_mismatch" : "no_site");
+
+  // the station: through the scanner and the day
+  const owners = (scan.tenant && ctx.tenantOwners.get(scan.tenant)) || [];
+  let station: (typeof ctx.stations)[number] | null = null;
+  let known = false;
+  if (scan.tenant && scan.colibriNumber) {
+    for (const d of ctx.devices) {
+      if (d.tenant !== scan.tenant || d.number !== scan.colibriNumber || !owners.includes(d.orgId)) continue;
+      known = true;
+      const day = scan.scanDateTime ? localDay(new Date(scan.scanDateTime), tzOfOrgCountry(ctx.orgCountry.get(d.orgId) ?? "DE")) : null;
+      const a = day ? assignmentAt(ctx.assignments, d.id, day) : undefined;
+      const st = a ? ctx.stations.find((s) => s.id === a.stationId) : undefined;
+      if (st) { station = st; break; }
+    }
   }
-  let current = client;
-  const loc = normalizeName(scan.location);
-  if (loc) {
-    const alias = sameTenant.find((s) => s.type !== "carrosserie" && s.azureLocationAliases.some((a) => normalizeName(a) === loc));
-    if (alias && (!client || alias.orgId === client.orgId)) current = alias;
-    else if (!alias && !client) warnings.push("location_unmapped");
-  }
-  const orgId = current?.orgId ?? client?.orgId ?? null;
+  if (!station) warnings.push(known ? "scanner_no_station" : "scanner_unknown");
+  const orgId = station?.orgId ?? null;
   let insurer = null as (typeof ctx.insurers)[number] | null;
-  if (link && orgId) {
-    insurer = ctx.insurers.find((i) => i.azureInsuranceId === link.insuranceId && i.orgId === orgId) ?? null;
+  const insOrg = orgId ?? client?.orgId ?? null;
+  if (link && insOrg) {
+    insurer = ctx.insurers.find((i) => i.azureInsuranceId === link.insuranceId && i.orgId === insOrg) ?? null;
     if (!insurer) warnings.push("no_insurer");
   }
   return {
-    orgId, clientStationId: client?.id ?? null, stationId: current?.id ?? null, insurerId: insurer?.id ?? null,
+    orgId, tenantOrgIds: owners, clientStationId: client?.id ?? null, stationId: station?.id ?? null, insurerId: insurer?.id ?? null,
     businessCustomerId: link?.businessCustomerId ?? null, insuranceId: link?.insuranceId ?? null, warnings,
-    importable: !!current && !scan.scanFailed,
+    importable: !!station && !scan.scanFailed,
   };
 }
 

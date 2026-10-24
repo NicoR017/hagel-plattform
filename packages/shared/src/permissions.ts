@@ -6,7 +6,7 @@ export const PERMISSIONS = [
   "kva.envoyer", "rapport_reparation.envoyer",
   "photos.ajouter", "photos.supprimer",
   "colibri.importer", "export.excel",
-  "assurances.gerer", "campagnes.gerer", "stations.gerer", "bodyshops.gerer", "parametres.gerer",
+  "assurances.gerer", "campagnes.gerer", "stations.gerer", "bodyshops.gerer", "colibri.geraete", "parametres.gerer",
   "utilisateurs.gerer", "roles.gerer", "audit.voir", "dashboard.voir",
   // UI v3
   "reparatur.board", "reparatur.endabnahme", "termine.buchen", "methoden.gerer", "wochenbericht.voir", "kommentare.schreiben",

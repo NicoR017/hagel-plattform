@@ -6,6 +6,18 @@ export const deV8 = {
   v8SearchBodyShops: "Body Shop suchen (Name, Adresse, Colibri-Kunde)", v8Vehicles: "Fahrzeuge offen / gesamt",
   v8DeleteBodyShopQ: "Diesen Body Shop endgültig löschen?", v8ContactName: "Ansprechpartner", v8ContactPhone: "Telefon",
   v8ExternalAccounts: "Externe Konten (Rolle „Body Shop“)", v8ExternalAccountsHint: "Nur Anzeige. Konten werden unter Verwaltung → Benutzer eingeladen.",
+  "p.colibri.geraete": "Colibri-Scanner verwalten",
+  v8Scanners: "Colibri-Scanner", v8ScannersHint: "Jeder Scan gehört zu der Station, in der sein Scanner an diesem Tag stand. Eine Station sieht nur die Scans ihrer Scanner.",
+  v8AddScanner: "Scanner hinzufügen", v8Add: "Hinzufügen", v8SeenInScans: "In Scans gesehen", v8SeenHint: "Diese Nummern kommen in Scans vor, sind aber noch kein Scanner.",
+  v8SeenRow: "{n} Scans, letzter am {date}", v8SearchScanners: "Scanner suchen (Nummer, Station, Tenant)", v8ScannerNumber: "Scanner-Nr.", v8ScannerStation: "Station",
+  v8ScannerSince: "Seit", v8ScannerScans: "Scans", v8NoStation: "Ohne Station", v8From: "ab", v8Move: "Verschieben", v8Assign: "Zuordnen", v8History: "Verlauf",
+  v8Release: "Freigeben (ohne Station)", v8FromDate: "Ab Datum", v8Note: "Notiz", v8Today: "heute",
+  v8DeleteScannerQ: "Diesen Scanner löschen? Der Verlauf seiner Zuordnungen geht mit.", v8PastDateHint: "Ein Datum in der Vergangenheit ordnet auch die Scans dieser Tage (ohne Gutachten) der neuen Station zu.",
+  v8ScannersEmpty: "Keine Scanner.", v8WaitingNoStation: "{n} Scans warten ohne Station",
+  v8StationScanners: "Colibri-Scanner dieser Station", v8StationScannersHint: "Nur Scans dieser Scanner erscheinen in dieser Station. Verwaltung → Colibri-Scanner.",
+  v8ScannersNoStation: "Colibri-Scanner ohne Station", v8ScannersNoStationHint: "Diese Scanner haben keine Station: Ihre Scans sehen nur Administratoren. Station zuordnen unter Verwaltung → Colibri-Scanner.", v8OpenScanners: "Scanner verwalten",
+  "w.scanner_unknown": "Scanner nicht angelegt", "w.scanner_no_station": "Scanner ohne Station an diesem Tag",
+  nsStartHere: "Hier starten", nsBannerNoStation: "{n} Scans stammen von Colibri-Scannern ohne Station. Nur Administratoren sehen sie.", nsBannerLink: "Scanner zuordnen",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -15,6 +27,18 @@ export const enV8: Record<keyof typeof deV8, string> = {
   v8SearchBodyShops: "Search body shops (name, address, Colibri customer)", v8Vehicles: "Vehicles open / total",
   v8DeleteBodyShopQ: "Delete this body shop for good?", v8ContactName: "Contact person", v8ContactPhone: "Phone",
   v8ExternalAccounts: "External accounts (role “Body shop”)", v8ExternalAccountsHint: "Display only. Accounts are invited under Administration → Users.",
+  "p.colibri.geraete": "Manage Colibri scanners",
+  v8Scanners: "Colibri scanners", v8ScannersHint: "Every scan belongs to the station its scanner stood in on that day. A station only sees the scans of its own scanners.",
+  v8AddScanner: "Add scanner", v8Add: "Add", v8SeenInScans: "Seen in scans", v8SeenHint: "These numbers appear in scans but are not a scanner yet.",
+  v8SeenRow: "{n} scans, last on {date}", v8SearchScanners: "Search scanners (number, station, tenant)", v8ScannerNumber: "Scanner no.", v8ScannerStation: "Station",
+  v8ScannerSince: "Since", v8ScannerScans: "Scans", v8NoStation: "No station", v8From: "from", v8Move: "Move", v8Assign: "Assign", v8History: "History",
+  v8Release: "Release (no station)", v8FromDate: "From date", v8Note: "Note", v8Today: "today",
+  v8DeleteScannerQ: "Delete this scanner? The history of its assignments goes with it.", v8PastDateHint: "A date in the past also moves the scans of those days (without an assessment) to the new station.",
+  v8ScannersEmpty: "No scanners.", v8WaitingNoStation: "{n} scans waiting without a station",
+  v8StationScanners: "Colibri scanners of this station", v8StationScannersHint: "Only scans of these scanners appear in this station. Administration → Colibri scanners.",
+  v8ScannersNoStation: "Colibri scanners without a station", v8ScannersNoStationHint: "These scanners have no station: only administrators see their scans. Assign a station under Administration → Colibri scanners.", v8OpenScanners: "Manage scanners",
+  "w.scanner_unknown": "Scanner not set up", "w.scanner_no_station": "Scanner without a station on that day",
+  nsStartHere: "Start here", nsBannerNoStation: "{n} scans come from Colibri scanners without a station. Only administrators see them.", nsBannerLink: "Assign scanners",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -24,6 +48,18 @@ export const frV8: Record<keyof typeof deV8, string> = {
   v8SearchBodyShops: "Chercher un body shop (nom, adresse, client Colibri)", v8Vehicles: "Véhicules ouverts / total",
   v8DeleteBodyShopQ: "Supprimer définitivement ce body shop ?", v8ContactName: "Personne à contacter", v8ContactPhone: "Téléphone",
   v8ExternalAccounts: "Comptes externes (rôle « Body shop »)", v8ExternalAccountsHint: "Affichage seulement. Les comptes s'invitent dans Administration → Utilisateurs.",
+  "p.colibri.geraete": "Gérer les scanners Colibri",
+  v8Scanners: "Scanners Colibri", v8ScannersHint: "Chaque scan appartient à la station où se trouvait son scanner ce jour-là. Une station ne voit que les scans de ses scanners.",
+  v8AddScanner: "Ajouter un scanner", v8Add: "Ajouter", v8SeenInScans: "Vus dans les scans", v8SeenHint: "Ces numéros apparaissent dans des scans mais ne sont pas encore un scanner.",
+  v8SeenRow: "{n} scans, dernier le {date}", v8SearchScanners: "Chercher un scanner (numéro, station, tenant)", v8ScannerNumber: "N° du scanner", v8ScannerStation: "Station",
+  v8ScannerSince: "Depuis", v8ScannerScans: "Scans", v8NoStation: "Sans station", v8From: "à partir du", v8Move: "Déplacer", v8Assign: "Affecter", v8History: "Historique",
+  v8Release: "Libérer (sans station)", v8FromDate: "À partir du", v8Note: "Note", v8Today: "aujourd'hui",
+  v8DeleteScannerQ: "Supprimer ce scanner ? L'historique de ses affectations disparaît avec lui.", v8PastDateHint: "Une date passée déplace aussi les scans de ces jours (sans expertise) vers la nouvelle station.",
+  v8ScannersEmpty: "Aucun scanner.", v8WaitingNoStation: "{n} scans en attente sans station",
+  v8StationScanners: "Scanners Colibri de cette station", v8StationScannersHint: "Seuls les scans de ces scanners apparaissent dans cette station. Administration → Scanners Colibri.",
+  v8ScannersNoStation: "Scanners Colibri sans station", v8ScannersNoStationHint: "Ces scanners n'ont pas de station : seuls les administrateurs voient leurs scans. Affectez une station dans Administration → Scanners Colibri.", v8OpenScanners: "Gérer les scanners",
+  "w.scanner_unknown": "Scanner non enregistré", "w.scanner_no_station": "Scanner sans station ce jour-là",
+  nsStartHere: "Démarrer ici", nsBannerNoStation: "{n} scans viennent de scanners Colibri sans station. Seuls les administrateurs les voient.", nsBannerLink: "Affecter les scanners",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -33,4 +69,16 @@ export const esV8: Record<keyof typeof deV8, string> = {
   v8SearchBodyShops: "Buscar body shop (nombre, dirección, cliente Colibri)", v8Vehicles: "Vehículos abiertos / total",
   v8DeleteBodyShopQ: "¿Eliminar este body shop definitivamente?", v8ContactName: "Persona de contacto", v8ContactPhone: "Teléfono",
   v8ExternalAccounts: "Cuentas externas (rol «Body shop»)", v8ExternalAccountsHint: "Solo visualización. Las cuentas se invitan en Administración → Usuarios.",
+  "p.colibri.geraete": "Gestionar escáneres Colibri",
+  v8Scanners: "Escáneres Colibri", v8ScannersHint: "Cada escaneo pertenece a la estación donde estaba su escáner ese día. Una estación solo ve los escaneos de sus escáneres.",
+  v8AddScanner: "Añadir escáner", v8Add: "Añadir", v8SeenInScans: "Vistos en escaneos", v8SeenHint: "Estos números aparecen en escaneos pero aún no son un escáner.",
+  v8SeenRow: "{n} escaneos, el último el {date}", v8SearchScanners: "Buscar escáner (número, estación, tenant)", v8ScannerNumber: "N.º de escáner", v8ScannerStation: "Estación",
+  v8ScannerSince: "Desde", v8ScannerScans: "Escaneos", v8NoStation: "Sin estación", v8From: "desde", v8Move: "Mover", v8Assign: "Asignar", v8History: "Historial",
+  v8Release: "Liberar (sin estación)", v8FromDate: "Desde la fecha", v8Note: "Nota", v8Today: "hoy",
+  v8DeleteScannerQ: "¿Eliminar este escáner? El historial de sus asignaciones se elimina con él.", v8PastDateHint: "Una fecha pasada también mueve los escaneos de esos días (sin peritación) a la nueva estación.",
+  v8ScannersEmpty: "Ningún escáner.", v8WaitingNoStation: "{n} escaneos esperando sin estación",
+  v8StationScanners: "Escáneres Colibri de esta estación", v8StationScannersHint: "Solo los escaneos de estos escáneres aparecen en esta estación. Administración → Escáneres Colibri.",
+  v8ScannersNoStation: "Escáneres Colibri sin estación", v8ScannersNoStationHint: "Estos escáneres no tienen estación: solo los administradores ven sus escaneos. Asigne una estación en Administración → Escáneres Colibri.", v8OpenScanners: "Gestionar escáneres",
+  "w.scanner_unknown": "Escáner no dado de alta", "w.scanner_no_station": "Escáner sin estación ese día",
+  nsStartHere: "Empezar aquí", nsBannerNoStation: "{n} escaneos proceden de escáneres Colibri sin estación. Solo los administradores los ven.", nsBannerLink: "Asignar escáneres",
 };

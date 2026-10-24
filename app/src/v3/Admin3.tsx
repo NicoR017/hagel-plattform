@@ -16,6 +16,7 @@ import { confirmDialog } from "../field/ui";
 import { fmtDateTime, getLang, locale, t, tOr, type Key } from "../i18n";
 import { Shell3 } from "./Shell3";
 import { BodyShopsPage } from "./BodyShops";
+import { ColibriDevicesPage } from "./ColibriDevices";
 
 interface Me {
   user: { id: string; email: string; name: string; isSuperadmin: boolean };
@@ -23,7 +24,7 @@ interface Me {
   grants: { orgId: string; stationId: string | null; permissions: string[] }[];
 }
 
-type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
+type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "scanners" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
 
 /** Map of the old tab names (bookmarks) to the new sections */
 const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
@@ -43,6 +44,7 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     { title: "v6MenuStructure", items: [
       { k: "sites", label: t("sites"), show: true },
       { k: "bodyshops", label: t("v8BodyShops"), show: hasAny("bodyshops.gerer") },
+      { k: "scanners", label: t("v8Scanners"), show: hasAny("colibri.geraete") },
       { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
       { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
     ] },
@@ -86,6 +88,7 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     case "users": body = <UsersPage canManage={has("utilisateurs.gerer")} />; break;
     case "roles": body = <RolesPage />; break;
     case "sites": body = <SitesPage canManage={has("stations.gerer")} canInsurers={has("assurances.gerer")} />; break;
+    case "scanners": body = <ColibriDevicesPage />; break;
     case "bodyshops": body = <BodyShopsPage canManage={hasAny("bodyshops.gerer")} canInsurers={hasAny("assurances.gerer") || hasAny("bodyshops.gerer")} />; break;
     case "insurers": body = <InsurersPage canMethods={has("methoden.gerer")} />; break;
     case "letterheads": body = <CompaniesPage />; break;
@@ -146,14 +149,14 @@ function Overview({ has, open }: { has: (p: string) => boolean; open: (k: Sectio
   const invs = useMaybe<unknown[]>("/admin/invitations", has("utilisateurs.gerer"));
   const sites = useLoad<{ id: string; capacite: number; present?: number; type: string }[]>("/admin/stations");
   const roles = useMaybe<{ isSystem: boolean }[]>("/admin/roles", has("roles.gerer"));
-  const az = useMaybe<{ configured: boolean; unmappedCustomers: unknown[]; unmappedLocations: unknown[]; lastRuns: { ok: boolean | null; at: string }[] }>("/admin/azure/status", has("stations.gerer"));
+  const az = useMaybe<{ configured: boolean; unmappedCustomers: unknown[]; scannersWithoutStation: unknown[]; lastRuns: { ok: boolean | null; at: string }[] }>("/admin/azure/status", has("stations.gerer"));
   const log = useMaybe<{ id: string; at: string; action: string; entity: string }[]>("/admin/audit?limit=8", has("audit.voir"));
   const full = (sites.data ?? []).filter((s) => isPlace(s) && s.capacite > 0 && (s.present ?? 0) >= s.capacite).length;
   const lastRun = az.data?.lastRuns?.[0];
   const azState = !az.data ? "…" : !az.data.configured ? t("v6AzureOff") : lastRun && lastRun.ok === false ? t("v6AzureErr") : t("v6AzureOk");
   const cards: { k: Section; show: boolean; title: string; big: ReactNode; sub: string }[] = [
     { k: "users", show: has("utilisateurs.gerer"), title: t("v6KpiUsers"), big: (users.data ?? []).filter((u) => u.status === "active").length, sub: `${invs.data?.length ?? 0} ${t("v6KpiInvites")}` },
-    { k: "azure", show: has("stations.gerer"), title: t("v6KpiAzure"), big: azState, sub: `${(az.data?.unmappedCustomers.length ?? 0) + (az.data?.unmappedLocations.length ?? 0)} ${t("v6KpiAzureOpen")}` },
+    { k: "azure", show: has("stations.gerer"), title: t("v6KpiAzure"), big: azState, sub: `${(az.data?.unmappedCustomers.length ?? 0) + (az.data?.scannersWithoutStation?.length ?? 0)} ${t("v6KpiAzureOpen")}` },
     { k: "sites", show: true, title: t("v6KpiStations"), big: sites.data?.filter(isPlace).length ?? "…", sub: `${full} ${t("v6KpiFull")}` },
     { k: "roles", show: has("roles.gerer"), title: t("v6KpiRoles"), big: roles.data?.length ?? "…", sub: t("v6KpiRolesSub") },
   ];

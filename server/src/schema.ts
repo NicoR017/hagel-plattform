@@ -538,3 +538,32 @@ export const citasLinks = pgTable("citas_links", {
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: createdAt(),
 }, (t) => ({ byAppt: uniqueIndex("citas_links_appt_uq").on(t.orgId, t.appointmentId), byVehicle: index("citas_links_vehicle_idx").on(t.vehicleId) }));
+
+// ---------------------------------------------------------------- V5: Colibri scanners (devices) and the station they stand in
+/**
+ * A Colibri scanner device. The number is what Azure calls `ColibriNumber`. The scans of a device belong to the station the device
+ * was assigned to on the day of the scan (colibri_device_assignments), so every station sees only the scans of its own scanners.
+ */
+export const colibriDevices = pgTable("colibri_devices", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  tenant: text("tenant").notNull().default(""),
+  number: text("number").notNull(),
+  note: text("note").notNull().default(""),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => ({ byKey: uniqueIndex("colibri_devices_key_uq").on(t.orgId, t.tenant, t.number) }));
+
+/** The device stands in `station_id` from `valid_from` to `valid_to` (both included, local dates YYYY-MM-DD; valid_to null = until further notice). */
+export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
+  id: id(),
+  deviceId: uuid("device_id").notNull().references(() => colibriDevices.id),
+  stationId: uuid("station_id").notNull().references(() => stations.id),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => ({
+  byDevice: index("colibri_assign_device_idx").on(t.deviceId, t.validFrom),
+  oneOpen: uniqueIndex("colibri_assign_one_open_idx").on(t.deviceId).where(sql`valid_to is null`),
+}));

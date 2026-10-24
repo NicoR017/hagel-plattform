@@ -98,6 +98,11 @@ export function NewScans() {
             {counts.stations.map(([id, c]) => <button key={id} className={"chip" + (chip === id ? " on" : "")} onClick={() => setChip(id)}>{c.name} ({c.n})</button>)}
             {counts.none > 0 && <button className={"chip" + (chip === "none" ? " on" : "")} onClick={() => setChip("none")}>{t("nsNoStation")} ({counts.none})</button>}
           </div>
+          {counts.none > 0 && (
+            <div className="warn" style={{ background: "#FDF0E1", color: "#8A4A06", borderRadius: 10, padding: "8px 12px" }}>
+              ⚠ {t("nsBannerNoStation").replace("{n}", String(counts.none))} {f.can("colibri.geraete") && <a href="#/admin/scanners" style={{ fontWeight: 700 }}>{t("nsBannerLink")}</a>}
+            </div>
+          )}
           {scans === null && <p className="muted">{t("loading")}</p>}
           {scans && !shown.length && <p className="empty">{err || t("nsEmpty")}</p>}
           <div className="rows">
@@ -120,7 +125,7 @@ export function NewScans() {
                     {s.warnings.map((w) => <span key={w} className="badge" style={{ background: "#EEF0F3", color: "#3B4555" }}>{t(("w." + w) as never)}</span>)}
                   </span>
                 </span>
-                <span className="btn primary" aria-hidden="true">{busy === s.partitionKey ? t("preparing") : t("nsStart")}</span>
+                <span className="btn primary" aria-hidden="true">{busy === s.partitionKey ? t("preparing") : s.stationId ? t("nsStart") : t("nsStartHere")}</span>
               </div>
             ))}
           </div>

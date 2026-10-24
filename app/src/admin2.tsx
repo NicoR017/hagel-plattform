@@ -231,7 +231,7 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
 interface AzStatus {
   configured: boolean; sasExpiresAt?: string | null; tenants: string[]; scansMirrored: number; waiting: { importable: number; blocked: number };
   lastRuns: { at: string; finishedAt: string | null; ok: boolean | null; error: string | null; stats: Record<string, number> | null }[];
-  unmappedCustomers: { name: string; tenant: string; scans: number }[]; unmappedLocations: { location: string; tenant: string; scans: number }[];
+  unmappedCustomers: { name: string; tenant: string; scans: number }[]; scannersWithoutStation: { tenant: string; number: string; scans: number }[];
 }
 /** Connection to PDR Citas (appointments): status, and a button that tests it (health, then locations). */
 function CitasCard() {
@@ -304,22 +304,14 @@ export function AzurePage() {
           })}
         </Card>
       )}
-      {!!d?.unmappedLocations.length && (
-        <Card title={t("unmappedLocations")}>
-          <p className="muted" style={{ marginTop: 0 }}>{t("unmappedLocationsHint")}</p>
-          {d.unmappedLocations.map((u) => {
-            const k = `L|${u.tenant}|${u.location}`;
-            const ok = halls.filter((h) => h.azureTenant === u.tenant);
-            return (
-              <div key={k} className="row" style={{ borderTop: "1px solid var(--line)", padding: "8px 0" }}>
-                <div className="grow"><b>{u.location}</b><div style={{ fontSize: 12, color: "var(--sub)" }}>{u.tenant} · {u.scans} {t("scansWord")}</div></div>
-                <select style={{ maxWidth: 220 }} value={pick[k] ?? ""} onChange={(e) => setPick({ ...pick, [k]: e.target.value })}>
-                  <option value="">—</option>{ok.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select>
-                <button className="btn" disabled={!pick[k]} onClick={() => void act(() => api("POST", "/admin/azure/map-location", { location: u.location, tenant: u.tenant, station_id: pick[k] }), setErr, () => void st.reload())}>{t("mapLocation")}</button>
-              </div>
-            );
-          })}
+      {!!d?.scannersWithoutStation?.length && (
+        <Card title={t("v8ScannersNoStation")} actions={<a className="btn sec" href="#/admin/scanners">{t("v8OpenScanners")}</a>}>
+          <p className="muted" style={{ marginTop: 0 }}>{t("v8ScannersNoStationHint")}</p>
+          {d.scannersWithoutStation.map((u) => (
+            <div key={u.tenant + u.number} className="row" style={{ borderTop: "1px solid var(--line)", padding: "8px 0" }}>
+              <div className="grow"><b>{u.number || "—"}</b><div style={{ fontSize: 12, color: "var(--sub)" }}>{u.tenant} · {u.scans} {t("scansWord")}</div></div>
+            </div>
+          ))}
         </Card>
       )}
     </>

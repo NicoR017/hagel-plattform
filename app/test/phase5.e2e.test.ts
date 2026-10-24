@@ -31,10 +31,12 @@ beforeAll(async () => {
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["TenantA"] } });
   const sts = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
   CARRO = sts.find((s) => s.type === "carrosserie").id; // the customer, mapped by its Colibri business customer
-  A = sts.find((s) => s.type === "hall" && s.name === "Nave Test A").id; // the place, mapped by the scan's Location alias
+  A = sts.find((s) => s.type === "hall" && s.name === "Nave Test A").id; // the place, reached through the scanner assignment
   await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["Nave Test A"], country: "ES" } });
-  az.add("AllScanResults", { PartitionKey: "20261019-1627", RowKey: "9547 LPV", Tenant: "TenantA", Location: "Nave Test A", BusinessCustomer: "Talavera - Allianz", LicensePlate: "9547 LPV", DentsTotalNumber: 618, ScanDateTime: "2026-10-19T16:27:00Z", ScanFailed: false, urlPdf: "allscans/20261019-1627.pdf", ClaimNumber: "X-1" });
+  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", country: "ES" } });
+  // V5: the scan lands at the hall because its scanner stands there
+  expect((await call(c, "POST", "/admin/colibri/devices", { token: c.superToken, org: c.orgES, body: { tenant: "TenantA", number: "COLIBRI-028", note: "test", station_id: A, from: "2026-01-01" } })).status).toBe(201);
+  az.add("AllScanResults", { PartitionKey: "20261019-1627", RowKey: "9547 LPV", Tenant: "TenantA", Location: "Nave Test A", ColibriNumber: "COLIBRI-028", BusinessCustomer: "Talavera - Allianz", LicensePlate: "9547 LPV", DentsTotalNumber: 618, ScanDateTime: "2026-10-19T16:27:00Z", ScanFailed: false, urlPdf: "allscans/20261019-1627.pdf", ClaimNumber: "X-1" });
   az.putBlob("allscans", "20261019-1627.pdf", PDF);
   const jpg = new Uint8Array(await sharp({ create: { width: 2000, height: 1500, channels: 3, background: "#456" } }).jpeg().toBuffer());
   az.putBlob("scan-color-pictures", "20261019-1627_Overview_Pictures_FRONT-0.jpg", jpg);

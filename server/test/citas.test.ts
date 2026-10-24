@@ -29,7 +29,9 @@ beforeAll(async () => {
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
   CARRO = st.find((s) => s.type === "carrosserie").id; A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; HALL = st.find((s) => s.type === "hall" && s.name !== "Nave Test A").id;
   await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
-  await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["Nave Madrid"], country: "ES" } });
+  await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", country: "ES" } });
+  // V5: the scan is at the hall because its SCANNER (Colibri number C-100) stands there since before the scan day
+  expect((await call(c, "POST", "/admin/colibri/devices", { token: c.superToken, org: c.orgES, body: { tenant: "TenantA", number: "C-100", note: "test", station_id: HALL, from: "2026-01-01" } })).status).toBe(201);
   ins = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Allianz (alt)", azure_insurance_id: "ins-1" } })).body.id;
   await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Mutua Madrileña" } });
 

@@ -6,6 +6,7 @@ import { audit } from "./audit";
 import { HttpError } from "./auth";
 import type { AzureSource } from "./azure";
 import { importScans } from "./azure_import";
+import { deviceRoutes } from "./colibri_devices";
 import { loadMappingContext, mapScan, newScansOfTenants, normalizeName, reconcileLinks, syncAzure, tenantsOfOrg } from "./azure_sync";
 import type { Db } from "./db";
 import type { Env } from "./env";
@@ -26,7 +27,11 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
   const r = new Hono<Env>();
   let lastManualSync = 0;
 
-  /** Scans waiting for import that point to a site where the user may import (and, for admins, the ones that still need a mapping). */
+  /**
+   * Scans waiting for import. V5: a user sees only the scans of the scanners that stand in HIS stations (the station of a scan is the one its
+   * scanner was assigned to on that day). An administrator (stations.gerer) sees every station of the organisation and the scans whose scanner
+   * has no station yet ("without station"). Enforced here, not in the page.
+   */
   r.get("/azure/scans", needAuth, needOrg, async (c) => {
     const u = c.get("principal"), orgId = c.get("orgId");
     const tenants = await tenantsOfOrg(db, orgId);
@@ -35,20 +40,20 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     const isAdmin = canOrg(u, "stations.gerer", orgId);
     const insName = new Map(ctx.insurers.map((i) => [i.id, i.name]));
     const stName = new Map(ctx.stations.map((s) => [s.id, s.name]));
-    // ?all=1: also the scans mapped to another station (or to none) of the organisation: they can be loaded into the station the user is in
-    const everywhere = c.req.query("all") === "1" && canOrg(u, "colibri.importer", orgId);
     const out = [];
     for (const s of rows) {
       const m = mapScan(s, ctx);
-      const mine = m.orgId === orgId && m.stationId && canOrg(u, "colibri.importer", orgId, m.stationId);
-      const adminUnmapped = !m.orgId && isAdmin; // only visible to admins of an organisation that owns this tenant
-      const elsewhere = everywhere && !mine && (m.orgId === orgId || !m.orgId);
-      if (!mine && !adminUnmapped && !elsewhere) continue;
+      const inMyOrg = m.orgId === orgId && !!m.stationId;
+      const mine = inMyOrg && canOrg(u, "colibri.importer", orgId, m.stationId);
+      const withoutStation = !m.stationId && m.tenantOrgIds.includes(orgId);
+      if (!mine && !(isAdmin && (inMyOrg || withoutStation))) continue;
       out.push({
         partitionKey: s.partitionKey, rowKey: s.rowKey, scanDateTime: s.scanDateTime, plate: s.plate, brand: s.brand, model: s.model, colibriNumber: s.colibriNumber,
         businessCustomer: s.businessCustomer, claimNumber: s.claimNumber, location: s.location, dentsTotal: s.dentsTotal, tenant: s.tenant,
         stationId: m.stationId, stationName: m.stationId ? stName.get(m.stationId) ?? "" : "", clientName: m.clientStationId ? stName.get(m.clientStationId) ?? "" : "",
-        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings, importable: (m.importable && !!mine) || (elsewhere && !s.scanFailed),
+        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings,
+        // a scan without a station can only be started by an administrator who picks the station (the scanner stays without one)
+        withoutStation, importable: !s.scanFailed && (!!mine || (isAdmin && withoutStation)),
       });
     }
     // newest first, by the real time (a Date compared as text is not chronological)
@@ -77,7 +82,7 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     const ctx = await loadMappingContext(db);
     const rows = await newScansOfTenants(db, tenants);
     const unmappedCustomers = new Map<string, { name: string; tenant: string; scans: number }>();
-    const unmappedLocations = new Map<string, { location: string; tenant: string; scans: number }>();
+    const noStation = new Map<string, { tenant: string; number: string; scans: number }>();
     let importable = 0, blocked = 0;
     for (const s of rows) {
       const m = mapScan(s, ctx);
@@ -87,16 +92,16 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
         const e = unmappedCustomers.get(k) ?? { name: s.businessCustomer, tenant: s.tenant, scans: 0 };
         e.scans++; unmappedCustomers.set(k, e);
       }
-      if (m.warnings.includes("location_unmapped")) {
-        const k = `${s.tenant}|${normalizeName(s.location)}`;
-        const e = unmappedLocations.get(k) ?? { location: s.location, tenant: s.tenant, scans: 0 };
-        e.scans++; unmappedLocations.set(k, e);
+      if (!m.stationId) {
+        const k = `${s.tenant}|${s.colibriNumber}`;
+        const e = noStation.get(k) ?? { tenant: s.tenant, number: s.colibriNumber, scans: 0 };
+        e.scans++; noStation.set(k, e);
       }
     }
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(colibriScans);
     return c.json({
       configured: !!az, sasExpiresAt: az?.expiresAt?.()?.toISOString() ?? null, tenants, lastRuns: runs.map((x) => ({ at: x.startedAt, finishedAt: x.finishedAt, ok: x.ok, error: x.error, stats: x.stats })),
-      scansMirrored: n, waiting: { importable, blocked }, unmappedCustomers: [...unmappedCustomers.values()].filter((e) => e.name), unmappedLocations: [...unmappedLocations.values()],
+      scansMirrored: n, waiting: { importable, blocked }, unmappedCustomers: [...unmappedCustomers.values()].filter((e) => e.name), scannersWithoutStation: [...noStation.values()].sort((a, b) => b.scans - a.scans),
     });
   });
 
@@ -166,5 +171,6 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     return c.json(out);
   });
 
+  r.route("/", deviceRoutes({ db, hub, needAuth, needOrg, validationHook }));
   return r;
 }

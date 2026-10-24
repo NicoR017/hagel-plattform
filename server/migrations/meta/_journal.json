@@ -120,6 +120,13 @@
       "when": 1792866170574,
       "tag": "0016_v5_bodyshops",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792867196710,
+      "tag": "0017_v5_colibri_devices",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { and, eq, lt, or, sql } from "drizzle-orm";
 import sharp from "sharp";
+import { isPlaceType } from "@hagel/shared";
 import { applyColibri, colibriPages, parseColibri, scanCheck, titleCase } from "@hagel/colibri";
 import { audit } from "./audit";
 import type { AzureSource } from "./azure";
@@ -91,11 +92,17 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
   if (!scan || !myTenants.includes(scan.tenant)) return { ...base, status: "not_found" };
   if (scan.importStatus === "imported") return { ...base, status: "already", vehicleId: scan.vehicleId ?? undefined };
   let m: ScanMapping = mapScan(scan, ctx);
-  // "load it into THIS station": the car stands in the chosen station (a station of the caller's organisation in the scan's Colibri tenant);
-  // the customer body shop it belongs to stays the one of the scan's BusinessCustomer link
+  const isAdmin = canOrg(u, "stations.gerer", callerOrgId);
+  // V5: the station of a scan is the one of its scanner on that day. Whoever picks another station (or one for a scan whose scanner has none)
+  // must be an administrator: "Start here" with a station select. A scan without station does not exist for anybody else.
+  if (!m.stationId && !(isAdmin && m.tenantOrgIds.includes(callerOrgId))) {
+    return { ...base, status: m.tenantOrgIds.includes(callerOrgId) && !isAdmin ? "not_found" : "unmapped" };
+  }
   if (stationOverride) {
     const [st] = await d.db.select().from(stations).where(eq(stations.id, stationOverride));
-    if (!st || st.orgId !== callerOrgId || !st.active || (st.azureTenant && st.azureTenant !== scan.tenant)) return { ...base, status: "unmapped" };
+    if (!st || st.orgId !== callerOrgId || !st.active || !isPlaceType(st.type) || (st.azureTenant && st.azureTenant !== scan.tenant)) return { ...base, status: "unmapped" };
+    if (m.stationId && m.stationId !== st.id && !isAdmin) return { ...base, status: "not_allowed" };
+    // the scanner keeps its (non-)assignment: only this car stands here
     m = { ...m, orgId: st.orgId, stationId: st.id, importable: !scan.scanFailed };
   }
   // the scan must belong to the user's organisation through ITS tenant — never through a name

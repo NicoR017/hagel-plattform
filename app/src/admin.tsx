@@ -1,3 +1,4 @@
+import { StationScanners } from "./v3/ColibriDevices";
 import { isPlace } from "./field/places";
 import { Occ } from "./field/occupancy";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -349,10 +350,7 @@ ${s.name}`)) void act(() => api("DELETE", `/admin/stations/${s.id}`), setErr, ()
             ? <select value={f.azure_tenant} onChange={(e) => setF({ ...f, azure_tenant: e.target.value })}><option value="">—</option>{tenants.data.map((x) => <option key={x}>{x}</option>)}</select>
             : <input value={f.azure_tenant} onChange={(e) => setF({ ...f, azure_tenant: e.target.value })} placeholder={t("tenantHint")} />}
           <label>{t("v6RepairsPerDay")}</label><input type="number" min={0} max={50} value={f.rpd} onChange={(e) => setF({ ...f, rpd: Number(e.target.value) })} />
-          {<>
-            <label>{t("locationAliases")}</label><input value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} />
-            <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("locationAliasesHint")}</div>
-          </>}
+          {f.id && <StationScanners stationId={f.id} />}
           {canManage && (!!citasLocs.data?.length || !!f.citas) && <>
             <label>{t("ciLocation")}</label>
             <select value={f.citas} onChange={(e) => setF({ ...f, citas: e.target.value })}>
@@ -365,7 +363,7 @@ ${s.name}`)) void act(() => api("DELETE", `/admin/stations/${s.id}`), setErr, ()
           <Err msg={err} />
           <p className="row"><button className="btn" onClick={() => {
             const body = { type: f.type, name: f.name, address: f.address, country: f.country, capacite: f.capacite, azure_tenant: f.azure_tenant || null,
-              repairs_per_day: f.rpd, ...(canManage ? { citas_location_id: f.citas || null } : {}), azure_location_aliases: f.aliases.split(",").map((x) => x.trim()).filter(Boolean) };
+              repairs_per_day: f.rpd, ...(canManage ? { citas_location_id: f.citas || null } : {}) };
             void act(() => (f.id ? api("PUT", `/admin/stations/${f.id}`, body) : api("POST", "/admin/stations", body)), setErr, () => { setF(null); void sites.reload(); });
           }}>{t("save")}</button><button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button></p>
         </Card>
