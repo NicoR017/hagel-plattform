@@ -21,7 +21,7 @@ export async function loadPrincipal(db: Db, userId: string): Promise<Principal |
     grants: rows.map(({ a, r }) => ({
       orgId: a.orgId, stationId: a.stationId, scope: r.scope as Scope, permissions: r.permissions,
       scopeClientStationId: a.scopeClientStationId, scopeInsurerId: a.scopeInsurerId, scopeCampaignId: a.scopeCampaignId,
-      expiresAt: a.expiresAt,
+      expiresAt: a.expiresAt, repairSteps: r.repairSteps,
     })),
   };
 }

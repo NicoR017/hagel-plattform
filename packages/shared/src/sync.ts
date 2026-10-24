@@ -324,7 +324,7 @@ export interface PullResponse {
     me: {
       id: string; name: string; language: string; permissions: string[];
       /** set for a technician / headliner account that does not see the internal split: the app then shows the field interface (v4) */
-      fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[] } | null;
+      fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[]; /** repair steps given by his role(s); empty = rule of his technician kind */ steps?: string[]; /** the moves he may make: [from, to] */ moves?: [string, string][] } | null;
     };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
     people: { id: string; name: string; roles?: string[]; stationIds?: string[] }[];

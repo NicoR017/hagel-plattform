@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LANGS } from "./errors";
-import { PERMISSIONS, PLACE_TYPES, SCOPES, STATION_TYPES } from "./permissions";
+import { PERMISSIONS, PLACE_TYPES, ROLE_REPAIR_STEPS, SCOPES, STATION_TYPES } from "./permissions";
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 export const uuid = z.string().uuid();
@@ -10,6 +10,8 @@ export const roleInput = z.object({
   description: z.string().max(300).default(""),
   scope: z.enum(SCOPES),
   permissions: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length),
+  /** repair steps the role works on (technician / headliner accounts); empty = the rule of the technician record */
+  repair_steps: z.array(z.enum(ROLE_REPAIR_STEPS)).max(ROLE_REPAIR_STEPS.length).default([]),
 });
 
 export const stationInput = z.object({

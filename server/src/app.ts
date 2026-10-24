@@ -405,7 +405,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   org.post("/roles", require("roles.gerer"), zValidator("json", roleInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     assertCanGrant(c.get("principal"), orgId, b.permissions);
-    const [r] = await db.insert(roles).values({ orgId, name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)] }).returning();
+    const [r] = await db.insert(roles).values({ orgId, name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], repairSteps: [...new Set(b.repair_steps)] }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "role", entityId: r.id, after: r });
     return c.json(r, 201);
   });
@@ -415,7 +415,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (!before) throw new HttpError(404, "role_not_found");
     // changing a role changes everyone who has it: may add only what you hold; may remove only what you could grant
     assertCanGrant(c.get("principal"), orgId, [...new Set([...b.permissions, ...before.permissions])]);
-    const [r] = await db.update(roles).set({ name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], updatedAt: new Date() }).where(eq(roles.id, before.id)).returning();
+    const [r] = await db.update(roles).set({ name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], repairSteps: [...new Set(b.repair_steps)], updatedAt: new Date() }).where(eq(roles.id, before.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "role", entityId: r.id, before, after: r });
     return c.json(r);
   });

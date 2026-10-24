@@ -134,6 +134,13 @@
       "when": 1792874510960,
       "tag": "0018_v5_handovers",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792880816050,
+      "tag": "0019_v5_role_steps",
+      "breakpoints": true
     }
   ]
 }

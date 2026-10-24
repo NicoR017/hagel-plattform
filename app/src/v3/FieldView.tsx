@@ -70,7 +70,7 @@ function useFieldMove(v: LocalVehicle, kind: FieldKind) {
   const photos = usePhotos(v.id);
   const me = f.refs?.me.id ?? "";
   const stage = stageOf(v);
-  const next = nextStep(kind, asField(v));
+  const next = nextStep(kind, asField(v), f.refs?.me.fieldView?.moves);
   const has = hasStepPhoto(photos, me, v.id, stage);
   const [moving, setMoving] = useState(false);
   const role = kind === "headliner" ? "Headliner" : "Techniker";
@@ -164,7 +164,8 @@ function FieldCard({ v, kind }: { v: LocalVehicle; kind: FieldKind }) {
 /** S34 / S37: his cars in one station (no mode choice, no board) */
 export function FieldCars({ stationId, who }: { stationId: string; who: { kind: FieldKind; meId: string } }) {
   const all = useVehicles();
-  const mine = useMemo(() => all.filter((v) => v.stationId === stationId && isMine(asField(v), who.kind)), [all, stationId, who.kind]);
+  const steps = useField().refs?.me.fieldView?.steps;
+  const mine = useMemo(() => all.filter((v) => v.stationId === stationId && isMine(asField(v), who.kind, steps)), [all, stationId, who.kind, steps]);
   const order = (v: LocalVehicle) => REPAIR_STAGES.indexOf(stageOf(v));
   const active = mine.filter((v) => isActive(asField(v)) && !isFinished(asField(v))).sort((a, b) => order(a) - order(b) || plateOf(a).localeCompare(plateOf(b)));
   const finished = mine.filter((v) => isFinished(asField(v))).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -193,7 +194,8 @@ export function FieldStations({ who, fvStations }: { who: { kind: FieldKind; meI
   const f = useField();
   const all = useVehicles();
   const stations = (f.refs?.stations ?? []).filter((s) => s.active && isPlace(s));
-  const mineBy = (id: string) => all.filter((v) => v.stationId === id && isMine(asField(v), who.kind));
+  const steps = f.refs?.me.fieldView?.steps;
+  const mineBy = (id: string) => all.filter((v) => v.stationId === id && isMine(asField(v), who.kind, steps));
   const list = stations.filter((s) => fvStations.includes(s.id) || mineBy(s.id).length > 0);
   useEffect(() => {
     if (list.length !== 1) return;
@@ -207,7 +209,7 @@ export function FieldStations({ who, fvStations }: { who: { kind: FieldKind; meI
       {!list.length && <p className="empty">{f.refs ? t("fvNoStations") : t("loading")}</p>}
       <div className="stgrid">
         {list.map((s) => {
-          const n = tally(mineBy(s.id) as unknown as FieldVehicle[], who.kind);
+          const n = tally(mineBy(s.id) as unknown as FieldVehicle[], who.kind, steps);
           const cells = who.kind === "headliner"
             ? [[n.toRemove, t("fvToRemove")], [n.toRefit, t("fvToRefit")], [n.total, t("fvTotal")]] as const
             : [[n.toDo, t("fvToDo")], [n.inPdr, t("fvInPdr")], [n.finished, t("fvFinished")]] as const;

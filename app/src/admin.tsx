@@ -3,7 +3,7 @@ import { isPlace } from "./field/places";
 import { Occ } from "./field/occupancy";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LANG_LIST, getLang } from "./i18n";
-import { PERMISSIONS, SCOPES, SYSTEM_ROLES, type Lang } from "@hagel/shared";
+import { PERMISSIONS, ROLE_REPAIR_STEPS, SCOPES, SYSTEM_ROLES, type Lang } from "@hagel/shared";
 import { api, getOrg } from "./api";
 import { fmtDateTime, t, tOr, type Key } from "./i18n";
 import { confirmDialog } from "./field/ui";
@@ -154,11 +154,12 @@ const PERM_GROUPS = (() => {
   const rest = PERMISSIONS.filter((p) => !known.has(p));
   return GROUPS_DEF.map((g, i) => ({ title: g.title, keys: (i === GROUPS_DEF.length - 1 ? [...g.keys, ...rest] : g.keys).filter((k) => (PERMISSIONS as readonly string[]).includes(k)) }));
 })();
-interface RoleRow { id: string; key: string | null; name: string; description: string; scope: string; permissions: string[]; isSystem: boolean }
+interface RoleRow { id: string; key: string | null; name: string; description: string; scope: string; permissions: string[]; repairSteps?: string[]; isSystem: boolean }
 
 export function RolesPage() {
   const roles = useLoad<RoleRow[]>("/admin/roles");
   const [edit, setEdit] = useState<(Partial<RoleRow> & { name: string; scope: string; permissions: string[] }) | null>(null);
+  const steps = edit?.repairSteps ?? [];
   const [err, setErr] = useState("");
   const [del, setDel] = useState<{ role: RoleRow; replacement: string; members: number } | null>(null);
   const startDelete = async (r: RoleRow) => {
@@ -213,11 +214,18 @@ export function RolesPage() {
               ))}</div>
             </div>
           ))}
+          <h4 style={{ margin: "14px 0 4px" }}>{t("rsTitle")}</h4>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>{t("rsHint")}</div>
+          <div className="grid">{ROLE_REPAIR_STEPS.map((s) => (
+            <label key={s}><input type="checkbox" checked={steps.includes(s)}
+              onChange={(e) => setEdit({ ...edit, repairSteps: e.target.checked ? [...steps, s] : steps.filter((x) => x !== s) })} />
+              <span>{t(("rs_" + s) as never)}<small style={{ display: "block", color: "var(--sub)" }}>{t(("rsMove_" + s) as never)}</small></span></label>
+          ))}</div>
           <Err msg={err} />
           <p className="row">
             <button className="btn" onClick={() => act(() => edit.id
-              ? api("PUT", `/admin/roles/${edit.id}`, { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions })
-              : api("POST", "/admin/roles", { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions }),
+              ? api("PUT", `/admin/roles/${edit.id}`, { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps })
+              : api("POST", "/admin/roles", { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps }),
             setErr, () => { setEdit(null); void roles.reload(); })}>{t("save")}</button>
             <button className="btn sec" onClick={() => setEdit(null)}>{t("cancel")}</button>
           </p>

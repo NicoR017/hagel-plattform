@@ -19,6 +19,10 @@ export type Scope = (typeof SCOPES)[number];
 /** Repair board columns (vehicles.repair_stage). */
 export const REPAIR_STAGES = ["bereit", "demontage", "pdr", "remontage", "bodyshop", "finish"] as const;
 export type RepairStage = (typeof REPAIR_STAGES)[number];
+/** the repair steps a role can be given (v5): with a step the role moves the car from that step to the next one */
+export const ROLE_REPAIR_STEPS = ["demontage", "pdr", "remontage"] as const;
+export type RoleRepairStep = (typeof ROLE_REPAIR_STEPS)[number];
+export const NEXT_AFTER_STEP: Record<RoleRepairStep, RepairStage> = { demontage: "pdr", pdr: "remontage", remontage: "bodyshop" };
 
 export const STATION_TYPES = ["carrosserie", "hall", "parc"] as const;
 export type StationType = (typeof STATION_TYPES)[number];

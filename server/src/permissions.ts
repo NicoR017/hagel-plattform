@@ -16,6 +16,8 @@ export interface Grant {
   scopeInsurerId?: string | null;
   scopeCampaignId?: string | null;
   expiresAt?: Date | null;
+  /** repair steps given by the role (v5) */
+  repairSteps?: readonly string[];
 }
 
 export interface Principal {
@@ -36,6 +38,11 @@ export function fieldProfile(u: Principal, orgId: string): { id: string; name: s
   const t = u.technicians?.find((x) => x.orgId === orgId);
   if (!t) return null;
   return u.grants.some((g) => g.orgId === orgId && g.permissions.includes("repartition_interne.voir")) ? null : t;
+}
+
+/** the repair steps the roles of this account give it in an organisation (live grants); empty = the rule of the technician record applies */
+export function roleRepairSteps(u: Principal, orgId: string, now = new Date()): string[] {
+  return [...new Set(u.grants.filter((g) => g.orgId === orgId && live(g, now)).flatMap((g) => [...(g.repairSteps ?? [])]))];
 }
 
 export interface VehicleRef {

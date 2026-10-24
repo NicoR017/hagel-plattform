@@ -1,4 +1,4 @@
-# Checklist de mise en production : nouvelle interface (branche `feature/ui-v3`)
+﻿# Checklist de mise en production : nouvelle interface (branche `feature/ui-v3`)
 
 À exécuter par **Nicolas**. Rien n'a été poussé, fusionné ni déployé par l'assistant. Procédure détaillée et retour arrière : `infra/README_STAGING.md` §5.
 
@@ -96,9 +96,10 @@ Headliner :
 
 # Ajouts v5 (branche `feature/ui-v5`, créée depuis la v4) : v4 + v5 en production le lundi
 
-La v5 **ajoute 3 migrations**, toutes additives (aucun DROP / RENAME / suppression de ligne), dans cet ordre, au démarrage du serveur :
+La v5 **ajoute 4 migrations**, toutes additives (aucun DROP / RENAME / suppression de ligne), dans cet ordre, au démarrage du serveur :
 - `0016_v5_bodyshops` : colonnes `contact_name` / `contact_phone` sur les stations, permission `bodyshops.gerer` ajoutée aux rôles qui avaient `stations.gerer`.
 - `0017_v5_colibri_devices` : tables `colibri_devices` et `colibri_device_assignments`, permission `colibri.geraete` (mêmes rôles).
+- `0019_v5_role_steps` : colonne `repair_steps` sur `roles` (étapes de réparation d'un rôle ; vide = règle actuelle par type de fiche technicien, aucun changement tant que rien n'est coché).
 - `0018_v5_handovers` : table `vehicle_handovers` et trois colonnes sur `vehicles` (`repair_entered_at`, `drop_off_signed_at`, `pick_up_signed_at`).
 
 Une quatrième étape **n'est pas une migration** et se lance à la main : le script `v5:move-bodyshop-vehicles` (voitures qui se trouvent dans une carrosserie → « Chapauto »). Par défaut il ne fait qu'un essai à blanc.

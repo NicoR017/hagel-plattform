@@ -9,11 +9,11 @@ import { audit } from "./audit";
 import { finishHandover } from "./handover";
 import type { Mailer } from "./email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
-import { applyRepairOp, isRepairOp, partsToTodos, repairDataFor } from "./repair";
+import { applyRepairOp, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor } from "./repair";
 import { recipientsOfVehicle } from "./reports";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
-import { can, canOrg, effectivePermissions, fieldProfile, filterFields, type Principal, type VehicleRef } from "./permissions";
+import { can, canOrg, effectivePermissions, fieldProfile, filterFields, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
 import {
   colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, repairEvents, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleHandovers, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
@@ -693,7 +693,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
       .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
     : [];
   return {
-    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

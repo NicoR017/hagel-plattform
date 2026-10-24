@@ -34,7 +34,9 @@ export function fieldPanels(v: Pick<FieldVehicle, "panels">): FieldPanel[] {
 export const countKinds = (list: FieldPanel[]) => ({ pdr: list.filter((p) => p.kind === "pdr").length, ptp: list.filter((p) => p.kind === "ptp").length, replace: list.filter((p) => p.kind === "replace").length });
 
 /** is it his car: assigned for his kind of work, or his earnings on it are not empty (his name is in the split) */
-export function isMine(v: FieldVehicle, kind: FieldKind): boolean {
+export function isMine(v: FieldVehicle, kind: FieldKind, steps?: readonly string[]): boolean {
+  // steps given by his role (v5): the PDR step is PDR work, disassembly / reassembly are removal-refit work
+  if (steps?.length) return (steps.includes("pdr") && (!!v.myAssign?.includes("pdr") || !!v.myEarn?.pdr)) || (steps.some((s) => s !== "pdr") && (!!v.myAssign?.includes("demontage") || !!v.myEarn?.dem));
   if (kind === "headliner") return !!v.myAssign?.includes("demontage") || !!v.myEarn?.dem;
   return !!v.myAssign?.includes("pdr") || !!v.myEarn?.pdr;
 }
@@ -51,10 +53,10 @@ export const FIELD_MOVES: Record<FieldKind, readonly (readonly [string, string])
   pdr: [["demontage", "pdr"]],
   headliner: [["demontage", "pdr"], ["remontage", "bodyshop"]],
 };
-export function nextStep(kind: FieldKind, v: FieldVehicle): string | null {
+export function nextStep(kind: FieldKind, v: FieldVehicle, moves?: readonly (readonly [string, string])[]): string | null {
   if (isFinished(v) || !isActive(v)) return null;
   const from = stageOf(v);
-  return FIELD_MOVES[kind].find(([a]) => a === from)?.[1] ?? null;
+  return (moves?.length ? moves : FIELD_MOVES[kind]).find(([a]) => a === from)?.[1] ?? null;
 }
 
 export interface PhotoLite { vehicleId: string; takenBy: string | null; repairStage?: string | null; deleted?: boolean }
@@ -64,8 +66,8 @@ export const hasStepPhoto = (photos: readonly PhotoLite[], meId: string, vehicle
 
 export interface StationTally { toDo: number; inPdr: number; finished: number; toRemove: number; toRefit: number; total: number }
 /** numbers of a station card */
-export function tally(list: readonly FieldVehicle[], kind: FieldKind): StationTally {
-  const mine = list.filter((v) => isMine(v, kind) && (isActive(v) || isFinished(v)));
+export function tally(list: readonly FieldVehicle[], kind: FieldKind, steps?: readonly string[]): StationTally {
+  const mine = list.filter((v) => isMine(v, kind, steps) && (isActive(v) || isFinished(v)));
   const act = mine.filter((v) => !isFinished(v));
   const at = (s: string) => act.filter((v) => stageOf(v) === s).length;
   return {

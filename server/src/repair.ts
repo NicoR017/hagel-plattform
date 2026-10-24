@@ -2,12 +2,12 @@
 // daily job that moves due bookings into "Bereit". Every rule is enforced HERE, not only in the UI.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
-import type { ClientRepair, Op } from "@hagel/shared";
+import { NEXT_AFTER_STEP, ROLE_REPAIR_STEPS, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
 import { audit } from "./audit";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
 import { bookingMail } from "./mails";
-import { effectivePermissions, fieldProfile, type Principal, type VehicleRef } from "./permissions";
+import { effectivePermissions, fieldProfile, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
 import { loadMethodMap, methodOf } from "./methods";
 import { autoRepairReport } from "./repair_report";
 import type { Storage } from "./storage";
@@ -30,19 +30,31 @@ export const FIELD_MOVES: Record<"pdr" | "headliner", readonly (readonly [string
   headliner: [["demontage", "pdr"], ["remontage", "bodyshop"]],
 };
 
+/**
+ * The moves of a field profile. When his role(s) list repair steps (v5), each step lets him take the car out of that step into the next one
+ * (Disassembly -> PDR, PDR -> Reassembly, Reassembly -> At body shop); without steps the rule of his technician record applies (FIELD_MOVES).
+ */
+export function fieldMovesOf(u: Principal, orgId: string, kind: "pdr" | "headliner"): [string, string][] {
+  const steps = roleRepairSteps(u, orgId).filter((s): s is RoleRepairStep => (ROLE_REPAIR_STEPS as readonly string[]).includes(s));
+  return steps.length ? ROLE_REPAIR_STEPS.filter((s) => steps.includes(s)).map((s) => [s, NEXT_AFTER_STEP[s]] as [string, string]) : FIELD_MOVES[kind].map(([a, b]) => [a, b] as [string, string]);
+}
+
 /** is this car his: assigned to his account for his kind of work (PDR / removal-refit), or his name in the split */
-async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }): Promise<boolean> {
-  const [a] = await tx.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.vehicleId, row.id), eq(vehicleAssignments.userId, u.id), eq(vehicleAssignments.type, fp.kind === "headliner" ? "demontage" : "pdr")));
+async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from?: string): Promise<boolean> {
+  // by role steps: the PDR step is PDR work, disassembly / reassembly are removal-refit work; otherwise by the kind of his record
+  const roleSteps = roleRepairSteps(u, row.orgId).length > 0;
+  const removal = roleSteps && from ? from !== "pdr" : fp.kind === "headliner";
+  const [a] = await tx.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.vehicleId, row.id), eq(vehicleAssignments.userId, u.id), eq(vehicleAssignments.type, removal ? "demontage" : "pdr")));
   if (a) return true;
   const sh = (row.shares ?? {}) as Record<string, unknown>;
   const me = fp.name.trim().toLowerCase();
-  return String(fp.kind === "headliner" ? sh.demTechName ?? "" : sh.techName ?? "").trim().toLowerCase() === me;
+  return String(removal ? sh.demTechName ?? "" : sh.techName ?? "").trim().toLowerCase() === me;
 }
 
 /** The technician / headliner moves HIS car, from one of his steps to the next one, after taking a photo of that step himself. */
 async function checkFieldMove(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from: string, to: string) {
-  if (!FIELD_MOVES[fp.kind].some(([a, b]) => a === from && b === to)) throw new Reject("move_not_allowed");
-  if (!(await isHisCar(tx, row, u, fp))) throw new Reject("not_your_vehicle");
+  if (!fieldMovesOf(u, row.orgId, fp.kind).some(([a, b]) => a === from && b === to)) throw new Reject("move_not_allowed");
+  if (!(await isHisCar(tx, row, u, fp, from))) throw new Reject("not_your_vehicle");
   const mine = await tx.select({ id: photos.id }).from(photos).where(and(eq(photos.vehicleId, row.id), isNull(photos.deletedAt), eq(photos.repairStage, from), eq(photos.takenBy, u.id))).limit(1);
   if (!mine.length) throw new Reject("photo_required");
 }

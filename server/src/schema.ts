@@ -44,6 +44,8 @@ export const roles = pgTable("roles", {
   scope: text("scope").notNull(),
   permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
   isSystem: boolean("is_system").notNull().default(false),
+  /** v5: repair steps (demontage | pdr | remontage) the role works on; empty = the rule of the technician record (pdr / headliner) */
+  repairSteps: text("repair_steps").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => ({ byOrg: index("roles_org_idx").on(t.orgId) }));
