@@ -57,8 +57,9 @@ export async function planBodyshopMove(db: Db): Promise<MovePlan> {
   if (asStation) problems.push(`${asStation} role assignment(s) have a body shop as STATION`);
   const invites = await count(db.select({ n: sql<number>`count(*)::int` }).from(invitations).where(and(inArray(invitations.stationId, shopIds), isNull(invitations.usedAt))));
   if (invites) problems.push(`${invites} pending invitation(s) have a body shop as station`);
-  const bookings = await count(db.select({ n: sql<number>`count(*)::int` }).from(repairBookings).where(sql`${repairBookings.stationId} in ${shopIds} or ${repairBookings.originStationId} in ${shopIds}`));
-  if (bookings) problems.push(`${bookings} repair booking(s) have a body shop as place or origin`);
+  const bookings = await count(db.select({ n: sql<number>`count(*)::int` }).from(repairBookings).where(sql`${repairBookings.stationId} in ${shopIds}`));
+  // the ORIGIN of a booking is where the car stood when it was booked: history, kept as it is (only the PLACE of a repair must be a place)
+  if (bookings) problems.push(`${bookings} repair booking(s) have a body shop as place`);
   const citas = await count(db.select({ n: sql<number>`count(*)::int` }).from(citasLinks).where(inArray(citasLinks.stationId, shopIds)));
   if (citas) problems.push(`${citas} Citas link(s) point to a body shop`);
   const camps = await count(db.select({ n: sql<number>`count(*)::int` }).from(campaignStations).where(inArray(campaignStations.stationId, shopIds)));
