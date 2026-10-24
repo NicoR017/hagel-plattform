@@ -15,6 +15,10 @@ import { Dialog } from "./ui";
 
 interface Ids { n: number; ids: string[] }
 interface Row { id: string; name: string; net: number; n: number; ids: string[] }
+interface LinkRow {
+  key: string; clientId: string | null; clientName: string; insurerId: string | null; insurerName: string;
+  vehicles: Ids; waiting: Ids; repair: Ids; finished: Ids; avgDays: number | null; net?: number;
+}
 interface Dash {
   generatedAt: string; vehicles: number; delayDays: Record<string, number>;
   kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
@@ -23,6 +27,7 @@ interface Dash {
   delayed: { id: string; plate: string; statut: string; motif: string | null; days: number; stationName: string; thresholdDays: number }[];
   hold: { reason: string; n: number; ids: string[] }[];
   technicians: { key: string; name: string; assigned: Ids; inProgress: Ids; finished: Ids; sites: { id: string; name: string }[]; noRoleOnSite: Ids }[];
+  linkTable: { byLink: LinkRow[]; byClient: LinkRow[]; byInsurer: LinkRow[] };
   revenue: null | {
     total: number; n: number; ids: string[];
     bySite: Row[]; byClient: Row[]; byInsurer: Row[]; byMonth: { month: string; net: number; n: number; ids: string[] }[];
@@ -95,6 +100,44 @@ function Bars({ rows, title, money }: { rows: Row[]; title: string; money: (n: n
         </div>
       ))}
     </div>
+  );
+}
+
+/** v5 2.3: one row per (body shop, insurer), per body shop or per insurer; the net column exists only for users who may see prices. */
+function LinkTable({ table, money }: { table: Dash["linkTable"]; money: (n: number) => string }) {
+  const [view, setView] = useState<"byLink" | "byClient" | "byInsurer">("byLink");
+  const rows = table[view];
+  const hasNet = rows.some((r) => r.net !== undefined);
+  const nm = (r: LinkRow) => [view !== "byInsurer" ? (r.clientName || t("lkNoClient")) : "", view !== "byClient" ? (r.insurerName || t("lkNoInsurer")) : ""].filter(Boolean);
+  return (
+    <Section title={t("lkTitle")} right={
+      <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {(["byLink", "byClient", "byInsurer"] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={view === k} className={"chip" + (view === k ? " on" : "")} style={{ minHeight: 40 }} onClick={() => setView(k)}>{t(k === "byLink" ? "lkByLink" : k === "byClient" ? "lkByClient" : "lkByInsurer")}</button>
+        ))}
+      </div>}>
+      {rows.length === 0 ? <div className="muted">{t("lkEmpty")}</div> : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr style={{ textAlign: "left" }}>
+              {view !== "byInsurer" && <th>{t("lkClient")}</th>}{view !== "byClient" && <th>{t("lkInsurer")}</th>}
+              <th>{t("lkVehicles")}</th><th>{t("lkWaiting")}</th><th>{t("lkRepair")}</th><th>{t("lkFinished")}</th><th>{t("lkAvgDays")}</th>{hasNet && <th>{t("lkNet")}</th>}
+            </tr></thead>
+            <tbody>{rows.map((r) => {
+              const label = nm(r).join(" · ");
+              const cell = (x: Ids, what: string) => <td><N v={x.n} ids={x.ids} label={`${label} · ${what}`} /></td>;
+              return (
+                <tr key={r.key} style={{ borderTop: "1px solid var(--line)" }}>
+                  {nm(r).map((x, i) => <td key={i}><b>{x}</b></td>)}
+                  {cell(r.vehicles, t("lkVehicles"))}{cell(r.waiting, t("lkWaiting"))}{cell(r.repair, t("lkRepair"))}{cell(r.finished, t("lkFinished"))}
+                  <td>{r.avgDays ?? "—"}</td>{hasNet && <td><b>{r.net !== undefined ? money(r.net) : "—"}</b></td>}
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -294,6 +337,8 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
                 </details>
               )}
             </Section>
+
+            <LinkTable table={data.linkTable} money={money} />
 
             {data.revenue && (
               <Section title={t("dashRevenue")}>

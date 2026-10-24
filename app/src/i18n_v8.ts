@@ -33,6 +33,10 @@ export const deV8 = {
   hoBlock: "Übergabe an den Kunden", hoDropOff: "Annahme", hoPickUp: "Rückgabe", hoNone: "noch nicht unterschrieben", hoSign: "Unterschreiben", hoSignAgain: "Erneut unterschreiben",
   hoReceipt: "Quittung (PDF)", hoResend: "Erneut senden", hoMailSent: "E-Mail gesendet", hoMailFailed: "E-Mail fehlgeschlagen", hoMailNone: "keine E-Mail", hoReplaced: "ersetzt",
   hoBy: "von {user}", hoResent: "Quittung gesendet", hoDetailsOnline: "Kundendaten nur online und für Mitarbeiter der Station sichtbar.",
+  lkTitle: "Carrosserien × Versicherungen", lkByLink: "Nach Verknüpfung", lkByClient: "Nach Carrosserie", lkByInsurer: "Nach Versicherung",
+  lkClient: "Carrosserie", lkInsurer: "Versicherung", lkVehicles: "Fahrzeuge", lkWaiting: "Begutachtung / Wartend", lkRepair: "In Reparatur", lkFinished: "Fertig",
+  lkAvgDays: "Ø Tage Ankunft → Rückgabe", lkNet: "Netto", lkNoClient: "— keine Carrosserie —", lkNoInsurer: "— keine Versicherung —", lkEmpty: "Keine Fahrzeuge im Zeitraum.",
+  allClients: "Alle Carrosserien", revByClient: "Nach Carrosserie", splitComm: "Provision Carrosserien",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -69,6 +73,10 @@ export const enV8: Record<keyof typeof deV8, string> = {
   hoBlock: "Customer hand-over", hoDropOff: "Drop-off", hoPickUp: "Pick-up", hoNone: "not signed yet", hoSign: "Sign", hoSignAgain: "Sign again",
   hoReceipt: "Receipt (PDF)", hoResend: "Send again", hoMailSent: "e-mail sent", hoMailFailed: "e-mail failed", hoMailNone: "no e-mail", hoReplaced: "replaced",
   hoBy: "by {user}", hoResent: "Receipt sent", hoDetailsOnline: "Customer data is only visible online, to the station's staff.",
+  lkTitle: "Body shops × insurers", lkByLink: "By link", lkByClient: "By body shop", lkByInsurer: "By insurer",
+  lkClient: "Body shop", lkInsurer: "Insurer", lkVehicles: "Vehicles", lkWaiting: "In assessment / on hold", lkRepair: "In repair", lkFinished: "Finished",
+  lkAvgDays: "Avg days arrival → returned", lkNet: "Net", lkNoClient: "— no body shop —", lkNoInsurer: "— no insurer —", lkEmpty: "No vehicles in the period.",
+  allClients: "All body shops", revByClient: "By body shop", splitComm: "Body shop commissions",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -105,6 +113,10 @@ export const frV8: Record<keyof typeof deV8, string> = {
   hoBlock: "Remise au client", hoDropOff: "Dépôt", hoPickUp: "Retrait", hoNone: "pas encore signé", hoSign: "Signer", hoSignAgain: "Signer à nouveau",
   hoReceipt: "Reçu (PDF)", hoResend: "Renvoyer", hoMailSent: "e-mail envoyé", hoMailFailed: "échec de l'e-mail", hoMailNone: "pas d'e-mail", hoReplaced: "remplacé",
   hoBy: "par {user}", hoResent: "Reçu envoyé", hoDetailsOnline: "Les données du client ne sont visibles qu'en ligne, pour le personnel de la station.",
+  lkTitle: "Carrosseries × assurances", lkByLink: "Par lien", lkByClient: "Par carrosserie", lkByInsurer: "Par assurance",
+  lkClient: "Carrosserie", lkInsurer: "Assurance", lkVehicles: "Véhicules", lkWaiting: "Expertise / en attente", lkRepair: "En réparation", lkFinished: "Terminés",
+  lkAvgDays: "Moy. jours arrivée → rendu", lkNet: "Net", lkNoClient: "— sans carrosserie —", lkNoInsurer: "— sans assurance —", lkEmpty: "Aucun véhicule sur la période.",
+  allClients: "Toutes les carrosseries", revByClient: "Par carrosserie", splitComm: "Commissions des carrosseries",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -141,4 +153,8 @@ export const esV8: Record<keyof typeof deV8, string> = {
   hoBlock: "Entrega al cliente", hoDropOff: "Recepción", hoPickUp: "Devolución", hoNone: "aún sin firmar", hoSign: "Firmar", hoSignAgain: "Firmar de nuevo",
   hoReceipt: "Comprobante (PDF)", hoResend: "Enviar de nuevo", hoMailSent: "correo enviado", hoMailFailed: "falló el correo", hoMailNone: "sin correo", hoReplaced: "sustituida",
   hoBy: "por {user}", hoResent: "Comprobante enviado", hoDetailsOnline: "Los datos del cliente solo se ven con conexión y para el personal de la estación.",
+  lkTitle: "Talleres × aseguradoras", lkByLink: "Por vínculo", lkByClient: "Por taller", lkByInsurer: "Por aseguradora",
+  lkClient: "Taller", lkInsurer: "Aseguradora", lkVehicles: "Vehículos", lkWaiting: "Peritación / en espera", lkRepair: "En reparación", lkFinished: "Terminados",
+  lkAvgDays: "Media días llegada → entregado", lkNet: "Neto", lkNoClient: "— sin taller —", lkNoInsurer: "— sin aseguradora —", lkEmpty: "Ningún vehículo en el periodo.",
+  allClients: "Todos los talleres", revByClient: "Por taller", splitComm: "Comisiones de los talleres",
 };

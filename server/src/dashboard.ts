@@ -197,6 +197,51 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     split: split.seen ? { technicians: split.technicians, commissions: split.commissions, rest: split.rest, n: split.seen } : null,
   };
 
+  // ---- 5. body shops x insurers (v5 2.3): the vehicles of the period, grouped by (body shop, insurer) = the Colibri "business customer - insurance" link
+  type LinkRow = {
+    key: string; clientId: string | null; clientName: string; insurerId: string | null; insurerName: string;
+    vehicles: Ids; waiting: Ids; repair: Ids; finished: Ids; avgDays: number | null; net?: number;
+  };
+  type Ids = { n: number; ids: string[] };
+  const linkVehicles = rows.filter((r) => inPeriod(dateOf(r)));
+  const mayNet = (r: (typeof rows)[number]) => effectivePermissions(u, refOf(r, assignees.get(r.id) ?? [])).has("prix.voir");
+  const anyNet = linkVehicles.some(mayNet); // without the price permission the key `net` does not exist at all
+  const netOf = new Map<string, number>();
+  if (anyNet) {
+    for (const r of linkVehicles) {
+      if (!mayNet(r)) continue;
+      const calc = computeVehicle(flatten(r, assignees.get(r.id) ?? [], null) as unknown as CalcVehicle, calcs, methodOf(methods, r));
+      netOf.set(r.id, calc.netto || 0);
+    }
+  }
+  const groupLinks = (keyOf: (r: (typeof rows)[number]) => { clientId: string | null; insurerId: string | null }): LinkRow[] => {
+    const g = new Map<string, { clientId: string | null; insurerId: string | null; rs: typeof rows }>();
+    for (const r of linkVehicles) {
+      const k = keyOf(r), key = `${k.clientId ?? ""}|${k.insurerId ?? ""}`;
+      if (!g.has(key)) g.set(key, { ...k, rs: [] });
+      g.get(key)!.rs.push(r);
+    }
+    const ids = (xs: typeof rows): Ids => ({ n: xs.length, ids: xs.map((x) => x.id) });
+    return [...g].map(([key, { clientId, insurerId, rs }]) => {
+      const days = rs.flatMap((r) => {
+        const back = [...(histBy.get(r.id) ?? [])].reverse().find((h) => h.statut === "rendu");
+        return back ? [(back.at.getTime() - r.createdAt.getTime()) / DAY] : [];
+      });
+      const row: LinkRow = {
+        key, clientId, clientName: clientId ? stName.get(clientId) ?? "" : "", insurerId, insurerName: insurerId ? insName.get(insurerId) ?? "" : "",
+        vehicles: ids(rs), waiting: ids(rs.filter((r) => r.statut === "arrive" || r.statut === "besichtigung" || r.statut === "attente")),
+        repair: ids(rs.filter((r) => r.statut === "reparatur")), finished: ids(rs.filter((r) => r.statut === "fertig" || r.statut === "rendu")), avgDays: avg(days),
+      };
+      if (anyNet) row.net = round2(rs.reduce((a, r) => a + (netOf.get(r.id) ?? 0), 0));
+      return row;
+    }).sort((a, b) => b.vehicles.n - a.vehicles.n || (a.clientName + a.insurerName).localeCompare(b.clientName + b.insurerName));
+  };
+  const linkTable = {
+    byLink: groupLinks((r) => ({ clientId: r.clientStationId, insurerId: r.insurerId })),
+    byClient: groupLinks((r) => ({ clientId: r.clientStationId, insurerId: null })),
+    byInsurer: groupLinks((r) => ({ clientId: null, insurerId: r.insurerId })),
+  };
+
   // cars that became "fertig" (or were handed back directly) in the period
   const finishedIds = rows.filter((r) => {
     const e = (histBy.get(r.id) ?? []).find((h) => h.statut === "fertig" || h.statut === "rendu");
@@ -217,7 +262,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     generatedAt: now.toISOString(), vehicles: rows.length, delayDays, kpis,
     sites: sitesOut,
     durations: { avgArrivalToReturnedDays: avg(toReturned), avgRepairDays: avg(repairTimes), returnedSamples: toReturned.length, repairSamples: repairTimes.length },
-    delayed, hold, technicians: techOut, revenue,
+    delayed, hold, technicians: techOut, revenue, linkTable,
   };
 }
 
