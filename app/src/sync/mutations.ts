@@ -1,4 +1,4 @@
-import type { ClientVehicle, HeaderFields, Op, OrgSettings, PhotoPhase } from "@hagel/shared";
+import type { ClientVehicle, HandoverInput, HeaderFields, Op, OrgSettings, PhotoPhase } from "@hagel/shared";
 import { DEFAULT_ORG_SETTINGS } from "@hagel/shared";
 import type { Settings } from "@hagel/calc";
 import { ES_MATRIX_DEFAULT } from "@hagel/calc";
@@ -74,6 +74,8 @@ export const setShares = (c: MutCtx, vehicleId: string, fields: Record<string, u
 export const setPanel = (c: MutCtx, vehicleId: string, key: string, panel: Record<string, unknown> | null) => push(c, op(c, "vehicle.panel", { vehicleId, key, panel }));
 export const setStatus = (c: MutCtx, vehicleId: string, statut: string, motif?: string) => push(c, op(c, "vehicle.status", { vehicleId, statut, ...(motif ? { motif } : {}) }));
 export const moveVehicle = (c: MutCtx, vehicleId: string, toStationId: string, note?: string) => push(c, op(c, "vehicle.move", { vehicleId, toStationId, ...(note ? { note } : {}) }));
+/** The customer signs the drop-off / pick-up. Offline it waits in the outbox like every other operation; the server makes the PDF and the e-mail when it arrives. */
+export const signHandover = (c: MutCtx, vehicleId: string, handover: HandoverInput) => push(c, op(c, "vehicle.handover", { vehicleId, handover }));
 export const deleteVehicle = (c: MutCtx, vehicleId: string) => push(c, op(c, "vehicle.delete", { vehicleId }));
 export const assignVehicle = (c: MutCtx, vehicleId: string, kind: "pdr" | "demontage", userIds: string[]) => push(c, op(c, "vehicle.assign", { vehicleId, kind, userIds }));
 export const setColibri = (c: MutCtx, vehicleId: string, colibri: Record<string, unknown>, file: { name: string; size: number } | null) =>

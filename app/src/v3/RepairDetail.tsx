@@ -5,7 +5,7 @@ import { api, ApiError } from "../api";
 import { fmtDateTime, t } from "../i18n";
 import type { Key } from "../i18n";
 import type { LocalPhoto, LocalVehicle } from "../sync/db";
-import { addPhoto, addTodo, deleteTodo, setCheck, setRepairStage, setStatus, tagPhoto, toggleTodo } from "../sync/mutations";
+import { addPhoto, addTodo, deleteTodo, setCheck, setRepairStage, tagPhoto, toggleTodo } from "../sync/mutations";
 import { downscale } from "../field/images";
 import { Lightbox } from "../field/Lightbox";
 import { BodyshopPick } from "./BodyshopPick";
@@ -13,7 +13,7 @@ import { SharesBox } from "../field/Kva";
 import { go, RTABS, type RTab } from "../field/route";
 import { useField, usePhotos, usePhotoUrl, useVehicle } from "../field/store";
 import { toast } from "../field/toast";
-import { confirmDialog } from "../field/ui";
+import { HandoverDialog, downloadReceipt, signedOn, useHandovers } from "./HandoverDialog";
 import { statusLabel } from "../field/Dialogs";
 import { REPAIR_STAGES, neighbour, stageIndex, stageOf, todosOpen, type RepairStage } from "./boardLogic";
 import { blockersText, stageLabel } from "./RepairBoard";
@@ -54,6 +54,11 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
   const [lb, setLb] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const cam = useRef<HTMLInputElement>(null), gal = useRef<HTMLInputElement>(null);
+  const [sign, setSign] = useState<"drop_off" | "pick_up" | null>(null);
+  // customer data: station staff only (technician / headliner never), read online from the server
+  const mayHandover = f.can("vehicules.changer_statut") && !f.refs?.me.fieldView;
+  const hv = v ? (v as Record<string, unknown>) : {};
+  const ho = useHandovers(id, mayHandover && !!v, `${String(hv.dropOffSignedAt ?? "")}|${String(hv.pickUpSignedAt ?? "")}`);
   if (v === undefined) return <main><p className="muted">{t("loading")}</p></main>;
   if (v === null) return <main><div className="empty">{t("vehicleNotFoundHint")}</div></main>;
 
@@ -135,6 +140,35 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
 
         {tab === "uebersicht" && (
           <>
+            {mayHandover && (
+              <section className="panel" style={{ padding: 16 }}>
+                <h3 style={{ margin: "0 0 8px" }}>✍ {t("hoBlock")}</h3>
+                {(["drop_off", "pick_up"] as const).map((k) => {
+                  const cur = ho.rows?.filter((h) => h.kind === k && !h.replaced).at(-1);
+                  const at = k === "drop_off" ? hv.dropOffSignedAt : hv.pickUpSignedAt;
+                  return (
+                    <div key={k} style={{ padding: "8px 0", borderTop: k === "pick_up" ? "1px solid #E4E8EF" : undefined }}>
+                      <b>{t(k === "drop_off" ? "hoDropOff" : "hoPickUp")}</b>{" "}
+                      {cur ? <span>{cur.customerName} · {signedOn(cur.signedAt)} · {t("hoBy").replace("{user}", cur.signedBy)}</span>
+                        : at ? <span>{signedOn(String(at))}</span> : <span className="muted">{t("hoNone")}</span>}
+                      {cur && <div className="muted" style={{ fontSize: 12 }}>{cur.mailStatus === "sent" ? `✓ ${t("hoMailSent")}` : cur.mailStatus === "failed" ? `⚠ ${t("hoMailFailed")}` : t("hoMailNone")}{cur.remarks ? ` · ${cur.remarks}` : ""}</div>}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                        {(k === "drop_off" || stage === "finish" || v.statut === "rendu") && <button className="btn" onClick={() => setSign(k)}>{at ? t("hoSignAgain") : t("hoSign")}</button>}
+                        {cur?.hasReceipt && <button className="btn" onClick={() => void downloadReceipt(cur.id, `${String(x.kennzeichen || "recibo")}-${k}`)}>📄 {t("hoReceipt")}</button>}
+                        {cur && (
+                          <button className="btn" disabled={busy} onClick={async () => {
+                            setBusy(true);
+                            try { await api("POST", `/handovers/${cur.id}/send`, {}); toast(t("hoResent"), 5000); ho.reload(); } catch (e) { toast((e as Error).message, 6000); }
+                            setBusy(false);
+                          }}>✉ {t("hoResend")}</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!ho.rows && <p className="muted" style={{ fontSize: 12 }}>{t("hoDetailsOnline")}</p>}
+              </section>
+            )}
             <section className="panel" style={{ padding: 16 }}>
               <h3 style={{ margin: "0 0 8px" }}>📍 {t("v5Origin")}</h3>
               <dl className="origin">
@@ -253,8 +287,8 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
                   <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{reportLine}</div>
                   {(chief || f.can("rapport_reparation.envoyer")) && <button className="btn" style={{ marginTop: 10 }} disabled={busy} onClick={() => void resend()}>✉ {busy ? t("preparing") : t("v5Resend")}</button>}
                 </div>
-                {f.can("vehicules.changer_statut") && v.statut === "fertig" && (
-                  <button className="pbtn" onClick={() => { if (confirmDialog(t("v5HandoverQ"))) { void setStatus(f.mut, id, "rendu"); go({ page: "list", stationId, mode: "rep" }); } }}>{t("v5Handover")}</button>
+                {mayHandover && v.statut === "fertig" && (
+                  <button className="pbtn" onClick={() => setSign("pick_up")}>{t("v5Handover")}</button>
                 )}
               </>
             )}
@@ -263,6 +297,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
 
         {tab === "verlauf" && <Verlauf id={id} />}
       </div>
+      {sign && <HandoverDialog v={v} kind={sign} onClose={() => setSign(null)} onSigned={() => { ho.reload(); if (sign === "pick_up") go({ page: "list", stationId, mode: "rep" }); }} />}
     </>
   );
 }

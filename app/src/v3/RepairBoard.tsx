@@ -12,7 +12,8 @@ import { go } from "../field/route";
 import { useField, useVehicles } from "../field/store";
 import { toast } from "../field/toast";
 import { Dialog, Field, confirmDialog } from "../field/ui";
-import { REPAIR_STAGES, arrivedToday, blockerKey, boardOf, moveCheck, neighbour, stageOf, todosOpen, type RepairStage } from "./boardLogic";
+import { REPAIR_STAGES, arrivedToday, blockerKey, boardOf, dropOffDue, moveCheck, neighbour, stageOf, todosOpen, type RepairStage } from "./boardLogic";
+import { HandoverDialog } from "./HandoverDialog";
 import { holdLabel } from "./listActions";
 import { BodyshopPick } from "./BodyshopPick";
 
@@ -73,7 +74,7 @@ function Planned({ stationId }: { stationId: string }) {
 }
 
 /** "+ Fahrzeug in Reparatur": only assessed cars of the station; the technician and the headliner are picked afterwards in the car's overview. */
-function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () => void }) {
+function AddToRepair({ stationId, onClose, onAdded }: { stationId: string; onClose: () => void; onAdded: (id: string) => void }) {
   const f = useField();
   const all = useVehicles();
   const cands = all.filter((v) => v.stationId === stationId && v.repairStage == null && (v.statut === "besichtigung" || (v.statut === "attente" && String(v.statutMotif ?? "").toLowerCase() !== "teile")) && f.calcOf(v).netto > 0);
@@ -84,6 +85,7 @@ function AddToRepair({ stationId, onClose }: { stationId: string; onClose: () =>
     await setRepairStage(f.mut, v.id, "bereit");
     toast(`${String((v as Record<string, unknown>).kennzeichen || "")} → ${stageLabel("bereit")}`);
     onClose();
+    onAdded(v.id); // the customer signs the drop-off now (D17); "Later" leaves the button on the card
   };
   return (
     <Dialog title={t("v5AddTitle")} onClose={onClose}>
@@ -114,6 +116,8 @@ export function RepairBoard({ stationId }: { stationId: string }) {
   const today = todayIn(tzOfCountry(st?.country ?? "DE"));
   const cols = useMemo(() => boardOf(all, stationId), [all, stationId]);
   const [add, setAdd] = useState(false);
+  const [sign, setSign] = useState<{ id: string; kind: "drop_off" | "pick_up" } | null>(null);
+  const mayHandover = f.can("vehicules.changer_statut") && !f.refs?.me.fieldView; // technician / headliner never handle customer data
   const [over, setOver] = useState<RepairStage | null>(null);
   const may = f.can("reparatur.board");
   const people = f.refs?.people ?? [];
@@ -157,6 +161,12 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                     {(!!techOf(v) || !!x.demTechName) && <span className="muted" style={{ fontSize: 11 }}>{techOf(v) ? `PDR ${techOf(v)}` : ""}{x.demTechName ? ` · Headliner ${String(x.demTechName)}` : ""}</span>}
                   </button>
                   {stage === "bodyshop" && <BodyshopPick v={v} disabled={!may} compact />}
+                  {dropOffDue(v) && (stage === "bereit" && mayHandover
+                    ? <button className="chip" style={{ minHeight: 40, maxWidth: "100%", whiteSpace: "normal", textAlign: "left", background: "#FDF0E1", color: "#8A4A06", borderColor: "#E9C79A", fontWeight: 700 }} onClick={() => setSign({ id: v.id, kind: "drop_off" })}>{t("hoToSign")}</button>
+                    : <span className="muted" style={{ fontSize: 11 }}>{t("hoNotSigned")}</span>)}
+                  {stage === "finish" && mayHandover && v.statut !== "rendu" && (
+                    <button className="chip" style={{ minHeight: 40, maxWidth: "100%", whiteSpace: "normal", fontWeight: 700 }} onClick={() => setSign({ id: v.id, kind: "pick_up" })}>{t("hoReturn")}</button>
+                  )}
                   <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                     <span className="badge" style={{ background: open ? "#FBF1D9" : "#E3F4EA", color: open ? "#7A5300" : "#17663F", fontSize: 11 }}>{open ? `${t("v5Todo")}: ${open} ${t("v3Open")}` : `${t("v5Todo")} ✓`}</span>
                     {may && (
@@ -173,7 +183,8 @@ export function RepairBoard({ stationId }: { stationId: string }) {
           </section>
         ))}
       </div>
-      {add && <AddToRepair stationId={stationId} onClose={() => setAdd(false)} />}
+      {add && <AddToRepair stationId={stationId} onClose={() => setAdd(false)} onAdded={(id) => { if (mayHandover) setSign({ id, kind: "drop_off" }); }} />}
+      {sign && (() => { const sv = all.find((x) => x.id === sign.id); return sv ? <HandoverDialog v={sv} kind={sign.kind} onClose={() => setSign(null)} /> : null; })()}
     </>
   );
 }

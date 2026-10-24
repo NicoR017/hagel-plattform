@@ -23,6 +23,16 @@ export const deV8 = {
   ciSearchScans: "Scan suchen (Kennzeichen, Marke/Modell, Body Shop, Versicherung, Colibri-Nr., Station)", ciAllScansAdmin: "Alle Scans zeigen (andere Tage, andere Stationen, Scanner ohne Station)",
   ciSearching: "Suche …", ciNoMatch: "Kein Scan passt zu „{q}“", ciScanHint: "{n} Scans · 3 sichtbar, Liste scrollen ↕", ciOtherStation: "Andere Station",
   ciSelectedLine: "Gewählt: {plate} · Colibri #{num} · {n} Dellen", ciNoSelected: "Kein Scan gewählt",
+  hoTitleDrop: "Fahrzeugannahme – Kundenunterschrift", hoTitlePick: "Fahrzeugrückgabe – Kundenunterschrift", hoName: "Name des Kunden", hoEmail: "E-Mail des Kunden",
+  hoSend: "Unterschriebene Quittung (PDF) per E-Mail an den Kunden senden", hoBadEmail: "Diese E-Mail-Adresse ist nicht gültig.", hoRemarks: "Bemerkungen / Vorschäden",
+  hoSignHere: "Unterschrift des Kunden (mit dem Finger)", hoClear: "Löschen", hoLater: "Später", hoSave: "Unterschreiben & speichern",
+  hoConfirmDrop: "Mit der Unterschrift bestätigt {name}, das Fahrzeug am {date} um {time} in {station} abgegeben zu haben. Entgegengenommen von {user}.",
+  hoConfirmPick: "Mit der Unterschrift bestätigt {name}, das Fahrzeug am {date} um {time} in {station} zurückerhalten zu haben. Übergeben von {user}.",
+  hoSaved: "Unterschrift gespeichert", hoSavedOffline: "Unterschrift gespeichert – wird gesendet, sobald Sie online sind", hoReceiptFailed: "Die Quittung konnte nicht geladen werden",
+  hoSignedOn: "unterschrieben am {at}", hoToSign: "✍ Annahme durch den Kunden unterschreiben", hoNotSigned: "Annahme nicht unterschrieben", hoReturn: "✍ An den Kunden zurückgeben",
+  hoBlock: "Übergabe an den Kunden", hoDropOff: "Annahme", hoPickUp: "Rückgabe", hoNone: "noch nicht unterschrieben", hoSign: "Unterschreiben", hoSignAgain: "Erneut unterschreiben",
+  hoReceipt: "Quittung (PDF)", hoResend: "Erneut senden", hoMailSent: "E-Mail gesendet", hoMailFailed: "E-Mail fehlgeschlagen", hoMailNone: "keine E-Mail", hoReplaced: "ersetzt",
+  hoBy: "von {user}", hoResent: "Quittung gesendet", hoDetailsOnline: "Kundendaten nur online und für Mitarbeiter der Station sichtbar.",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -49,6 +59,16 @@ export const enV8: Record<keyof typeof deV8, string> = {
   ciSearchScans: "Search a scan (plate, make/model, body shop, insurer, Colibri no., station)", ciAllScansAdmin: "Show all scans (other days, other stations, scanners without a station)",
   ciSearching: "Searching …", ciNoMatch: "No scan matches “{q}”", ciScanHint: "{n} scans · 3 shown, scroll the list ↕", ciOtherStation: "Other station",
   ciSelectedLine: "Selected: {plate} · Colibri #{num} · {n} dents", ciNoSelected: "No scan selected",
+  hoTitleDrop: "Car drop-off – customer signature", hoTitlePick: "Car pick-up – customer signature", hoName: "Customer name", hoEmail: "Customer e-mail",
+  hoSend: "Send the signed receipt (PDF) to the customer by e-mail", hoBadEmail: "This e-mail address is not valid.", hoRemarks: "Remarks / existing damage",
+  hoSignHere: "Customer signature (with the finger)", hoClear: "Clear", hoLater: "Later", hoSave: "Sign & save",
+  hoConfirmDrop: "By signing, {name} confirms that the car was left on {date} at {time} at {station}. Received by {user}.",
+  hoConfirmPick: "By signing, {name} confirms that the car was taken back on {date} at {time} at {station}. Handed over by {user}.",
+  hoSaved: "Signature saved", hoSavedOffline: "Signature saved – it is sent as soon as you are online", hoReceiptFailed: "The receipt could not be loaded",
+  hoSignedOn: "signed on {at}", hoToSign: "✍ Customer drop-off to sign", hoNotSigned: "drop-off not signed", hoReturn: "✍ Return to customer",
+  hoBlock: "Customer hand-over", hoDropOff: "Drop-off", hoPickUp: "Pick-up", hoNone: "not signed yet", hoSign: "Sign", hoSignAgain: "Sign again",
+  hoReceipt: "Receipt (PDF)", hoResend: "Send again", hoMailSent: "e-mail sent", hoMailFailed: "e-mail failed", hoMailNone: "no e-mail", hoReplaced: "replaced",
+  hoBy: "by {user}", hoResent: "Receipt sent", hoDetailsOnline: "Customer data is only visible online, to the station's staff.",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -75,6 +95,16 @@ export const frV8: Record<keyof typeof deV8, string> = {
   ciSearchScans: "Chercher un scan (plaque, marque/modèle, body shop, assurance, n° Colibri, station)", ciAllScansAdmin: "Afficher tous les scans (autres jours, autres stations, scanners sans station)",
   ciSearching: "Recherche …", ciNoMatch: "Aucun scan ne correspond à « {q} »", ciScanHint: "{n} scans · 3 affichés, faites défiler la liste ↕", ciOtherStation: "Autre station",
   ciSelectedLine: "Choisi : {plate} · Colibri n° {num} · {n} bosses", ciNoSelected: "Aucun scan choisi",
+  hoTitleDrop: "Dépôt du véhicule – signature du client", hoTitlePick: "Retrait du véhicule – signature du client", hoName: "Nom du client", hoEmail: "E-mail du client",
+  hoSend: "Envoyer le reçu signé (PDF) au client par e-mail", hoBadEmail: "Cette adresse e-mail n'est pas valide.", hoRemarks: "Remarques / dommages existants",
+  hoSignHere: "Signature du client (au doigt)", hoClear: "Effacer", hoLater: "Plus tard", hoSave: "Signer et enregistrer",
+  hoConfirmDrop: "En signant, {name} confirme avoir déposé le véhicule le {date} à {time} à {station}. Reçu par {user}.",
+  hoConfirmPick: "En signant, {name} confirme avoir repris le véhicule le {date} à {time} à {station}. Remis par {user}.",
+  hoSaved: "Signature enregistrée", hoSavedOffline: "Signature enregistrée – envoyée dès que vous êtes en ligne", hoReceiptFailed: "Le reçu n'a pas pu être chargé",
+  hoSignedOn: "signé le {at}", hoToSign: "✍ Dépôt du client à signer", hoNotSigned: "dépôt non signé", hoReturn: "✍ Rendre au client",
+  hoBlock: "Remise au client", hoDropOff: "Dépôt", hoPickUp: "Retrait", hoNone: "pas encore signé", hoSign: "Signer", hoSignAgain: "Signer à nouveau",
+  hoReceipt: "Reçu (PDF)", hoResend: "Renvoyer", hoMailSent: "e-mail envoyé", hoMailFailed: "échec de l'e-mail", hoMailNone: "pas d'e-mail", hoReplaced: "remplacé",
+  hoBy: "par {user}", hoResent: "Reçu envoyé", hoDetailsOnline: "Les données du client ne sont visibles qu'en ligne, pour le personnel de la station.",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -101,4 +131,14 @@ export const esV8: Record<keyof typeof deV8, string> = {
   ciSearchScans: "Buscar un escaneo (matrícula, marca/modelo, body shop, aseguradora, n.º Colibri, estación)", ciAllScansAdmin: "Mostrar todos los escaneos (otros días, otras estaciones, escáneres sin estación)",
   ciSearching: "Buscando …", ciNoMatch: "Ningún escaneo coincide con «{q}»", ciScanHint: "{n} escaneos · 3 visibles, desplace la lista ↕", ciOtherStation: "Otra estación",
   ciSelectedLine: "Elegido: {plate} · Colibri n.º {num} · {n} abolladuras", ciNoSelected: "Ningún escaneo elegido",
+  hoTitleDrop: "Entrega del vehículo – firma del cliente", hoTitlePick: "Recogida del vehículo – firma del cliente", hoName: "Nombre del cliente", hoEmail: "Correo del cliente",
+  hoSend: "Enviar el comprobante firmado (PDF) al cliente por correo", hoBadEmail: "Esta dirección de correo no es válida.", hoRemarks: "Observaciones / daños previos",
+  hoSignHere: "Firma del cliente (con el dedo)", hoClear: "Borrar", hoLater: "Más tarde", hoSave: "Firmar y guardar",
+  hoConfirmDrop: "Con su firma, {name} confirma que entregó el vehículo el {date} a las {time} en {station}. Recibido por {user}.",
+  hoConfirmPick: "Con su firma, {name} confirma que recogió el vehículo el {date} a las {time} en {station}. Entregado por {user}.",
+  hoSaved: "Firma guardada", hoSavedOffline: "Firma guardada – se envía en cuanto haya conexión", hoReceiptFailed: "No se pudo cargar el comprobante",
+  hoSignedOn: "firmado el {at}", hoToSign: "✍ Entrega del cliente por firmar", hoNotSigned: "entrega sin firmar", hoReturn: "✍ Devolver al cliente",
+  hoBlock: "Entrega al cliente", hoDropOff: "Recepción", hoPickUp: "Devolución", hoNone: "aún sin firmar", hoSign: "Firmar", hoSignAgain: "Firmar de nuevo",
+  hoReceipt: "Comprobante (PDF)", hoResend: "Enviar de nuevo", hoMailSent: "correo enviado", hoMailFailed: "falló el correo", hoMailNone: "sin correo", hoReplaced: "sustituida",
+  hoBy: "por {user}", hoResent: "Comprobante enviado", hoDetailsOnline: "Los datos del cliente solo se ven con conexión y para el personal de la estación.",
 };

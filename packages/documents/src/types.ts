@@ -74,6 +74,21 @@ export interface KvaOptions {
   now?: Date;
 }
 
+/** Box in which a customer signature is drawn; points are numbers in this coordinate system (origin top-left, y downwards). */
+export const SIG_W = 600, SIG_H = 200;
+export type Stroke = [number, number][];
+export interface HandoverDoc {
+  kind: "drop_off" | "pick_up";
+  customerName: string; customerEmail?: string | null; remarks: string;
+  /** ISO instant (time on the device) */
+  signedAt: string;
+  /** name of the staff member who received the car / handed it back */
+  receivedBy: string;
+  stationName: string; stationAddress: string;
+  /** the signature */
+  strokes: Stroke[];
+}
+
 export interface RepairReportOptions {
   letterhead?: Letterhead | null;
   photos: DocPhoto[];
@@ -82,6 +97,8 @@ export interface RepairReportOptions {
   now?: Date;
   /** IANA zone used to render `takenAt`; default Europe/Madrid (ES) / Europe/Berlin (DE) */
   timeZone?: string;
+  /** when given (even with both null), a last page with the customer's signatures is appended */
+  handovers?: { dropOff: HandoverDoc | null; pickUp: HandoverDoc | null };
 }
 
 export interface XlsxColumns { prices: boolean; internalSplit: boolean }

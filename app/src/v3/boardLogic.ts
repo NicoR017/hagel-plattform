@@ -49,3 +49,10 @@ export function blockerKey(code: string): string {
   if (code.startsWith("photos:")) return "v5BlkPhoto";
   return code;
 }
+
+/**
+ * V5: the customer has not signed the drop-off yet. Only cars that ENTERED the board after V5 (repairEnteredAt is set by the server at that
+ * moment) are concerned: cars that were already in repair on go-live day show nothing. Returned cars are done.
+ */
+export const dropOffDue = (v: { statut: string; repairStage?: string | null; repairEnteredAt?: string | null; dropOffSignedAt?: string | null }): boolean =>
+  v.statut !== "rendu" && v.repairStage != null && !!v.repairEnteredAt && !v.dropOffSignedAt;

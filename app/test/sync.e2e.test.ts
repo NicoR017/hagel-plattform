@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { LocalDb, refsKey } from "../src/sync/db";
 import { SyncEngine, type Http } from "../src/sync/engine";
-import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/sync/mutations";
+import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/sync/mutations";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { users, vehicleAssignments } from "../../server/src/schema";
 
@@ -319,6 +319,30 @@ describe("misc", () => {
     await sync(p);
     expect((await p.db.issues.toArray()).some((i) => i.code === "field_not_allowed")).toBe(true);
     expect((await veh(p, id))!.werkPct).toBe(20);
+  });
+  it("customer signature signed offline: the phone shows it at once, the server applies it once, the customer data stays off every phone", async () => {
+    const p = phone(tokens.chefA);
+    await sync(p);
+    const id = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "SIG 001" } });
+    await sync(p);
+    p.online = false;
+    const hid = crypto.randomUUID();
+    await signHandover(p.ctx, id, {
+      id: hid, kind: "pick_up", customerName: "Ana Cliente", customerEmail: null, remarks: "", signedAt: new Date().toISOString(),
+      signature: [[[10, 10], [200, 80], [300, 20]]], sendReceipt: false,
+    });
+    const local = (await veh(p, id)) as Record<string, unknown>;
+    expect(local.pickUpSignedAt).toBeTruthy(); // signed on the screen straight away
+    expect(local.statut).toBe("rendu");
+    expect(JSON.stringify(local)).not.toContain("Ana Cliente");
+    const op = (await p.db.outbox.toArray())[0].op;
+    p.online = true;
+    await sync(p);
+    await call(c, "POST", "/sync/push", { token: tokens.chefA, body: { ops: [op] } }); // the answer was lost: sent again
+    expect(await p.db.outbox.count()).toBe(0);
+    const rows = (await call(c, "GET", `/vehicles/${id}/handovers`, { token: tokens.chefA, org: c.orgES })).body as { id: string }[];
+    expect(rows.filter((r) => r.id === hid)).toHaveLength(1);
+    expect(JSON.stringify(await vehicles(p))).not.toContain("Ana Cliente");
   });
   it("assigned technician list (people) and refs arrive with the first pull", async () => {
     const p = phone(tokens.assessor);

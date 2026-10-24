@@ -5,14 +5,14 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { generateRepairPhotoReport, type DocPhoto, type DocVehicle, type Letterhead } from "@hagel/documents";
+import { generateRepairPhotoReport, type DocPhoto, type DocVehicle, type HandoverDoc, type Letterhead } from "@hagel/documents";
 import { audit } from "./audit";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
 import { reportMail } from "./mails";
 import { loadMethodMap, methodOf } from "./methods";
 import { recipientsOfVehicle } from "./reports";
-import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicles } from "./schema";
+import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicleHandovers, vehicles } from "./schema";
 import type { Storage } from "./storage";
 import { calcSettings, flatten, loadOrgSettings } from "./sync";
 
@@ -24,7 +24,7 @@ let bundledLogo: Promise<Letterhead["logo"] | undefined> | null = null;
 const pdrLogo = () => (bundledLogo ??= readFile(fileURLToPath(new URL("../assets/pdr-team-logo.jpg", import.meta.url)))
   .then((b) => ({ bytes: new Uint8Array(b), kind: "jpg" as const, width: 1000, height: 276 })).catch(() => undefined));
 
-async function letterheadOf(db: Db, storage: Storage, row: VehicleRow): Promise<Letterhead | null> {
+export async function letterheadOf(db: Db, storage: Storage, row: VehicleRow): Promise<Letterhead | null> {
   const h = row.header as Record<string, unknown>;
   const id = typeof h.companyId === "string" ? h.companyId : null;
   if (id) {
@@ -59,8 +59,17 @@ export async function buildRepairReportPdf(deps: Pick<ReportDeps, "db" | "storag
     const f = p.fileKey ? await storage.get(p.fileKey) : null;
     if (f) list.push({ label: p.label, bytes: f.bytes, inPdf: true, phase: p.phase as DocPhoto["phase"], takenAt: p.takenAt.toISOString() });
   }
+  // last page: the customer's signatures at drop-off and pick-up (the newest of each, "not signed yet" when missing)
+  const hs = await db.select().from(vehicleHandovers).where(and(eq(vehicleHandovers.vehicleId, row.id), isNull(vehicleHandovers.replacedBy)));
+  const docOf = async (kind: "drop_off" | "pick_up"): Promise<HandoverDoc | null> => {
+    const h = hs.find((x) => x.kind === kind);
+    if (!h) return null;
+    const [by] = h.signedBy ? await db.select().from(users).where(eq(users.id, h.signedBy)) : [];
+    const [hst] = h.stationId ? await db.select().from(stations).where(eq(stations.id, h.stationId)) : [];
+    return { kind, customerName: h.customerName, customerEmail: h.customerEmail, remarks: h.remarks, signedAt: h.signedAt.toISOString(), receivedBy: by?.name || by?.email || "", stationName: hst?.name ?? "", stationAddress: hst?.address ?? "", strokes: h.signature as HandoverDoc["strokes"] };
+  };
   const bytes = await generateRepairPhotoReport(doc, {
-    letterhead: await letterheadOf(db, storage, row), photos: list, now,
+    letterhead: await letterheadOf(db, storage, row), photos: list, now, handovers: { dropOff: await docOf("drop_off"), pickUp: await docOf("pick_up") },
     amounts: { netto: calc.netto, mwst: calc.brutto - calc.netto, brutto: calc.brutto },
   });
   const plate = String(flat.kennzeichen ?? "").replace(/[^A-Za-z0-9]+/g, "-");

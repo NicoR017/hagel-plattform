@@ -30,6 +30,7 @@ import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
 import { buildDashboard, buildTechSheets } from "./dashboard";
+import { handoverRoutes } from "./handover";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
   auditLog, campaignStations, citasLinks, insurers, invitations, repairBookings, stationInsurers, vehicles, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
@@ -221,6 +222,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
 
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
+  app.route("/", handoverRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", repairRoutes({ db, storage, mailer, needAuth, needOrg }));
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 

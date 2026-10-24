@@ -114,3 +114,32 @@ export function bookingMail(lang: "de" | "es", kind: "created" | "moved" | "canc
     : `${kind === "moved" ? "Der Termin wurde verschoben." : "Ihr Reparaturtermin ist bestätigt."}\n\nDatum: ${date}\nUhrzeit: ${i.time} Uhr\nStation: ${place}`;
   return { subject: `${head}${veh ? " – " + veh : ""}`, text: `Sehr geehrte Damen und Herren,\n\n${body}\n\nFahrzeug: ${veh}${i.claim ? `\nSchadennummer: ${i.claim}` : ""}\n\nMit freundlichen Grüßen` };
 }
+
+export interface HandoverMailInfo { plate: string; model: string; stationName: string; customerName: string; senderName: string }
+
+/** E-mail that carries the signed handover receipt (PDF) to the customer. Only vehicle and place: never prices, technicians or commission. */
+export function handoverMail(lang: Lang | "es", kind: "drop_off" | "pick_up", i: HandoverMailInfo): MailBody {
+  const veh = [i.model, i.plate].filter(Boolean).join(" · ");
+  const drop = kind === "drop_off";
+  const vs = veh ? " – " + veh : "";
+  const sig = (s: string) => (i.senderName ? "\n" + s + "\n" + i.senderName : "\n" + s);
+  const n = i.customerName || "";
+  switch (lang) {
+    case "en": return {
+      subject: `Handover confirmation – ${drop ? "vehicle drop-off" : "vehicle pick-up"}${vs}`,
+      text: `Dear ${n || "customer"},\n\nattached you will find the signed confirmation (PDF) that you ${drop ? "handed over" : "picked up"} the vehicle ${veh} ${drop ? "at" : "from"} ${i.stationName}.\n\nPlease keep it for your records.\n${sig("Kind regards")}`,
+    };
+    case "fr": return {
+      subject: `Confirmation de remise – ${drop ? "dépôt du véhicule" : "restitution du véhicule"}${vs}`,
+      text: `Bonjour ${n},\n\nvous trouverez ci-joint la confirmation signée (PDF) ${drop ? "du dépôt" : "de la restitution"} du véhicule ${veh} à ${i.stationName}.\n\nVeuillez la conserver.\n${sig("Cordialement")}`,
+    };
+    case "es": return {
+      subject: `Comprobante de entrega – ${drop ? "recepción del vehículo" : "devolución del vehículo"}${vs}`,
+      text: `Estimado/a ${n}:\n\nadjuntamos el comprobante firmado (PDF) de ${drop ? "la entrega" : "la recogida"} del vehículo ${veh} en ${i.stationName}.\n\nLe rogamos que lo conserve.\n${sig("Un saludo cordial")}`,
+    };
+    default: return {
+      subject: `Übergabebestätigung ${drop ? "Fahrzeugannahme" : "Fahrzeugrückgabe"}${vs}`,
+      text: `Guten Tag ${n},\n\nanbei erhalten Sie die unterschriebene Bestätigung (PDF) über die ${drop ? "Abgabe" : "Rückgabe"} des Fahrzeugs ${veh} in ${i.stationName}.\n\nBitte bewahren Sie sie für Ihre Unterlagen auf.\n${sig("Mit freundlichen Grüßen")}`,
+    };
+  }
+}

@@ -201,6 +201,10 @@ export const vehicles = pgTable("vehicles", {
   methodVersion: integer("method_version"),
   /** body shop (a "carrosserie" site of the tenant) that repairs the car while it stands in the "At Bodyshop" column */
   bodyshopId: uuid("bodyshop_id").references((): AnyPgColumn => stations.id),
+  /** V5: when the car entered the repair board (null = before V5 or never: no drop-off to sign), and when the customer signed (summary only, the details are in vehicle_handovers) */
+  repairEnteredAt: timestamp("repair_entered_at", { withTimezone: true }),
+  dropOffSignedAt: timestamp("drop_off_signed_at", { withTimezone: true }),
+  pickUpSignedAt: timestamp("pick_up_signed_at", { withTimezone: true }),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdBy: uuid("created_by").references(() => users.id),
@@ -567,3 +571,35 @@ export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
   byDevice: index("colibri_assign_device_idx").on(t.deviceId, t.validFrom),
   oneOpen: uniqueIndex("colibri_assign_one_open_idx").on(t.deviceId).where(sql`valid_to is null`),
 }));
+
+// ---------------------------------------------------------------- V5: customer signature at drop-off and pick-up
+/**
+ * A signed hand-over receipt. Personal data (customer name, e-mail, signature): same retention as the vehicle, never in the synced vehicle,
+ * never for technician / headliner profiles, never in an Excel export. A signature is never edited: signing again creates a new row and
+ * the previous one gets `replaced_by`. The id is created on the phone, so a replayed offline operation is applied once.
+ */
+export const vehicleHandovers = pgTable("vehicle_handovers", {
+  id: uuid("id").primaryKey(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  /** drop_off | pick_up */
+  kind: text("kind").notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  remarks: text("remarks").notNull().default(""),
+  /** time on the device when the customer signed */
+  signedAt: timestamp("signed_at", { withTimezone: true }).notNull(),
+  /** time the server received it */
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  signedBy: uuid("signed_by").references(() => users.id),
+  stationId: uuid("station_id").references(() => stations.id),
+  /** the drawing: strokes of [x, y] points in a 600 x 200 box (vector, a few KB) */
+  signature: jsonb("signature").notNull(),
+  sendReceipt: boolean("send_receipt").notNull().default(false),
+  receiptPdfKey: text("receipt_pdf_key"),
+  /** sent | failed | null (not asked / not sent yet) */
+  mailStatus: text("mail_status"),
+  mailError: text("mail_error"),
+  mailedAt: timestamp("mailed_at", { withTimezone: true }),
+  replacedBy: uuid("replaced_by"),
+  createdAt: createdAt(),
+}, (t) => ({ byVehicle: index("vehicle_handovers_vehicle_idx").on(t.vehicleId, t.kind) }));

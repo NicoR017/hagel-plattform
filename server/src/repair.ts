@@ -127,7 +127,7 @@ async function startBooking(tx: Tx, booking: typeof repairBookings.$inferSelect,
   await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: "reparatur", userId: byUser });
   await partsToTodos(tx, row, byUser);
   await event(tx, row.id, byUser, "booking_started", { bookingId: booking.id, date: booking.date, why });
-  return touchVehicle(tx, null, row, { ...set, statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", groupAt: stamps });
+  return touchVehicle(tx, null, row, { ...set, statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", repairEnteredAt: now, groupAt: stamps });
 }
 
 async function cancelBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, byUser: string | null, reason: string) {
@@ -187,7 +187,7 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
         await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: "reparatur", userId: u.id });
         await partsToTodos(tx, row, u.id);
         await event(tx, row.id, u.id, "entered_repair", { from: row.statut });
-        return touchVehicle(tx, u, row, { statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", groupAt: { ...stamps, status: at } });
+        return touchVehicle(tx, u, row, { statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", repairEnteredAt: now, groupAt: { ...stamps, status: at } });
       }
       const from = row.repairStage ?? "bereit";
       if (op.stage === from && !(op.stage !== "finish" && row.statut === "fertig")) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id };

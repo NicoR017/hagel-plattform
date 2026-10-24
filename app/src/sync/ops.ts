@@ -57,13 +57,19 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
       return n;
     }
     case "vehicle.move": return v ? { ...v, stationId: op.toStationId, updatedAt: at } : v;
+    case "vehicle.handover": {
+      if (!v) return v;
+      const n: LocalVehicle = op.handover.kind === "drop_off" ? { ...v, dropOffSignedAt: op.handover.signedAt, updatedAt: at } : { ...v, pickUpSignedAt: op.handover.signedAt, updatedAt: at };
+      if (op.handover.kind === "pick_up" && v.statut !== "rendu") { n.statut = "rendu"; n.statutMotif = null; n.statutDepuis = at; } // handing the car back = Returned
+      return n;
+    }
     case "vehicle.delete": return null;
     case "vehicle.repairStage": {
       if (!v) return v;
       const n: LocalVehicle = { ...v, repairStage: op.stage, updatedAt: at };
       if (op.stage === "finish") { n.statut = "fertig"; n.statutDepuis = at; }
       else if (v.statut === "fertig") { n.statut = "reparatur"; n.statutDepuis = at; }
-      else if (v.statut !== "reparatur" && v.statut !== "attente") { n.statut = "reparatur"; n.statutDepuis = at; n.repAt = (v.repAt as string | null) ?? at; }
+      else if (v.statut !== "reparatur" && v.statut !== "attente") { n.statut = "reparatur"; n.statutDepuis = at; n.repAt = (v.repAt as string | null) ?? at; if (v.repairStage == null) n.repairEnteredAt = at; }
       return n;
     }
     case "vehicle.bodyshop": return v ? { ...v, bodyshopId: op.bodyshopId, updatedAt: at } : v;

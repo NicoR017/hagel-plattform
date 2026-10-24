@@ -110,6 +110,23 @@ const bookingInput = z.object({
   email: z.string().trim().max(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
 }).strict();
 
+/** Box in which the customer draws the signature (the points of a stroke are in this coordinate system, origin top-left). */
+export const SIGNATURE_W = 600, SIGNATURE_H = 200;
+const strokeSchema = z.array(z.tuple([z.number().min(-20).max(SIGNATURE_W + 20), z.number().min(-20).max(SIGNATURE_H + 20)])).min(1).max(2000);
+export const signatureSchema = z.array(strokeSchema).min(1).max(60).refine((s) => s.reduce((n, st) => n + st.length, 0) <= 6000, "too many points");
+/** A signed receipt of the car being left (drop_off) or taken back (pick_up). The id is made on the phone: a replayed operation is applied once. */
+export const handoverInput = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(["drop_off", "pick_up"]),
+  customerName: z.string().trim().min(1).max(120),
+  customerEmail: z.preprocess((v) => (typeof v === "string" && !v.trim() ? null : v), z.string().trim().email().max(254).nullable()).default(null),
+  remarks: z.string().max(2000).default(""),
+  signedAt: z.string().datetime({ offset: true }),
+  signature: signatureSchema,
+  sendReceipt: z.boolean().default(false),
+});
+export type HandoverInput = z.infer<typeof handoverInput>;
+
 export const opSchema = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("vehicle.create"),
@@ -126,6 +143,7 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("vehicle.status"), vehicleId: uuidStr, statut: z.enum(STATUSES), motif: z.string().max(300).optional() }),
   z.object({ ...base, type: z.literal("vehicle.move"), vehicleId: uuidStr, toStationId: uuidStr, note: z.string().max(300).optional() }),
   z.object({ ...base, type: z.literal("vehicle.delete"), vehicleId: uuidStr }),
+  z.object({ ...base, type: z.literal("vehicle.handover"), vehicleId: uuidStr, handover: handoverInput }),
   z.object({ ...base, type: z.literal("vehicle.assign"), vehicleId: uuidStr, kind: z.enum(["pdr", "demontage"]), userIds: z.array(uuidStr).max(20) }),
   z.object({
     ...base, type: z.literal("vehicle.colibri"), vehicleId: uuidStr, colibri: colibriMeta,
@@ -166,6 +184,7 @@ export const KNOWN_OP_TYPES: readonly string[] = opSchema.options.map((o) => o.s
 export const V3_OP_TYPES: readonly string[] = [
   "vehicle.repairStage", "vehicle.bodyshop", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
   "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
+  "vehicle.handover", // v5: customer signature (kept queued on a server that does not know it yet)
 ];
 export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
 
@@ -186,6 +205,7 @@ export interface OpResult {
 }
 export interface PushResponse { results: OpResult[] }
 
+
 /** What a client may hold. Restricted fields are absent (not blank) when the user has no right to them. */
 export interface ClientVehicle extends Record<string, unknown> {
   id: string;
@@ -198,6 +218,10 @@ export interface ClientVehicle extends Record<string, unknown> {
   statutMotif: string | null;
   statutDepuis: string | null;
   repAt: string | null;
+  /** V5: when the car entered the repair board / when the customer signed (summary only: names and signatures never travel with the vehicle) */
+  repairEnteredAt?: string | null;
+  dropOffSignedAt?: string | null;
+  pickUpSignedAt?: string | null;
   panels: Record<string, unknown>;
   colibri: unknown | null;
   colibriFile: { name: string; size: number } | null;

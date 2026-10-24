@@ -2,8 +2,9 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFImage, PDFPage } from "pdf-lib";
 import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
-import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
-import type { DocPhoto, DocVehicle, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
+import { dentBreak, docText, handoverText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
+import { SIG_H, SIG_W } from "./types";
+import type { DocPhoto, DocVehicle, HandoverDoc, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
 import { TECH_LABELS, techDate, type TechLang, type TechSheetData } from "./techsheet";
 
 const W = 595.28, H = 841.89, L = 42, R = 553;
@@ -177,6 +178,114 @@ function photoGrid(cv: Canvas, cells: Cell[], head: () => void, rowH: number) {
     if (col === 1) { cv.y -= rowH; col = 0; } else col = 1;
   });
   if (col === 1) cv.y -= rowH;
+}
+
+/** "19.10.2026, 10:15" -> ["19.10.2026", "10:15"] */
+function splitDateTime(s: string): [string, string] {
+  const m = /^(.*?),?\s+(\d{1,2}:\d{2})$/.exec(s.trim());
+  return m ? [m[1], m[2]] : [s, ""];
+}
+
+/** Wraps by measured width; words longer than the line are cut. Never overflows `maxW`. */
+function wrapWidth(cv: Canvas, str: string, maxW: number, size: number, bold = false): string[] {
+  const out: string[] = [];
+  for (const par of String(str ?? "").split(/\r?\n/)) {
+    let cur = "";
+    for (const word of par.split(/\s+/).filter(Boolean)) {
+      let w = word;
+      while (cv.widthOf(w, size, bold) > maxW) {
+        let k = w.length - 1;
+        while (k > 1 && cv.widthOf(w.slice(0, k), size, bold) > maxW) k--;
+        if (cur) { out.push(cur); cur = ""; }
+        out.push(w.slice(0, k)); w = w.slice(k);
+      }
+      const t = cur ? cur + " " + w : w;
+      if (cur && cv.widthOf(t, size, bold) > maxW) { out.push(cur); cur = w; } else cur = t;
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+/** Framed box (x, yTop = top edge, w x h) with the strokes scaled from SIG_W x SIG_H; points outside the box are ignored. */
+function drawSignature(cv: Canvas, strokes: [number, number][][], x: number, yTop: number, w: number, h: number) {
+  cv.RG(150, 158, 172);
+  cv.line(x, yTop, x + w, yTop, 0.8); cv.line(x, yTop - h, x + w, yTop - h, 0.8);
+  cv.line(x, yTop, x, yTop - h, 0.8); cv.line(x + w, yTop, x + w, yTop - h, 0.8);
+  const sx = w / SIG_W, sy = h / SIG_H;
+  const col = rgb(10 / 255, 25 / 255, 90 / 255);
+  const ok = (p: unknown): p is [number, number] =>
+    Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && p[0] >= 0 && p[0] <= SIG_W && p[1] >= 0 && p[1] <= SIG_H;
+  const pt = (p: [number, number]) => ({ x: x + p[0] * sx, y: yTop - p[1] * sy });
+  for (const st of Array.isArray(strokes) ? strokes : []) {
+    if (!Array.isArray(st)) continue;
+    if (st.length === 1) {
+      if (ok(st[0])) cv.page.drawCircle({ ...pt(st[0]), size: 0.9, color: col });
+      continue;
+    }
+    let prev: [number, number] | null = null;
+    for (const p of st) {
+      if (!ok(p)) { prev = null; continue; }
+      if (prev) cv.page.drawLine({ start: pt(prev), end: pt(p), thickness: 1.4, color: col });
+      prev = p;
+    }
+  }
+}
+
+/** One-page receipt the customer signs at drop-off / pick-up. Language of the vehicle's country. */
+export async function generateHandoverReceipt(
+  v: DocVehicle, h: HandoverDoc, opts: { letterhead?: Letterhead | null; now?: Date; timeZone?: string } = {},
+): Promise<Uint8Array> {
+  const cv = await Canvas.create(opts.now || new Date());
+  const lh = opts.letterhead || null;
+  const land: Land = v.land === "ES" ? "ES" : "DE";
+  const HT = handoverText(land);
+  const pick = h.kind === "pick_up";
+  const title = pick ? HT.titlePick : HT.titleDrop;
+  cv.top();
+  cv.y = await drawLetterhead(cv, lh);
+  cv.rgbc(22, 35, 63); cv.rect(L, cv.y - 30, R - L, 34);
+  cv.rgbc(255, 255, 255); cv.T(L + 10, cv.y - 18, title, 15, true);
+  cv.black(); cv.y -= 56;
+
+  const VX = L + 150, maxW = R - VX;
+  const kv = (label: string, value: string) => {
+    const lines = wrapWidth(cv, value && value.trim() ? value : "—", maxW, 10).slice(0, 12);
+    cv.black(); cv.T(L, cv.y, label, 9.5, true);
+    lines.forEach((ln) => { cv.T(VX, cv.y, ln, 10); cv.y -= 14; });
+    cv.y -= 4;
+  };
+  const [date, time] = splitDateTime(fmtDateTime(land, h.signedAt, opts.timeZone));
+  const veh = [v.modell, v.kennzeichen].filter(Boolean).join(" · ");
+  kv(HT.vehicle, veh);
+  kv(HT.plate, v.kennzeichen || "—");
+  kv(HT.vin, v.fin || "—");
+  if (v.claimNumber) kv(HT.claim, v.claimNumber);
+  if (v.insurerName) kv(HT.insurer, v.insurerName);
+  if (v.kunde) kv(HT.bodyShop, v.kunde);
+  kv(HT.dateTime, time ? date + ", " + time : date);
+  kv(HT.customer, h.customerName);
+  if (h.customerEmail) kv(HT.email, h.customerEmail);
+  kv(HT.place, [h.stationName, h.stationAddress].filter(Boolean).join(", "));
+  kv(HT.remarks, h.remarks);
+  kv(pick ? HT.receivedByPick : HT.receivedByDrop, h.receivedBy);
+
+  cv.y -= 10;
+  const sentence = (pick ? HT.sentencePick : HT.sentenceDrop)
+    .replace("{name}", () => h.customerName).replace("{date}", () => date).replace("{time}", () => time)
+    .replace("{station}", () => h.stationName).replace("{user}", () => h.receivedBy);
+  cv.black();
+  wrapWidth(cv, sentence, R - L, 10.5).slice(0, 10).forEach((ln) => { cv.T(L, cv.y, ln, 10.5); cv.y -= 15; });
+  cv.y -= 14;
+  cv.T(L, cv.y, HT.signature + ":", 9.5, true); cv.y -= 8;
+  drawSignature(cv, h.strokes, L, cv.y, 240, 80);
+  cv.y -= 80 + 14;
+  cv.RG(0, 0, 0); cv.line(L, cv.y + 6, L + 240, cv.y + 6, 0.6);
+  cv.T(L, cv.y - 6, h.customerName, 9.5);
+  cv.black();
+  drawFooters(cv, lh);
+  cv.doc.setTitle(title + " " + (v.kennzeichen || ""));
+  return cv.doc.save();
 }
 
 export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOptions = {}): Promise<Uint8Array> {
@@ -375,6 +484,35 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
       img, label: imgLabel(land, p.label) || X.foto, sub: p.takenAt ? fmtDateTime(land, p.takenAt, opts.timeZone) : undefined,
     })), () => { head(); cv.T(L, cv.y, title, 12, true); cv.y -= 22; }, rowH);
     cv.y -= 6;
+  }
+  if (opts.handovers) {
+    const HT = handoverText(land);
+    cv.np(); cv.top();
+    cv.rgbc(22, 35, 63); cv.rect(L, cv.y - 30, R - L, 34);
+    cv.rgbc(255, 255, 255); cv.T(L + 10, cv.y - 18, HT.signaturesTitle, 15, true);
+    cv.black(); cv.y -= 56;
+    const blocks: [string, HandoverDoc | null][] = [[HT.blockDrop, opts.handovers.dropOff], [HT.blockPick, opts.handovers.pickUp]];
+    for (const [title, h] of blocks) {
+      cv.black(); cv.T(L, cv.y, title, 12, true);
+      cv.RG(225, 229, 238); cv.line(L, cv.y - 4, R, cv.y - 4, 0.6);
+      cv.y -= 22;
+      if (!h) {
+        cv.rgbc(110, 120, 140); cv.T(L, cv.y, HT.unsigned, 10.5); cv.black(); cv.y -= 40;
+        continue;
+      }
+      const lab = h.kind === "pick_up" ? HT.receivedByPick : HT.receivedByDrop;
+      const [d, t] = splitDateTime(fmtDateTime(land, h.signedAt, opts.timeZone));
+      cv.T(L, cv.y, HT.dateTime + ": " + (t ? d + ", " + t : d), 10); cv.y -= 14;
+      cv.T(L, cv.y, HT.customer + ": " + h.customerName, 10); cv.y -= 14;
+      cv.T(L, cv.y, lab + ": " + h.receivedBy, 10); cv.y -= 14;
+      const rem = (h.remarks || "").trim();
+      if (rem) {
+        wrapWidth(cv, HT.remarks + ": " + rem, R - L, 9.5).slice(0, 3).forEach((ln) => { cv.T(L, cv.y, ln, 9.5); cv.y -= 13; });
+      }
+      cv.y -= 6;
+      drawSignature(cv, h.strokes, L, cv.y, 240, 80);
+      cv.y -= 80 + 40;
+    }
   }
   drawFooters(cv, lh);
   cv.doc.setTitle(X.fotobericht + " " + (v.kennzeichen || ""));

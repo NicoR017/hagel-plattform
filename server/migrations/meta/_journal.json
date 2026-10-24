@@ -127,6 +127,13 @@
       "when": 1792867196710,
       "tag": "0017_v5_colibri_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792874510960,
+      "tag": "0018_v5_handovers",
+      "breakpoints": true
     }
   ]
 }

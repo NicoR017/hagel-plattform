@@ -6,6 +6,7 @@ import {
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "./audit";
+import { finishHandover } from "./handover";
 import type { Mailer } from "./email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
 import { applyRepairOp, isRepairOp, partsToTodos, repairDataFor } from "./repair";
@@ -14,7 +15,7 @@ import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, effectivePermissions, fieldProfile, filterFields, type Principal, type VehicleRef } from "./permissions";
 import {
-  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
+  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, repairEvents, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleHandovers, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import type { Storage } from "./storage";
 
@@ -69,7 +70,8 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
     ...shares,
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
     repairStage: r.repairStage, bodyshopId: r.bodyshopId, methodId: r.methodId, methodVersion: r.methodVersion,
-    statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
+    statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif,
+    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
     assigneeIds, updatedAt: r.updatedAt.toISOString(), updatedBy: updatedByName, seq: r.seq,
@@ -299,11 +301,43 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       if (op.statut === "reparatur") set.repAt = now;
       else if (op.statut === "arrive" || op.statut === "besichtigung") set.repAt = null;
       // the older status path keeps the board column consistent (it never sends the automatic report nor checks the Finish rules)
-      if (op.statut === "reparatur") { if (!row.repairStage || row.repairStage === "finish") set.repairStage = row.repairStage === "finish" ? "pdr" : "bereit"; await partsToTodos(tx, row, u.id); }
+      if (op.statut === "reparatur") { if (!row.repairStage || row.repairStage === "finish") set.repairStage = row.repairStage === "finish" ? "pdr" : "bereit"; if (!row.repairStage) set.repairEnteredAt = now; await partsToTodos(tx, row, u.id); }
       else if (op.statut === "fertig") set.repairStage = "finish";
       else if (op.statut === "arrive" || op.statut === "besichtigung") set.repairStage = null;
       await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: op.statut, motif: set.statutMotif ?? null, userId: u.id });
       return commit(tx, u, row, set, ["status"], [], op.type, { before: { statut: row.statut }, after: { statut: op.statut, motif: set.statutMotif } });
+    }
+
+    case "vehicle.handover": {
+      const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
+      need(u, "vehicules.changer_statut", ref);
+      if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // technician / headliner: no customer data, no hand-over
+      const h = op.handover;
+      const [dup] = await tx.select({ id: vehicleHandovers.id, vehicleId: vehicleHandovers.vehicleId }).from(vehicleHandovers).where(eq(vehicleHandovers.id, h.id));
+      if (dup) { if (dup.vehicleId === row.id) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id }; throw new Reject("not_allowed"); } // a replayed operation is applied once
+      const received = new Date();
+      const signed = new Date(h.signedAt);
+      const when = signed.getTime() > received.getTime() + 10 * 60_000 ? received : signed; // a phone clock far in the future is not trusted
+      await tx.insert(vehicleHandovers).values({
+        id: h.id, vehicleId: row.id, kind: h.kind, customerName: h.customerName, customerEmail: h.customerEmail, remarks: h.remarks, signedAt: when, signedBy: u.id,
+        stationId: row.stationId, signature: h.signature as never, sendReceipt: h.sendReceipt && !!h.customerEmail,
+      });
+      // never edited: the new signature replaces the previous one of the same kind (which stays in the database)
+      await tx.update(vehicleHandovers).set({ replacedBy: h.id }).where(and(eq(vehicleHandovers.vehicleId, row.id), eq(vehicleHandovers.kind, h.kind), isNull(vehicleHandovers.replacedBy), ne(vehicleHandovers.id, h.id)));
+      await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "handover_signed", payload: { kind: h.kind, handoverId: h.id } as never }); // history: no personal data
+      const set: Partial<typeof vehicles.$inferInsert> = h.kind === "drop_off" ? { dropOffSignedAt: when } : { pickUpSignedAt: when };
+      if (h.kind === "pick_up") {
+        // handing the car back = status "Returned" (same effect as the status change, unless a newer status change already won)
+        const stamps = { ...(row.groupAt as Record<string, number>) };
+        if ((stamps.status ?? 0) <= at && row.statut !== "rendu") {
+          stamps.status = at;
+          Object.assign(set, { statut: "rendu", statutMotif: null, statutAvant: null, statutDepuis: received, groupAt: stamps });
+          await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: "rendu", userId: u.id });
+        }
+      }
+      // the audit log keeps the reference, never the name, e-mail or drawing
+      const out = await commit(tx, u, row, set, ["handover"], [], op.type, { after: { handoverId: h.id, kind: h.kind } });
+      return { ...out, after: () => finishHandover({ db: deps.db, storage: deps.storage, mailer: deps.mailer }, h.id) };
     }
 
     case "vehicle.move": {
