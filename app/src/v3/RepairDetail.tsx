@@ -278,7 +278,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
             {stage !== "finish" ? (
               <>
                 {rep.finishBlockers.length > 0 && <p className="note" style={{ marginTop: 12 }}>{t("v5FinishNo")} – {blockersText(rep.finishBlockers)}</p>}
-                {may && <button className="pbtn green" onClick={() => void finish()}>{t("v5Finish")}</button>}
+                {may && <button className="btn primary" style={{ marginTop: 14 }} onClick={() => void finish()}>{t("v5Finish")}</button>}
               </>
             ) : (
               <>
@@ -288,7 +288,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
                   {(chief || f.can("rapport_reparation.envoyer")) && <button className="btn" style={{ marginTop: 10 }} disabled={busy} onClick={() => void resend()}>✉ {busy ? t("preparing") : t("v5Resend")}</button>}
                 </div>
                 {mayHandover && v.statut === "fertig" && (
-                  <button className="pbtn" onClick={() => setSign("pick_up")}>{t("v5Handover")}</button>
+                  <button className="btn primary" style={{ marginTop: 14 }} onClick={() => setSign("pick_up")}>{t("v5Handover")}</button>
                 )}
               </>
             )}
