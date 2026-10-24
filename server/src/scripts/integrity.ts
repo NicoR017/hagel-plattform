@@ -101,7 +101,13 @@ if (process.argv[1] && /integrity\.ts$/.test(process.argv[1].replace(/\\/g, "/")
     if (out) writeFileSync(out, JSON.stringify(rep, null, 2));
     if (cmp) {
       const before = JSON.parse(readFileSync(cmp, "utf8")) as typeof rep;
-      const d = diff(before.stable, rep.stable);
+      // --after-v5-move: the Chapauto move script (v5) changes where cars stand and writes one move + one audit row per car, nothing else.
+      // Those numbers are listed as EXPECTED instead of compared; amounts, vehicle counts, photos, users, scans... are still compared.
+      const expected = process.argv.includes("--after-v5-move") ? [/\/byStation\//, /\/counts\/vehicle_moves$/, /\/counts\/audit_log$/] : [];
+      const all = diff(before.stable, rep.stable);
+      const d = all.filter((x) => !expected.some((re) => re.test(x.split(":")[0])));
+      const exp = all.filter((x) => !d.includes(x));
+      if (exp.length) console.log(`EXPECTED after the v5 move (${exp.length}):\n${exp.join("\n")}`);
       console.log(d.length ? `DIFFERENCES (${d.length}):\n${d.join("\n")}` : "IDENTICAL: stable integrity numbers are unchanged");
       console.log("added tables:", JSON.stringify(rep.added));
       process.exitCode = d.length ? 1 : 0;
