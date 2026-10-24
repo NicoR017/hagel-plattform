@@ -71,6 +71,7 @@ export const ERROR_MESSAGES = {
   insurer_not_found: { de: "Versicherung nicht gefunden", en: "Insurer not found" },
   campaign_not_found: { de: "Kampagne nicht gefunden", en: "Campaign not found" },
   company_not_found: { de: "Briefkopf nicht gefunden", en: "Letterhead not found" },
+  technician_in_use: { de: "Der Techniker hat Termine im Reparaturkalender – bitte deaktivieren statt löschen", en: "The technician has appointments in the repair calendar – deactivate instead of deleting" },
   technician_not_found: { de: "Techniker nicht gefunden", en: "Technician not found" },
   azure_unavailable: { de: "Azure-Anbindung nicht konfiguriert", en: "Azure connection is not configured" },
   azure_failed: { de: "Azure-Abgleich fehlgeschlagen", en: "Azure sync failed" },

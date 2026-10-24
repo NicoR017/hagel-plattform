@@ -10,7 +10,7 @@ import type { Env } from "./env";
 import type { Hub } from "./hub";
 import { methodRoutes } from "./methods";
 import { stationRecipientPreview } from "./reports";
-import { campaignStations, campaigns, companies, insurers, stationInsurers, stations, technicians, users, memberships, vehicles } from "./schema";
+import { campaignStations, campaigns, companies, insurers, stationInsurers, stations, technicians, users, memberships, repairAppointments, vehicles } from "./schema";
 import type { Storage } from "./storage";
 
 interface Deps {
@@ -272,6 +272,18 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
     await audit(db, { orgId: org(c), userId: who(c), action: "update", entity: "technician", entityId: id, before, after: t });
     touch(org(c));
     return c.json(t);
+  });
+  /** Delete a technician record. Vehicles keep the NAME they carry in their split (nothing is lost); a technician with planned appointments is deactivated instead. */
+  r.delete("/technicians/:id", require("parametres.gerer"), async (c) => {
+    const id = c.req.param("id") ?? "";
+    const [before] = await db.select().from(technicians).where(and(eq(technicians.id, id), eq(technicians.orgId, org(c))));
+    if (!before) throw new HttpError(404, "technician_not_found");
+    const [used] = await db.select({ n: sql<number>`count(*)::int` }).from(repairAppointments).where(eq(repairAppointments.technicianId, id));
+    if (used.n > 0) throw new HttpError(409, "technician_in_use");
+    await db.delete(technicians).where(eq(technicians.id, id));
+    await audit(db, { orgId: org(c), userId: who(c), action: "delete", entity: "technician", entityId: id, before });
+    touch(org(c));
+    return c.json({ ok: true });
   });
 
   // ------------------------------------------------------------ station recipients (pre-filled list) and calculation methods

@@ -2,7 +2,7 @@
 // without steps the rule of the technician record (PDR / headliner) still applies (v4_field.test.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { technicians, users, vehicles } from "../src/schema";
+import { repairAppointments, technicians, users, vehicles } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;
@@ -124,5 +124,27 @@ describe("the moves follow the steps of the role", () => {
   it("managers and assessors are not affected by steps", async () => {
     const id = await car("demontage");
     expect((await move(assessor, id, "remontage")).status).toBe("ok");
+  });
+});
+
+describe("deleting technicians", () => {
+  it("a technician record can be deleted (audited); the cars keep the name in their split", async () => {
+    const t = (await call(c, "POST", "/admin/technicians", { token: c.superToken, org: c.orgES, body: { name: "To Delete", kind: "pdr" } })).body;
+    const car1 = uuid();
+    await ok(assessor, [op("vehicle.create", { vehicle: { id: car1, stationId: A, clientStationId: CARRO, header: { land: "ES", kennzeichen: "DEL 1", leistungsdatum: "2026-10-19", stundensatz: 69 }, panels: {}, shares: { techName: "To Delete", techPct: 50 } } })]);
+    expect((await call(c, "DELETE", `/admin/technicians/${t.id}`, { token: pdrTok, org: c.orgES })).status).toBe(403);
+    expect((await call(c, "DELETE", `/admin/technicians/${t.id}`, { token: c.superToken, org: c.orgES })).status).toBe(200);
+    expect((await call(c, "GET", "/admin/technicians", { token: c.superToken, org: c.orgES })).body.some((x: any) => x.id === t.id)).toBe(false);
+    expect((await call(c, "DELETE", `/admin/technicians/${t.id}`, { token: c.superToken, org: c.orgES })).status).toBe(404);
+    const [v] = await c.h.db.select().from(vehicles).where(eq(vehicles.id, car1));
+    expect((v.shares as any).techName).toBe("To Delete");
+  });
+  it("a technician with appointments in the repair calendar cannot be deleted (deactivate instead)", async () => {
+    const t = (await call(c, "POST", "/admin/technicians", { token: c.superToken, org: c.orgES, body: { name: "Busy", kind: "pdr" } })).body;
+    const car2 = await car("pdr");
+    await c.h.db.insert(repairAppointments).values({ id: uuid(), vehicleId: car2, technicianId: t.id, date: "2026-11-02", durationMin: 60, note: "" });
+    const r = await call(c, "DELETE", `/admin/technicians/${t.id}`, { token: c.superToken, org: c.orgES });
+    expect(r.status).toBe(409);
+    expect(r.body.code ?? r.body.error).toMatch(/technician_in_use|Termine/);
   });
 });

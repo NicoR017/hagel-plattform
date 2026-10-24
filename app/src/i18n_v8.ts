@@ -43,6 +43,7 @@ export const deV8 = {
   v4SecDocs: "Kostenvoranschlag", v4SecDocsRep: "Kostenvoranschlag",
   rsTitle: "Reparaturschritte", rsHint: "Für Konten mit Technikerprofil (Techniker / Headliner): bei jedem angehakten Schritt darf die Person das Fahrzeug nach eigenem Foto in den nächsten Schritt schieben. Ohne Haken gilt die Regel des Technikerprofils.",
   rs_demontage: "Demontage", rs_pdr: "PDR", rs_remontage: "Remontage", rsMove_demontage: "darf von Demontage nach PDR schieben", rsMove_pdr: "darf von PDR nach Remontage schieben", rsMove_remontage: "darf von Remontage zu Beim Carrossier schieben",
+  rsDeleteTechQ: "Techniker „{name}“ löschen? Fahrzeuge behalten den Namen in ihrer Aufteilung.",
 };
 
 export const enV8: Record<keyof typeof deV8, string> = {
@@ -89,6 +90,7 @@ export const enV8: Record<keyof typeof deV8, string> = {
   v4SecDocs: "Estimate", v4SecDocsRep: "Estimate",
   rsTitle: "Repair steps", rsHint: "For accounts with a technician profile (technician / headliner): for each ticked step the person may move the car to the next step after taking a photo of it. With nothing ticked the rule of the technician record applies.",
   rs_demontage: "Disassembly", rs_pdr: "PDR", rs_remontage: "Reassembly", rsMove_demontage: "may move from Disassembly to PDR", rsMove_pdr: "may move from PDR to Reassembly", rsMove_remontage: "may move from Reassembly to At body shop",
+  rsDeleteTechQ: "Delete technician “{name}”? Vehicles keep the name in their split.",
 };
 
 export const frV8: Record<keyof typeof deV8, string> = {
@@ -135,6 +137,7 @@ export const frV8: Record<keyof typeof deV8, string> = {
   v4SecDocs: "Devis", v4SecDocsRep: "Devis",
   rsTitle: "Étapes de réparation", rsHint: "Pour les comptes avec une fiche technicien (technicien / headliner) : pour chaque étape cochée, la personne peut passer la voiture à l'étape suivante après sa propre photo. Sans case cochée, la règle de la fiche technicien s'applique.",
   rs_demontage: "Démontage", rs_pdr: "PDR", rs_remontage: "Remontage", rsMove_demontage: "peut passer de Démontage à PDR", rsMove_pdr: "peut passer de PDR à Remontage", rsMove_remontage: "peut passer de Remontage à Chez le carrossier",
+  rsDeleteTechQ: "Supprimer le technicien « {name} » ? Les véhicules gardent le nom dans leur répartition.",
 };
 
 export const esV8: Record<keyof typeof deV8, string> = {
@@ -181,4 +184,5 @@ export const esV8: Record<keyof typeof deV8, string> = {
   v4SecDocs: "Presupuesto", v4SecDocsRep: "Presupuesto",
   rsTitle: "Etapas de reparación", rsHint: "Para cuentas con ficha de técnico (técnico / headliner): por cada etapa marcada, la persona puede pasar el coche a la etapa siguiente tras su propia foto. Sin ninguna marcada se aplica la regla de la ficha del técnico.",
   rs_demontage: "Desmontaje", rs_pdr: "PDR", rs_remontage: "Montaje", rsMove_demontage: "puede pasar de Desmontaje a PDR", rsMove_pdr: "puede pasar de PDR a Montaje", rsMove_remontage: "puede pasar de Montaje a En el taller",
+  rsDeleteTechQ: "¿Eliminar al técnico «{name}»? Los vehículos conservan el nombre en su reparto.",
 };

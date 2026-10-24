@@ -3,6 +3,7 @@ import { Picker } from "./field/Picker";
 import { api, httpFetch } from "./api";
 import { act, Card, Err, matches, useLoad } from "./admin";
 import { fmtDateTime, t, tOr } from "./i18n";
+import { confirmDialog } from "./field/ui";
 
 interface Station { id: string; type: string; name: string; active: boolean }
 interface Insurer { id: string; name: string; reportEmails: string[]; sendReports: boolean; reportsToSend: string; stationIds: string[] }
@@ -195,7 +196,8 @@ export function TechniciansPage({ canUsers }: { canUsers: boolean }) {
               <td>{x.name}{!x.active && <span className="pill off">{t("inactive")}</span>}</td><td>{x.kind === "headliner" ? t("v6TechHeadliner") : t("v6TechPdr")}</td><td>{Number(x.defaultPctPdr)} %</td><td>{Number(x.defaultPctDemontage)} %</td>
               <td>{x.userId ? users.data?.find((u) => u.id === x.userId)?.email ?? t("v6TechAccount") : t("v6TechNoAccount")}</td>
               <td>{x.email ?? "—"}</td>
-              <td><button className="btn sec" onClick={() => setF({ id: x.id, name: x.name, userId: x.userId ?? "", pdr: Number(x.defaultPctPdr), dem: Number(x.defaultPctDemontage), kind: x.kind ?? "pdr", email: x.email ?? "", active: x.active })}>{t("edit")}</button></td>
+              <td><button className="btn sec" onClick={() => setF({ id: x.id, name: x.name, userId: x.userId ?? "", pdr: Number(x.defaultPctPdr), dem: Number(x.defaultPctDemontage), kind: x.kind ?? "pdr", email: x.email ?? "", active: x.active })}>{t("edit")}</button>{" "}
+                <button className="btn danger" onClick={() => { if (confirmDialog(t("rsDeleteTechQ").replace("{name}", x.name))) void act(() => api("DELETE", `/admin/technicians/${x.id}`), setErr, () => void list.reload()); }}>{t("delete")}</button></td>
             </tr>
           ))}</tbody>
         </table>
