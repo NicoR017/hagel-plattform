@@ -6,7 +6,7 @@ export const PERMISSIONS = [
   "kva.envoyer", "rapport_reparation.envoyer",
   "photos.ajouter", "photos.supprimer",
   "colibri.importer", "export.excel",
-  "assurances.gerer", "campagnes.gerer", "stations.gerer", "parametres.gerer",
+  "assurances.gerer", "campagnes.gerer", "stations.gerer", "bodyshops.gerer", "parametres.gerer",
   "utilisateurs.gerer", "roles.gerer", "audit.voir", "dashboard.voir",
   // UI v3
   "reparatur.board", "reparatur.endabnahme", "termine.buchen", "methoden.gerer", "wochenbericht.voir", "kommentare.schreiben",
@@ -22,6 +22,10 @@ export type RepairStage = (typeof REPAIR_STAGES)[number];
 
 export const STATION_TYPES = ["carrosserie", "hall", "parc"] as const;
 export type StationType = (typeof STATION_TYPES)[number];
+/** A PLACE is where cars are assessed, stand and are repaired. A body shop ("carrosserie") is a CUSTOMER and never a place (V5). */
+export const PLACE_TYPES = ["hall", "parc"] as const;
+export type PlaceType = (typeof PLACE_TYPES)[number];
+export const isPlaceType = (t: unknown): t is PlaceType => (PLACE_TYPES as readonly unknown[]).includes(t);
 
 export const STATUSES = ["arrive", "besichtigung", "attente", "reparatur", "fertig", "rendu"] as const;
 export type VehicleStatus = (typeof STATUSES)[number];

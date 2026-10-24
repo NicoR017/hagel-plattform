@@ -31,6 +31,8 @@ export async function seed(db: Db, o: SeedOptions) {
       await db.insert(stations).values([
         { orgId: orgs[1].id, type: "carrosserie", name: "Carrosserie Test Talavera", country: "ES", capacite: 40 },
         { orgId: orgs[1].id, type: "hall", name: "Nave PDR Madrid", country: "ES", capacite: 120 },
+        // V5: a body shop is a customer, never a place: the tests that need a second place (cars stand here) use this hall
+        { orgId: orgs[1].id, type: "hall", name: "Nave Test A", country: "ES", capacite: 40 },
       ]);
     }
   }

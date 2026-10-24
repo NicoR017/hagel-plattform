@@ -4,6 +4,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { campaignInput, companyInput, insurerInput, stationInsurerInput, technicianInput, type Permission } from "@hagel/shared";
 import { audit } from "./audit";
 import { HttpError } from "./auth";
+import { hasOrgPermission } from "./permissions";
 import type { Db } from "./db";
 import type { Env } from "./env";
 import type { Hub } from "./hub";
@@ -92,7 +93,13 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
     return c.json({ ok: true });
   });
   /** Which insurers work with this carrosserie (replaces the whole list). */
-  r.put("/stations/:id/insurers", require("assurances.gerer"), zValidator("json", stationInsurerInput, validationHook), async (c) => {
+  const mayLinkInsurers: MiddlewareHandler<Env> = async (c, next) => {
+    // insurers or body shops managers (a station manager has the right through the grant of his station)
+    const u = c.get("principal"), o = c.get("orgId");
+    if (!(hasOrgPermission(u, "assurances.gerer", o) || hasOrgPermission(u, "bodyshops.gerer", o))) throw new HttpError(403, "forbidden");
+    await next();
+  };
+  r.put("/stations/:id/insurers", mayLinkInsurers, zValidator("json", stationInsurerInput, validationHook), async (c) => {
     const sid = c.req.param("id") ?? "", ids = [...new Set(c.req.valid("json").insurer_ids)];
     const [st] = await db.select().from(stations).where(and(eq(stations.id, sid), eq(stations.orgId, org(c))));
     if (!st) throw new HttpError(404, "station_not_found");
@@ -109,7 +116,7 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
     touch(org(c));
     return c.json({ insurer_ids: ids });
   });
-  r.get("/stations/:id/insurers", require("assurances.gerer"), async (c) =>
+  r.get("/stations/:id/insurers", mayLinkInsurers, async (c) =>
     c.json((await db.select().from(stationInsurers).where(eq(stationInsurers.stationId, c.req.param("id") ?? ""))).map((l) => l.insurerId)));
 
   // ------------------------------------------------------------ campaigns
@@ -122,8 +129,9 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
   const checkStations = async (orgId: string, ids: string[]) => {
     const uniq = [...new Set(ids)];
     if (uniq.length) {
-      const ok = await db.select({ id: stations.id }).from(stations).where(and(eq(stations.orgId, orgId), inArray(stations.id, uniq)));
+      const ok = await db.select({ id: stations.id, type: stations.type }).from(stations).where(and(eq(stations.orgId, orgId), inArray(stations.id, uniq)));
       if (ok.length !== uniq.length) throw new HttpError(400, "station_wrong_org");
+      if (ok.some((s) => s.type === "carrosserie")) throw new HttpError(400, "station_not_a_place");
     }
     return uniq;
   };

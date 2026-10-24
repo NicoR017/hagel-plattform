@@ -90,6 +90,13 @@ export function can(u: Principal, action: Action, v: VehicleRef, now = new Date(
  * Org-level / site-level actions that are not about one vehicle (users, roles, sites, settings…).
  * With a `stationId`, an org-wide grant or a grant on that site qualifies; without, only an org-wide grant does.
  */
+/** Does ANY live grant of this organisation carry the action (also a grant bound to one site)? For org-wide data that is cut to a scope afterwards. */
+export function hasOrgPermission(u: Principal, action: Action, orgId: string, now = new Date()): boolean {
+  if (u.status !== "active") return false;
+  if (u.isSuperadmin) return true;
+  return u.grants.some((g) => live(g, now) && g.orgId === orgId && g.permissions.includes(action));
+}
+
 export function canOrg(u: Principal, action: Action, orgId: string, stationId: string | null = null, now = new Date()): boolean {
   if (u.status !== "active") return false;
   if (u.isSuperadmin) return true;

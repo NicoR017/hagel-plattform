@@ -210,6 +210,7 @@ export function citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, va
     const apptId = c.req.param("id") ?? "";
     if (!apptId || apptId.length > 120) throw new HttpError(400, "invalid_input");
     const st = await stationFor(c, b.station_id, "vehicules.creer");
+    if (st.type === "carrosserie") throw new HttpError(409, "station_not_a_place"); // a body shop is a customer, not a place
     if (!citas) throw new HttpError(409, "citas_unavailable");
     if (!st.citasLocationId) throw new HttpError(404, "appointment_not_found");
 
@@ -256,14 +257,14 @@ export function citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, va
         const cos = await db.select().from(companies).where(and(eq(companies.orgId, orgId), eq(companies.active, true)));
         const co = cos.find((x) => x.logoKey) ?? cos[0];
         const header = {
-          land, kennzeichen: "", fin: "", modell: "", kunde: st.type === "carrosserie" ? st.name : "", kundeEmail: "", leistungsdatum: dayInZone(new Date(), zone),
+          land, kennzeichen: "", fin: "", modell: "", kunde: "", kundeEmail: "", leistungsdatum: dayInZone(new Date(), zone),
           teiler: settings.defaultTeiler, stundensatz: land === "ES" ? settings.rateES : settings.rateDE, notiz: "", zustand: ["Trocken", "Sauber"],
           greifzone: false, hohlraum: false, verbringung: false, logo: "pdr", ...(co ? { companyId: co.id } : {}), ...fields,
         };
         const out = await processPush(deps, u, [{
           opId: crypto.randomUUID(), at: new Date().toISOString(), type: "vehicle.create",
           vehicle: {
-            id: vehicleId, stationId: st.id, clientStationId: st.type === "carrosserie" ? st.id : null, campaignId: null, insurerId, header, panels: {},
+            id: vehicleId, stationId: st.id, clientStationId: null, campaignId: null, insurerId, header, panels: {},
             shares: { techName: "", techPct: 50, demTechName: "", demTechPct: 100 }, statut: "besichtigung",
           },
         } as unknown as Op]);

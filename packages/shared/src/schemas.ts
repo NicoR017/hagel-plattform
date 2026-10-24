@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LANGS } from "./errors";
-import { PERMISSIONS, SCOPES, STATION_TYPES } from "./permissions";
+import { PERMISSIONS, PLACE_TYPES, SCOPES, STATION_TYPES } from "./permissions";
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 export const uuid = z.string().uuid();
@@ -32,6 +32,14 @@ export const stationInput = z.object({
   excluded_insurer_emails: z.array(emailSchema).max(100).default([]),
   /** PDR Citas location of this station (null = none) */
   citas_location_id: z.string().trim().min(1).max(80).nullable().default(null),
+});
+
+/** Places (hall / yard): no commission, no Colibri customer, no report addresses. */
+export const placeInput = stationInput.extend({ type: z.enum(PLACE_TYPES) });
+/** Body shops (customers): no capacity, no repair places, no Citas location. */
+export const bodyshopInput = stationInput.omit({ type: true, capacite: true, repairs_per_day: true, citas_location_id: true, azure_location_aliases: true }).extend({
+  contact_name: z.string().trim().max(120).nullable().default(null),
+  contact_phone: z.string().trim().max(60).nullable().default(null),
 });
 
 export const inviteInput = z.object({

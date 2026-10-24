@@ -73,6 +73,9 @@ export const stations = pgTable("stations", {
   /** automatic insurer report e-mails the admin removed for this station */
   excludedInsurerEmails: text("excluded_insurer_emails").array().notNull().default(sql`'{}'::text[]`),
   /** id of the PDR Citas location whose appointments are shown on this station (null = not linked) */
+  /** body shops (customers) only: who to call there */
+  contactName: text("contact_name"),
+  contactPhone: text("contact_phone"),
   citasLocationId: text("citas_location_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

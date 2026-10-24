@@ -2,7 +2,7 @@ import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { ES_MATRIX_DEFAULT, computeShares, computeVehicle, type CalcVehicle, type Settings } from "@hagel/calc";
 import {
-  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
+  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, isPlaceType, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "./audit";
@@ -224,7 +224,8 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const l = mergeFields({ clientStationId: row.clientStationId, insurerId: row.insurerId, campaignId: row.campaignId }, h.nextStamps, HEADER_PREFIX, links, at);
       for (const f of ["clientStationId", "insurerId"] as const) {
         const id = l.next[f] as string | null;
-        if (id && l.applied.includes(f)) await assertStationOrInsurer(tx, f, id, row.orgId);
+        // only a CHANGED customer is checked: a car whose customer was a hall before V5 keeps it and stays editable
+        if (id && l.applied.includes(f) && id !== (f === "clientStationId" ? row.clientStationId : row.insurerId)) await assertStationOrInsurer(tx, f, id, row.orgId);
       }
       const set: Partial<typeof vehicles.$inferInsert> = { header: h.next, groupAt: l.nextStamps };
       if (l.applied.includes("clientStationId")) {
@@ -310,6 +311,7 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       need(u, "vehicules.deplacer", ref); // right on the SOURCE site
       const [dest] = await tx.select().from(stations).where(and(eq(stations.id, op.toStationId), eq(stations.orgId, row.orgId)));
       if (!dest || !dest.active) throw new Reject("station_unknown");
+      if (!isPlaceType(dest.type)) throw new Reject("station_not_a_place"); // a body shop is a customer, never a place
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.site ?? 0) > at) return commit(tx, u, row, {}, [], ["site"], op.type, {}, true);
       stamps.site = at;
@@ -425,8 +427,9 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
 
 async function assertStationOrInsurer(tx: Tx, field: "clientStationId" | "insurerId", id: string, orgId: string) {
   if (field === "clientStationId") {
-    const [s] = await tx.select({ id: stations.id }).from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId)));
+    const [s] = await tx.select({ id: stations.id, type: stations.type }).from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId)));
     if (!s) throw new Reject("station_unknown");
+    if (s.type !== "carrosserie") throw new Reject("client_not_bodyshop"); // the customer is a body shop (V5)
   }
   // insurers are managed in phase 4; ids are accepted only if they exist in this org
   else {
@@ -458,6 +461,7 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
   const v = op.vehicle;
   const [dest] = await tx.select().from(stations).where(eq(stations.id, v.stationId));
   if (!dest) throw new Reject("station_unknown");
+  if (!isPlaceType(dest.type)) throw new Reject("station_not_a_place");
   const [exists] = await tx.select().from(vehicles).where(eq(vehicles.id, v.id)).for("update");
   if (exists) {
     if (exists.createdBy === u.id && exists.orgId === dest.orgId) return { status: "ok", orgId: exists.orgId, seq: exists.seq };
@@ -651,7 +655,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
     : [];
   const repairLocations = perms.has("termine.buchen")
-    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), inArray(stations.type, ["hall", "carrosserie"]), eq(stations.active, true))).orderBy(asc(stations.name)))
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "hall"), eq(stations.active, true))).orderBy(asc(stations.name)))
       .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
     : [];
   return {

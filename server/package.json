@@ -12,6 +12,7 @@
     "integrity": "tsx src/scripts/integrity.ts",
     "freelancers": "tsx src/scripts/freelancers.ts",
     "seed:staging": "tsx src/scripts/seed_staging.ts",
+    "v5:move-bodyshop-vehicles": "tsx src/scripts/v5_move_bodyshop_vehicles.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
