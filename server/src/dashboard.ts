@@ -76,7 +76,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     .filter((s) => !siteSet || siteSet.has(s.id))
     .map((s) => {
       const here = rows.filter((r) => r.stationId === s.id);
-      const presentHere = here.filter((r) => r.statut !== "rendu");
+      const presentHere = here.filter((r) => r.statut === "reparatur"); // occupancy = cars in repair
       const byStatus: Record<string, { n: number; ids: string[] }> = Object.fromEntries(STATUSES.map((st) => [st, { n: 0, ids: [] as string[] }]));
       for (const r of here) { byStatus[r.statut].n++; byStatus[r.statut].ids.push(r.id); }
       const arrIds = new Set<string>(), depIds = new Set<string>();

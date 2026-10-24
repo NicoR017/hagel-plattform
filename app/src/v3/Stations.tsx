@@ -68,7 +68,7 @@ export function Stations({ userName }: { userName: string }) {
           </span>
           <span className="badge" style={{ background: "#EEF0F3", color: "#3B4555" }}>{typeLabel(s.type)}</span>
         </span>
-        <OccLine present={f.refs?.occupancy?.[s.id] ?? c.present} capacity={s.capacite} />
+        <OccLine present={f.refs?.occupancy?.[s.id] ?? c.rep} capacity={s.capacite} />
         <span className="three">
           <span><b>{c.kalk}</b>{t("v3ModeKalk")}</span>
           <span><b>{c.rep}</b>{t("v3ModeRep")}</span>

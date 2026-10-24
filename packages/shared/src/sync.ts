@@ -318,7 +318,7 @@ export interface PullResponse {
     repairLocations: { id: string; name: string; type: string; country: string; repairsPerDay: number; azureTenant: string | null }[];
     /** body shops (carrosserie sites, names only) a car can be sent to: the choices of the "At Bodyshop" column; only for users of the repair board */
     bodyshops: { id: string; name: string; azureTenant: string | null }[];
-    /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
+    /** occupancy per site = cars in repair status right now, for the sites the user can see */
     occupancy: Record<string, number>;
     settings: OrgSettings;
     me: {

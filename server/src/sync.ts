@@ -353,8 +353,9 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const warnings: string[] = [];
       if (dest.capacite > 0) {
         const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles)
-          .where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu")));
-        if (n >= dest.capacite) warnings.push("capacity_full");
+          .where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur")));
+        // the occupancy counts cars in repair: a car that is not being repaired does not take a place
+        if (row.statut === "reparatur" && n >= dest.capacite) warnings.push("capacity_full");
       }
       if (row.stationId && row.stationId !== dest.id) {
         const [from] = await tx.select().from(stations).where(eq(stations.id, row.stationId));
@@ -535,7 +536,7 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
   await audit(tx as unknown as Db, { orgId: dest.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: v.id, after: { stationId: v.stationId, ...pick(header, ["kennzeichen", "land"]) } });
   const warnings: string[] = [];
   if (dest.capacite > 0) {
-    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu")));
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur")));
     if (n > dest.capacite) warnings.push("capacity_full");
   }
   return { status: "ok", orgId: dest.orgId, seq, warnings };
@@ -638,12 +639,12 @@ export async function visibleStations(db: Db, u: Principal, orgId: string, vs: P
   return all.filter((x) => ids.has(x.id));
 }
 
-/** Vehicles physically present per site: every status but `rendu`, deleted ones excluded. */
+/** Occupancy of a site = the cars being repaired there right now (status "reparatur"), deleted ones excluded. */
 export async function occupancyOf(db: Pick<Db, "select">, orgId: string, stationIds: string[]): Promise<Record<string, number>> {
   const out: Record<string, number> = Object.fromEntries(stationIds.map((id) => [id, 0]));
   if (!stationIds.length) return out;
   const rows = await db.select({ id: vehicles.stationId, n: sql<number>`count(*)::int` }).from(vehicles)
-    .where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu"), inArray(vehicles.stationId, stationIds)))
+    .where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur"), inArray(vehicles.stationId, stationIds)))
     .groupBy(vehicles.stationId);
   for (const r of rows) if (r.id) out[r.id] = r.n;
   return out;

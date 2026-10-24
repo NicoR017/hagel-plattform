@@ -23,7 +23,7 @@ export function ModeChoice({ stationId }: { stationId: string }) {
   const st = f.refs?.stations.find((s) => s.id === stationId);
   if (!st) return <main><p className="empty">{f.refs ? t("v3NoStations") : t("loading")}</p></main>;
   const c = stationCounts(vehicles, st.id);
-  const present = f.refs?.occupancy?.[st.id] ?? c.present;
+  const present = f.refs?.occupancy?.[st.id] ?? c.rep;
   const nScans = scans.byStation.get(st.name) ?? 0;
   const pick = (mode: Mode) => { void setPrefs(f.db, { lastStationId: st.id, lastMode: mode }); go({ page: "list", stationId: st.id, mode }); };
 

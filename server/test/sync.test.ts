@@ -321,6 +321,7 @@ describe("status, move, delete", () => {
   it("moving into a full site warns but is allowed", async () => {
     const a = uuid(), b = uuid();
     await push(c, assessor, [createOp(a), createOp(b)]);
+    await push(c, assessor, [op("vehicle.status", { vehicleId: a, statut: "reparatur" }), op("vehicle.status", { vehicleId: b, statut: "reparatur" })]); // the occupancy counts cars in repair
     const r1 = await push(c, chefA, [op("vehicle.move", { vehicleId: a, toStationId: MINI })]);
     expect(r1.body.results[0].warnings ?? []).toEqual([]);
     const r2 = await push(c, chefA, [op("vehicle.move", { vehicleId: b, toStationId: MINI })]);

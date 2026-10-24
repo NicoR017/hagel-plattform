@@ -28,7 +28,7 @@ export const MODE_STATUSES: Record<Mode, string[]> = {
 export const matchesChip = (v: ModeVehicle, mode: Mode, chip: string) => chip === "all" || (v.statut === chip && inMode(v, mode));
 
 export interface StationCounts { kalk: number; rep: number; wait: number; present: number }
-/** numbers on a station card (deleted vehicles are not on the phone): present = every status but "Zurückgegeben" */
+/** numbers on a station card (deleted vehicles are not on the phone): present = every status but "Zurückgegeben" (the occupancy itself is `rep`: cars in repair) */
 export function stationCounts(vehicles: ModeVehicle[], stationId: string): StationCounts {
   const here = vehicles.filter((v) => v.stationId === stationId);
   return {
