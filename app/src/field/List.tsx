@@ -1,3 +1,4 @@
+import { isPlace } from "./places";
 import { useMemo, useRef, useState } from "react";
 import { STATUSES } from "@hagel/shared";
 import { buildXlsx, eur, fmtDate, h1, num, xlsxFileName } from "@hagel/documents";
@@ -53,8 +54,9 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const counts = Object.fromEntries(STATUSES.map((s) => [s, all.filter((v) => v.statut === s).length]));
   const days = [...new Set(all.map((v) => v.leistungsdatum as string).filter(Boolean))].sort().reverse();
   const sumNet = filtered.reduce((a, r) => a + r.c.netto, 0);
-  const sites = f.refs?.stations ?? [];
-  const customers = sites.filter((s) => s.type === "carrosserie");
+  const allStations = f.refs?.stations ?? [];
+  const sites = allStations.filter(isPlace); // places only: a body shop is a customer
+  const customers = allStations.filter((s) => s.type === "carrosserie");
   const ids = sel ? [...sel] : [];
   const selected = filtered.filter((r) => sel?.has(r.v.id)).map((r) => r.v);
 

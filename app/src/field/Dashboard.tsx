@@ -1,3 +1,4 @@
+import { isPlace } from "./places";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
 import { buildTechnicianWorkbook, eur, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
@@ -179,7 +180,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
         <details style={{ marginBottom: 12 }}>
           <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("filtersLabel")}{site || client || insurer ? " •" : ""}</summary>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-            {sel(site, setSite, t("allSites"), stations.filter((s) => s.active))}
+            {sel(site, setSite, t("allSites"), stations.filter((s) => s.active && isPlace(s)))}
             {sel(client, setClient, t("allClients"), stations.filter((s) => s.type === "carrosserie"))}
             {sel(insurer, setInsurer, t("allInsurers"), refs?.insurers ?? [])}
           </div>

@@ -8,7 +8,7 @@ import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helper
 import { users, vehicleAssignments } from "../../server/src/schema";
 
 let c: Ctx;
-let A: string, B: string;
+let A: string, B: string, CARRO: string;
 let n = 0;
 
 interface Phone { db: LocalDb; engine: SyncEngine; ctx: MutCtx; online: boolean; notices: any[]; token: string }
@@ -36,9 +36,10 @@ let tokens: Record<string, string> = {};
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id;
-  B = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20 } });
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; // places
+  B = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id; // the customer
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20 } });
   tokens.assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   tokens.chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
   tokens.chefA2 = await inviteAndAccept(c, c.orgES, "chefa2@example.test", { role_id: c.roleId.chef_site, station_id: A });
@@ -113,7 +114,7 @@ describe("two phones", () => {
     pa = phone(tokens.assessor);
     pb = phone(tokens.chefA);
     await sync(pa); await sync(pb);
-    id = await createVehicle(pa.ctx, { stationId: A, header: { kennzeichen: "SYNC 1", modell: "Original" } });
+    id = await createVehicle(pa.ctx, { stationId: A, clientStationId: CARRO, header: { kennzeichen: "SYNC 1", modell: "Original" } });
     await sync(pa);
   });
   it("the other phone receives it with the commission snapshot", async () => {
@@ -309,7 +310,7 @@ describe("misc", () => {
   it("shares: assessor sets the technician; server stores it; commission cannot be edited by him", async () => {
     const p = phone(tokens.assessor);
     await sync(p);
-    const id = await createVehicle(p.ctx, { stationId: A });
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: CARRO });
     await sync(p);
     await setShares(p.ctx, id, { techName: "Luis", techPct: 55 });
     await sync(p);

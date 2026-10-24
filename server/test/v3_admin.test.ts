@@ -5,14 +5,15 @@ import { auditLog, invitations, memberships, roleAssignments, sessions, technici
 import { isoWeekRange } from "../src/weekly";
 import { call, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
 
-let c: Ctx, A: string, chef: string, assessor: string;
+let c: Ctx, A: string, CARRO: string, chef: string, assessor: string;
 const S = () => c.superToken;
 const org = () => c.orgES;
 
 beforeAll(async () => {
   c = await setup();
-  const st = (await call(c, "GET", "/admin/stations", { token: S(), org: org() })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
+  const st = (await call(c, "GET", "/admin/stations", { token: S(), org: org() })).body as { id: string; type: string; name: string }[];
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A")!.id;
+  CARRO = st.find((s) => s.type === "carrosserie")!.id;
   chef = await inviteAndAccept(c, org(), "chef6@example.test", { role_id: c.roleId.chef_site });
   assessor = await inviteAndAccept(c, org(), "assessor6@example.test", { role_id: c.roleId.aufnehmer });
 });
@@ -131,7 +132,7 @@ describe("Wochenbericht", () => {
 
   it("lists the cars that reached Finish in the week with basis and amount, per person; the total to invoice is the sum", async () => {
     vid = uuid();
-    const r = ((await push(c, assessor, [op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: A, statut: "reparatur", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Wochen Tech", techPct: 50 }, header: { land: "ES", kennzeichen: "WK 1", modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
+    const r = ((await push(c, assessor, [op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: CARRO, statut: "reparatur", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Wochen Tech", techPct: 50 }, header: { land: "ES", kennzeichen: "WK 1", modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
     expect(r.status).toBe("ok");
     await c.h.db.insert(vehicleStatusHistory).values({ vehicleId: vid, statut: "fertig", at: new Date() });
     const res = await call(c, "GET", `/weekly-report?week=${thisWeek()}`, { token: S(), org: org() });

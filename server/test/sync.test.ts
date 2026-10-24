@@ -4,23 +4,24 @@ import { JPEG, PDF, call, dentsPanel, inviteAndAccept, op, pull, push, setup, ti
 import { auditLog, insurers, photos, technicians, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles, users } from "../src/schema";
 
 let c: Ctx;
-let A: string, B: string, MINI: string; // sites: A = carrosserie (customer + current site), B = hall, MINI = capacity 1
+let A: string, B: string, MINI: string, CARRO: string; // A = hall (current site), B = other hall, MINI = capacity 1, CARRO = customer carrosserie
 let chefA: string, assessor: string, tech: string, techId: string, carro: string, insurerTok: string, chefB: string;
 let insurerId: string;
 
 const header = (o: Record<string, unknown> = {}) => ({ land: "ES", kennzeichen: "1234 ABC", fin: "", modell: "Seat Leon", kunde: "Carrosserie Test Talavera", leistungsdatum: "2026-10-19", stundensatz: 69, ...o });
 const createOp = (id: string, extra: Record<string, unknown> = {}) =>
-  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: header(), panels: {}, shares: { techName: "Ana", techPct: 50 }, ...extra } });
+  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: header(), panels: {}, shares: { techName: "Ana", techPct: 50 }, ...extra } });
 
 const byId = (list: any[], id: string) => list.find((v) => v.id === id);
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id;
-  B = st.find((s) => s.type === "hall").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id;
+  B = st.find((s) => s.type === "hall" && s.id !== A).id;
   // customer carrosserie with a 20 % commission
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20, commission_mode: "pct" } });
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20, commission_mode: "pct" } });
   MINI = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "hall", name: "Mini", capacite: 1 } })).body.id;
   [insurerId] = (await c.h.db.insert(insurers).values({ orgId: c.orgES, name: "Allianz" }).returning()).map((i) => i.id);
 
@@ -31,7 +32,7 @@ beforeAll(async () => {
   // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
   await c.h.db.delete(technicians);
   techId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
-  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: CARRO });
   insurerTok = await inviteAndAccept(c, c.orgES, "ins@example.test", { role_id: c.roleId.assureur, scope_insurer_id: insurerId });
 });
 afterAll(async () => { await c.h.close(); });
@@ -258,7 +259,7 @@ describe("pull: what each role receives (restricted fields never reach the phone
     const t = await call(c, "GET", "/admin/stations", { token: tech, org: c.orgES });
     expect(JSON.stringify(t.body)).not.toMatch(/commission|reportEmails|azure/i);
     const k = await call(c, "GET", "/admin/stations", { token: carro, org: c.orgES });
-    expect(k.body.map((s: any) => s.id)).toEqual([A]); // the customer only knows its own site
+    expect(k.body.map((s: any) => s.id)).toEqual([CARRO]); // the customer only knows its own site
     const full = await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES });
     expect(JSON.stringify(full.body)).toContain("commissionPct");
   });
@@ -307,7 +308,7 @@ describe("status, move, delete", () => {
     const forB = await pull(c, chefB, c.orgES);
     const vb = byId(forB.vehicles, mid);
     expect(vb).toBeTruthy();
-    expect(vb.clientStationId).toBe(A); // the customer never changes
+    expect(vb.clientStationId).toBe(CARRO); // the customer never changes
     expect(vb.werkPct).toBe(20); // the commission snapshot travels with the vehicle (chef de site may see the internal split)
   });
   it("move audit trail and customer visibility", async () => {

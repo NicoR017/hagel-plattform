@@ -29,8 +29,11 @@ const measured = async (plate: string) => {
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { repairs_per_day: 1, report_emails: ["taller@example.test"] } });
+  const st2 = st as { id: string; type: string; name: string }[];
+  A = st2.find((s) => s.type === "hall" && s.name === "Nave Test A")!.id; // a PLACE
+  const CARRO = st2.find((s) => s.type === "carrosserie")!.id; // the customer
+  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { repairs_per_day: 1 } });
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { report_emails: ["taller@example.test"] } });
   const token = await inviteAndAccept(c, c.orgES, "chef@example.test", { role_id: c.roleId.chef_site });
   db = new LocalDb("v4-phone");
   const http: Http = async (method, path, body, init) => {

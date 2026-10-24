@@ -9,7 +9,7 @@ import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ct
 
 const JPG = new Uint8Array(readFileSync(resolve(__dirname, "../../assets/pdr-team-logo.jpg")));
 
-let c: Ctx, A: string, NOMAIL: string;
+let c: Ctx, A: string, CARRO: string, NOMAIL: string;
 let assessor: string, chefA: string, tech: string, carro: string, techUserId: string, insurerId: string, techAll: { token: string; userId: string };
 
 async function pdfText(bytes: Uint8Array): Promise<string> {
@@ -39,7 +39,7 @@ const sends = async (id: string) => (await c.h.db.select().from(reportSends).whe
 /** a vehicle ready for Finish: measured, in repair, technician assigned, to-dos none, all checks done, one photo per stage (a real JPEG) */
 async function readyToFinish(plate: string, station = A, extra: Record<string, unknown> = {}, w: { token: string; userId: string } = { token: tech, userId: techUserId }): Promise<string> {
   const id = uuid();
-  const r = await one(assessor, op("vehicle.create", { vehicle: { id, stationId: station, clientStationId: station, insurerId: extra.insurerId ?? null, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Test Tech", techPct: 55 }, header: { land: "ES", kennzeichen: plate, modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69, partsToReplace: ["Antenne"] } } }));
+  const r = await one(assessor, op("vehicle.create", { vehicle: { id, stationId: station, clientStationId: (extra.client as string | undefined) ?? CARRO, insurerId: extra.insurerId ?? null, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Test Tech", techPct: 55 }, header: { land: "ES", kennzeichen: plate, modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69, partsToReplace: ["Antenne"] } } }));
   expect(r.status).toBe("ok");
   expect((await one(assessor, op("vehicle.repairStage", { vehicleId: id, stage: "bereit" }))).status).toBe("ok");
   expect((await one(assessor, op("vehicle.assign", { vehicleId: id, kind: "pdr", userIds: [w.userId] }))).status).toBe("ok");
@@ -59,9 +59,10 @@ async function readyToFinish(plate: string, station = A, extra: Record<string, u
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string; name: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10, report_emails: ["taller@example.test"] } });
-  NOMAIL = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "carrosserie", name: "Sin correo", capacite: 10 } })).body.id;
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A")!.id; // the place
+  CARRO = st.find((s) => s.type === "carrosserie")!.id; // the customer (commission, report e-mails)
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10, report_emails: ["taller@example.test"] } });
+  NOMAIL = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgES, body: { name: "Sin correo" } })).body.id;
   [insurerId] = (await c.h.db.insert(insurers).values({ orgId: c.orgES, name: "Allianz", reportEmails: ["siniestros@allianz.test"], sendReports: true, reportsToSend: "both" }).returning()).map((i) => i.id);
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site });
@@ -69,7 +70,7 @@ beforeAll(async () => {
   techUserId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
   const tokAll = await inviteAndAccept(c, c.orgES, "techall@example.test", { role_id: c.roleId.technicien });
   techAll = { token: tokAll, userId: (await c.h.db.select().from(users).where(eq(users.email, "techall@example.test")))[0].id };
-  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: CARRO });
   // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
   await c.h.db.delete(technicians);
 });
@@ -161,7 +162,7 @@ describe("the repair report at Finish", () => {
   });
 
   it("no recipients (no e-mail on the station, no insurer): Finish works, the missing list is logged as 'no_recipients'", async () => {
-    const other = await readyToFinish("REP 104", NOMAIL, {}, techAll);
+    const other = await readyToFinish("REP 104", A, { client: NOMAIL }, techAll);
     c.mailer.sent.length = 0;
     // the technician is assigned by user id: he needs a role on that station to move the card (use the chef)
     expect((await one(chefA, op("vehicle.repairStage", { vehicleId: other, stage: "finish" }))).status).toBe("ok");

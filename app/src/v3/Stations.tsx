@@ -1,3 +1,4 @@
+import { isPlace } from "../field/places";
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { t } from "../i18n";
@@ -36,7 +37,7 @@ export function Stations({ userName }: { userName: string }) {
   const scans = useNewScans();
   const prefs = useLiveQuery(() => getPrefs(f.db), [f.db]);
   const [q, setQ] = useState("");
-  const list = useMemo(() => (f.refs?.stations ?? []).filter((s) => s.active), [f.refs]);
+  const list = useMemo(() => (f.refs?.stations ?? []).filter((s) => s.active && isPlace(s)), [f.refs]);
   const last = prefs?.lastStationId ?? null;
   const lastStation = list.find((s) => s.id === last);
 
@@ -83,7 +84,6 @@ export function Stations({ userName }: { userName: string }) {
   const ordered = (type: string) => shown.filter((s) => s.type === type).sort((x, y) => rank(x.id) - rank(y.id) || x.name.localeCompare(y.name, "de"));
   const groups = [
     { key: "hall", title: t("v6GroupHall") },
-    { key: "carrosserie", title: t("v6GroupCarro") },
     { key: "parc", title: t("v6GroupParc") },
   ].map((g) => ({ ...g, all: ordered(g.key) })).filter((g) => g.all.length);
   const LIMIT = 3;

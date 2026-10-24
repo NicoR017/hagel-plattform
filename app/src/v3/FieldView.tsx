@@ -1,3 +1,4 @@
+import { isPlace } from "../field/places";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PANEL_MAP, type Panel } from "@hagel/calc";
 import { eur } from "@hagel/documents";
@@ -191,7 +192,7 @@ export function FieldCars({ stationId, who }: { stationId: string; who: { kind: 
 export function FieldStations({ who, fvStations }: { who: { kind: FieldKind; meId: string }; fvStations: string[] }) {
   const f = useField();
   const all = useVehicles();
-  const stations = (f.refs?.stations ?? []).filter((s) => s.active);
+  const stations = (f.refs?.stations ?? []).filter((s) => s.active && isPlace(s));
   const mineBy = (id: string) => all.filter((v) => v.stationId === id && isMine(asField(v), who.kind));
   const list = stations.filter((s) => fvStations.includes(s.id) || mineBy(s.id).length > 0);
   useEffect(() => {

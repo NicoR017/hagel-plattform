@@ -11,7 +11,7 @@ let c: Ctx, A: string, token: string;
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
+  A = (st as { id: string; type: string; name: string }[]).find((s) => s.type === "hall" && s.name === "Nave Test A")!.id; // a place
   token = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
 });
 afterAll(async () => { await c.h.close(); });

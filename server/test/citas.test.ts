@@ -15,7 +15,7 @@ const RK = "9547 LPV";
 const URL_PDF = "https://storagecolibri.blob.core.windows.net/allscans/20261019-1627_9547 LPV.pdf";
 const DAY = "2026-10-19";
 
-let c: Ctx, A: string, HALL: string, ins: string;
+let c: Ctx, A: string, CARRO: string, HALL: string, ins: string;
 let admin: string, importer: string, techA: string;
 
 beforeAll(async () => {
@@ -27,8 +27,8 @@ beforeAll(async () => {
   az.add("BusinessCustomersInsurance", { PartitionKey: "x", RowKey: "l-1", BusinessCustomerInsurance: "Carrosserie Talavera - Allianz", BusinessCustomerId: "bc-1", InsuranceId: "ins-1" });
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["TenantA"] } });
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; HALL = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
+  CARRO = st.find((s) => s.type === "carrosserie").id; A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; HALL = st.find((s) => s.type === "hall" && s.name !== "Nave Test A").id;
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
   await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["Nave Madrid"], country: "ES" } });
   ins = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Allianz (alt)", azure_insurance_id: "ins-1" } })).body.id;
   await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Mutua Madrileña" } });

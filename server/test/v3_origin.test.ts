@@ -5,13 +5,15 @@ import { colibriScans, vehicles } from "../src/schema";
 import { reopenScansOfDeletedVehicles } from "../src/azure_sync";
 import { call, dentsPanel, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
-let c: Ctx, A: string, imported: string, manual: string;
+let c: Ctx, A: string, CARRO: string, imported: string, manual: string;
 beforeAll(async () => {
   c = await setup();
-  A = ((await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[]).find((s) => s.type === "carrosserie")!.id;
+  const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string; name: string }[];
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A")!.id; // the place
+  CARRO = st.find((s) => s.type === "carrosserie")!.id; // the customer
   const mk = async (plate: string) => {
     const id = uuid();
-    const r = ((await push(c, c.superToken, [op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 4 }) }, header: { land: "ES", kennzeichen: plate, modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
+    const r = ((await push(c, c.superToken, [op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 4 }) }, header: { land: "ES", kennzeichen: plate, modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
     expect(r.status).toBe("ok");
     return id;
   };

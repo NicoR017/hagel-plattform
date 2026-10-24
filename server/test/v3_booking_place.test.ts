@@ -5,7 +5,7 @@ import { repairBookings, repairEvents, stations, vehicleMoves, vehicles } from "
 import { runDueBookings, todayIn } from "../src/repair";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
-let c: Ctx, A: string, B: string, PARC: string, assessor: string, chefA: string;
+let c: Ctx, A: string, B: string, CARRO: string, PARC: string, assessor: string, chefA: string;
 const one = async (token: string, o: unknown) => ((await push(c, token, [o])).body.results as { status: string; code?: string }[])[0];
 function workday(n: number): string {
   const d = new Date(todayIn("Europe/Madrid") + "T12:00:00Z");
@@ -14,7 +14,7 @@ function workday(n: number): string {
 }
 const car = async (plate: string) => {
   const id = uuid();
-  expect((await one(assessor, op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 10, "30": 4 }) }, header: { land: "ES", kennzeichen: plate, modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } }))).status).toBe("ok");
+  expect((await one(assessor, op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 10, "30": 4 }) }, header: { land: "ES", kennzeichen: plate, modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } }))).status).toBe("ok");
   return id;
 };
 const book = (vehicleId: string, date: string, stationId?: string) => op("booking.create", { vehicleId, booking: { id: uuid(), date, time: "08:30", phone: "+34 612 345 678", email: "kunde@example.test", ...(stationId ? { stationId } : {}) } });
@@ -23,8 +23,10 @@ const bookingOf = async (vehicleId: string) => (await c.h.db.select().from(repai
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
-  B = st.find((s) => s.type === "hall")!.id;
+  const halls = (st as any[]).filter((s) => s.type === "hall");
+  A = halls.find((s) => s.name === "Nave Test A").id;
+  B = halls.find((s) => s.name !== "Nave Test A").id;
+  CARRO = st.find((s) => s.type === "carrosserie")!.id; // customer only, never a place
   PARC = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "parc", name: "Parking", capacite: 20 } })).body.id;
   await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { repairs_per_day: 3 } });
   await call(c, "PUT", `/admin/stations/${B}`, { token: c.superToken, org: c.orgES, body: { repairs_per_day: 1 } });
@@ -34,11 +36,12 @@ beforeAll(async () => {
 afterAll(async () => { await c.h.close(); });
 
 describe("repair appointment at another place", () => {
-  it("the choices travel with the data for the people who book (halls and body shops, not car parks)", async () => {
+  it("the choices travel with the data for the people who book (halls only: not car parks, not body shops)", async () => {
     const p = await pull(c, assessor, c.orgES);
     const ids = p.refs.repairLocations.map((x: { id: string }) => x.id);
     expect(ids).toEqual(expect.arrayContaining([A, B]));
     expect(ids).not.toContain(PARC);
+    expect(ids).not.toContain(CARRO);
   });
 
   it("booked for another hall: that hall's capacity counts, the origin is remembered, the car stays where it is until the day", async () => {

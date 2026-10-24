@@ -9,7 +9,7 @@ import { snapshotVehicles, undoMove, undoStatus } from "../src/field/undo";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { vehicleMoves, vehicleStatusHistory, vehicles } from "../../server/src/schema";
 
-let c: Ctx, A: string, B: string, db: LocalDb, engine: SyncEngine, mut: MutCtx, tokenA: string, n = 0;
+let c: Ctx, A: string, B: string, CARRO: string, db: LocalDb, engine: SyncEngine, mut: MutCtx, tokenA: string, n = 0;
 const sync = () => engine.syncNow(c.orgES);
 /** a phone signed in as `token` */
 function phone(token: string) {
@@ -28,8 +28,10 @@ const newVehicle = async (plate: string) => { const id = await createVehicle(mut
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
-  B = st.find((s) => s.type === "hall")!.id;
+  const named = st as { id: string; type: string; name: string }[];
+  A = named.find((s) => s.type === "hall" && s.name === "Nave Test A")!.id; // places
+  B = named.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid")!.id;
+  CARRO = named.find((s) => s.type === "carrosserie")!.id; // the customer
   // a station manager with rights on BOTH stations (organisation-wide) and one who only has station A
   const both = await inviteAndAccept(c, c.orgES, "chef@example.test", { role_id: c.roleId.chef_site });
   tokenA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
@@ -73,14 +75,14 @@ describe("undo", () => {
 
   it("move: the vehicle returns to its station; both moves are logged, the customer never changes", async () => {
     const id = await newVehicle("UNDO 4");
-    await setHeader(mut, id, { clientStationId: A }); await sync();
+    await setHeader(mut, id, { clientStationId: CARRO }); await sync();
     const before = await snapshotVehicles(db, [id]);
     await moveVehicle(mut, id, B, "move test"); await sync();
     expect((await row(id)).stationId).toBe(B);
     await undoMove(mut, before, B, "Rückgängig gemacht"); await sync();
     const r = await row(id);
     expect(r.stationId).toBe(A);
-    expect(r.clientStationId).toBe(A);
+    expect(r.clientStationId).toBe(CARRO);
     const moves = (await c.h.db.select().from(vehicleMoves).where(eq(vehicleMoves.vehicleId, id))).sort((x, y) => x.at.getTime() - y.at.getTime());
     expect(moves.map((m) => [m.fromStationId, m.toStationId, m.note])).toEqual([[A, B, "move test"], [B, A, "Rückgängig gemacht"]]);
   });

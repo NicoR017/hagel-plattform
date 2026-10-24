@@ -9,13 +9,13 @@ import { calcMethods, insurerMethods, insurers, photos, repairBookings, repairEv
 import { JPEG, call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;
-let A: string, B: string; // A = carrosserie (customer + current site), B = hall
+let A: string, B: string, CARRO: string; // A = hall (current place), B = another hall, CARRO = carrosserie (customer only)
 let assessor: string, chefA: string, tech: string, carro: string, insurerTok: string, techUserId: string, techRowId: string, insurerId: string;
 
 const hdr = (o: Record<string, unknown> = {}) => ({ land: "ES", kennzeichen: "1234 ABC", modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69, ...o });
 const panels = () => ({ haube: dentsPanel("haube", { "20": 12, "30": 6 }) });
 const create = (id: string, extra: Record<string, unknown> = {}, header: Record<string, unknown> = {}) =>
-  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: hdr(header), panels: panels(), shares: {}, statut: "besichtigung", ...extra } });
+  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: hdr(header), panels: panels(), shares: {}, statut: "besichtigung", ...extra } });
 const ok = async (token: string, ops: unknown[]) => {
   const r = await push(c, token, ops);
   expect(r.status).toBe(200);
@@ -38,9 +38,11 @@ const book = (vehicleId: string, date: string, extra: Record<string, unknown> = 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id;
-  B = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10, report_emails: ["taller@example.test"], repairs_per_day: 2 } });
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id;
+  B = st.find((s) => s.type === "hall" && s.name !== "Nave Test A").id;
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10, report_emails: ["taller@example.test"] } });
+  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { repairs_per_day: 2 } });
   [insurerId] = (await c.h.db.insert(insurers).values({ orgId: c.orgES, name: "Allianz", reportEmails: ["siniestros@allianz.test"], sendReports: true, reportsToSend: "both" }).returning()).map((i) => i.id);
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
@@ -48,7 +50,7 @@ beforeAll(async () => {
   techUserId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
   await c.h.db.delete(technicians); // the invitation created a record of its own
   techRowId = (await c.h.db.insert(technicians).values({ orgId: c.orgES, name: "Test Tech", userId: techUserId, kind: "pdr" }).returning())[0].id;
-  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: CARRO });
   insurerTok = await inviteAndAccept(c, c.orgES, "ins@example.test", { role_id: c.roleId.assureur, scope_insurer_id: insurerId });
 });
 afterAll(async () => { await c.h.close(); });
@@ -450,13 +452,13 @@ describe("recipients", () => {
     expect(recipientsFor({ carrosserieEmails: ["t@x.test"], insurer: ins }, "termin")).toEqual(["t@x.test"]);
   });
   it("the admin preview pre-fills the list from the insurers selected on the station, flagging removed ones", async () => {
-    await c.h.db.execute(await import("drizzle-orm").then(({ sql }) => sql`insert into station_insurers (station_id, insurer_id) values (${A}, ${insurerId}) on conflict do nothing`));
-    let p = (await call(c, "GET", `/admin/stations/${A}/recipients`, { token: c.superToken, org: c.orgES })).body;
+    await c.h.db.execute(await import("drizzle-orm").then(({ sql }) => sql`insert into station_insurers (station_id, insurer_id) values (${CARRO}, ${insurerId}) on conflict do nothing`));
+    let p = (await call(c, "GET", `/admin/stations/${CARRO}/recipients`, { token: c.superToken, org: c.orgES })).body;
     expect(p.manual).toEqual(["taller@example.test"]);
     expect(p.auto).toEqual([{ insurerId, insurer: "Allianz", email: "siniestros@allianz.test", excluded: false }]);
     expect(p.effective).toEqual(["taller@example.test", "siniestros@allianz.test"]);
-    await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { excluded_insurer_emails: ["siniestros@allianz.test"] } });
-    p = (await call(c, "GET", `/admin/stations/${A}/recipients`, { token: c.superToken, org: c.orgES })).body;
+    await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { excluded_insurer_emails: ["siniestros@allianz.test"] } });
+    p = (await call(c, "GET", `/admin/stations/${CARRO}/recipients`, { token: c.superToken, org: c.orgES })).body;
     expect(p.auto[0].excluded).toBe(true);
     expect(p.effective).toEqual(["taller@example.test"]);
     // the real send for a vehicle of that insurer honours the exclusion
@@ -464,7 +466,7 @@ describe("recipients", () => {
     const r = await call(c, "GET", `/reports/recipients?vehicleId=${id}&type=kva`, { token: assessor, org: c.orgES });
     expect(r.body.recipients ?? r.body).toEqual(expect.arrayContaining(["taller@example.test"]));
     expect(JSON.stringify(r.body)).not.toContain("allianz");
-    await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { excluded_insurer_emails: [] } });
+    await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { excluded_insurer_emails: [] } });
   });
   it("technician kind (pdr / headliner) is stored and sent to people who may see the split", async () => {
     const t = await call(c, "POST", "/admin/technicians", { token: c.superToken, org: c.orgES, body: { name: "Hans Headliner", kind: "headliner", default_pct_demontage: 80 } });

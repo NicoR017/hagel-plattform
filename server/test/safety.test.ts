@@ -53,11 +53,12 @@ describe("ModeMailer", () => {
 });
 
 describe("old op shapes and the public config", () => {
-  let c: Ctx, st: string, assessor: string;
+  let c: Ctx, st: string, cust: string, assessor: string;
   beforeAll(async () => {
     c = await setup();
     const sts = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-    st = sts.find((s) => s.type === "carrosserie")!.id;
+    st = sts.find((s) => s.type === "hall")!.id; // a place
+    cust = sts.find((s) => s.type === "carrosserie")!.id; // the customer
     assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   });
   afterAll(async () => { await c.h.close(); });
@@ -97,7 +98,7 @@ describe("old op shapes and the public config", () => {
 
   it("an op type this server does not know: 409 unsupported_op, NOTHING of the batch is applied (the client keeps it queued)", async () => {
     const id = uuid();
-    const known = op("vehicle.create", { vehicle: { id, stationId: st, clientStationId: st, header: { land: "ES", kennzeichen: "9999 ZZZ" }, panels: {}, shares: {} } });
+    const known = op("vehicle.create", { vehicle: { id, stationId: st, clientStationId: cust, header: { land: "ES", kennzeichen: "9999 ZZZ" }, panels: {}, shares: {} } });
     const future = op("vehicle.teleport", { vehicleId: id, to: "mars" });
     const r = await push(c, assessor, [known, future]);
     expect(r.status).toBe(409);
@@ -125,7 +126,7 @@ describe("old op shapes and the public config", () => {
     expect(again.stable).toEqual(before.stable);
     const id = uuid();
     await push(c, assessor, [
-      op("vehicle.create", { vehicle: { id, stationId: st, clientStationId: st, header: { land: "ES", kennzeichen: "7777 QQQ", stundensatz: 69 }, panels: { haube: dentsPanel("haube", { "20": 30 }) }, shares: {} } }),
+      op("vehicle.create", { vehicle: { id, stationId: st, clientStationId: cust, header: { land: "ES", kennzeichen: "7777 QQQ", stundensatz: 69 }, panels: { haube: dentsPanel("haube", { "20": 30 }) }, shares: {} } }),
     ]);
     const after = await buildReport(c.h.db);
     expect(after.stable.netDigest).not.toBe(before.stable.netDigest);

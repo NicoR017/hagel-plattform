@@ -13,7 +13,7 @@ const PK = "20261019-1627";
 const RK = "9547 LPV";
 const URL_PDF = "https://storagecolibri.blob.core.windows.net/allscans/20261019-1627_9547 LPV.pdf";
 
-let c: Ctx, A: string, HALL: string, DEEA: string, ins: string;
+let c: Ctx, A: string, HALL: string, OTHER: string, DEEA: string, ins: string;
 let importer: string, chefA: string, tech: string, admin: string, deAdmin: string;
 
 const img = async (w: number, h: number, fmt: "jpeg" | "png") => new Uint8Array(await sharp({ create: { width: w, height: h, channels: 3, background: "#4a7" } })[fmt]().toBuffer());
@@ -37,17 +37,17 @@ beforeAll(async () => {
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["TenantA"] } });
   await call(c, "PUT", `/admin/orgs/${c.orgDE}/tenants`, { token: c.superToken, body: { tenants: ["TenantB"] } });
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; HALL = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", commission_pct: 20, country: "ES", report_emails: ["t@x.test"] } });
+  A = st.find((s) => s.type === "carrosserie").id; HALL = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id; OTHER = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id;
+  await call(c, "PUT", `/admin/bodyshops/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", commission_pct: 20, country: "ES", report_emails: ["t@x.test"] } });
   await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["nave  MADRID"], country: "ES" } });
-  DEEA = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgDE, body: { type: "carrosserie", name: "Karosserie DE", azure_tenant: "TenantB", azure_business_customer_id: "bc-1", country: "DE" } })).body.id;
+  DEEA = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgDE, body: { name: "Karosserie DE", azure_tenant: "TenantB", azure_business_customer_id: "bc-1", country: "DE" } })).body.id;
   ins = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Allianz (alt)", azure_insurance_id: "ins-1" } })).body.id;
   await call(c, "POST", "/admin/campaigns", { token: c.superToken, org: c.orgES, body: { name: "Camp Oct", country: "ES", start: "2026-01-01", end: "2027-12-31", station_ids: [HALL] } });
 
   admin = await inviteAndAccept(c, c.orgES, "admin@example.test", { role_id: c.roleId.org_admin });
   importer = await inviteAndAccept(c, c.orgES, "importer@example.test", { role_id: c.roleId.aufnehmer });
-  chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
-  tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: OTHER });
+  tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: OTHER });
   const rolesDE = (await call(c, "GET", "/admin/roles", { token: c.superToken, org: c.orgDE })).body as any[];
   deAdmin = await inviteAndAccept(c, c.orgDE, "deadmin@example.test", { role_id: rolesDE.find((r) => r.key === "org_admin").id });
 
@@ -459,14 +459,14 @@ describe("administration: status, mapping, pickers", () => {
   });
 
   it("a site can be linked to several customers through the API; the single legacy field still works and mirrors the first", async () => {
-    const mk = await call(c, "POST", "/admin/stations", { token: admin, org: c.orgES, body: { type: "carrosserie", name: "Multi", azure_tenant: "TenantA", azure_business_customer_ids: ["bc-1", "bc-2"], azure_link_ids: ["l-9"], country: "ES" } });
+    const mk = await call(c, "POST", "/admin/bodyshops", { token: admin, org: c.orgES, body: { name: "Multi", azure_tenant: "TenantA", azure_business_customer_ids: ["bc-1", "bc-2"], azure_link_ids: ["l-9"], country: "ES" } });
     expect(mk.status).toBe(201);
     expect(mk.body).toMatchObject({ azureBcIds: ["bc-1", "bc-2"], azureBusinessCustomerId: "bc-1", azureLinkIds: ["l-9"] });
-    const legacy = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_id: "bc-2" } });
+    const legacy = await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_id: "bc-2" } });
     expect(legacy.body).toMatchObject({ azureBcIds: ["bc-2"], azureBusinessCustomerId: "bc-2" });
-    const clear = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_ids: [], azure_business_customer_id: null } });
+    const clear = await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_ids: [], azure_business_customer_id: null } });
     expect(clear.body).toMatchObject({ azureBcIds: [], azureBusinessCustomerId: null });
-    await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { active: false } });
+    await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { active: false } });
   });
 
   it("mapping a customer: create a new carrosserie from the Azure name, or link an existing one; tenant must belong to the organisation", async () => {

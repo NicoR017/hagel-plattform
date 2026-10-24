@@ -1,3 +1,4 @@
+import { isPlace } from "../field/places";
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { api } from "../api";
@@ -133,7 +134,7 @@ export function NewScans() {
 /** A scan that belongs to no station: choose where the car is created (the last station used is preselected). */
 function StationAsk({ scan, last, onGo, onClose }: { scan: Scan; last: string | null; onGo: (stationId: string) => void; onClose: () => void }) {
   const f = useField();
-  const sites = (f.refs?.stations ?? []).filter((s) => s.active && (!s.azureTenant || !scan.tenant || s.azureTenant === scan.tenant));
+  const sites = (f.refs?.stations ?? []).filter((s) => s.active && isPlace(s) && (!s.azureTenant || !scan.tenant || s.azureTenant === scan.tenant));
   const [id, setId] = useState<string>(last && sites.some((s) => s.id === last) ? last : "");
   const typeWord = (ty: string) => (ty === "hall" ? t("v3TypeHall") : ty === "parc" ? t("v3TypeParc") : t("v3TypeCarrosserie"));
   const items: PickItem[] = sites.map((s) => ({ id: s.id, title: s.name, sub: [typeWord(s.type), s.address].filter(Boolean).join(" · "), search: [typeWord(s.type), s.address], rank: s.id === last ? 0 : 1 }));

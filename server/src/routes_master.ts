@@ -275,7 +275,11 @@ export function masterRoutes({ db, hub, storage, require, validationHook }: Deps
   });
 
   // ------------------------------------------------------------ station recipients (pre-filled list) and calculation methods
-  r.get("/stations/:id/recipients", require("stations.gerer"), async (c) => {
+  r.get("/stations/:id/recipients", async (c, next) => {
+    const u = c.get("principal"), o = c.get("orgId");
+    if (!(hasOrgPermission(u, "stations.gerer", o) || hasOrgPermission(u, "bodyshops.gerer", o))) throw new HttpError(403, "forbidden");
+    await next();
+  }, async (c) => {
     const p = await stationRecipientPreview(db, c.req.param("id") ?? "", org(c));
     if (!p) throw new HttpError(404, "station_not_found");
     return c.json(p);

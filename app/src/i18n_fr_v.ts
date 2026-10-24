@@ -83,7 +83,7 @@ export const frV: Record<string, string> = {
   v6DeleteRole: "Supprimer le rôle", v6DeleteRoleQ: "Supprimer le rôle ?", v6DeleteRoleUsed: "Ce rôle a encore des membres. Choisissez un rôle de remplacement qui reprendra leurs affectations et les invitations en attente.",
   v6Replacement: "Rôle de remplacement", v6DeleteRoleGo: "Supprimer et réaffecter", v6RoleMembers: "affectations",
   v6PermGroupVehicles: "Véhicules", v6PermGroupMoney: "Finances", v6PermGroupDocs: "Documents et photos", v6PermGroupDash: "Colibri et tableau de bord", v6PermGroupAdmin: "Administration", v6PermGroupRepair: "Réparation",
-  v6RepairsPerDay: "Réparations par jour", v6StationInsurers: "Assurances de la station", v6Recipients: "Destinataires des rapports", v6RecipientsHint: "Plusieurs adresses, à ajouter une par une. L'adresse d'une assurance sélectionnée est ajoutée automatiquement et peut être retirée séparément.",
+  v6RepairsPerDay: "Réparations par jour", v6StationInsurers: "Assurances avec lesquelles il travaille", v6Recipients: "Destinataires des rapports", v6RecipientsHint: "Plusieurs adresses, à ajouter une par une. L'adresse d'une assurance sélectionnée est ajoutée automatiquement et peut être retirée séparément.",
   v6AddRecipient: "Ajouter une adresse", v6Automatic: "automatique", v6RestoreAuto: "rajouter", v6NoRecipients: "Aucun destinataire : les rapports sont uniquement envoyés à l'assurance du véhicule.",
   v6BadEmail: "Adresse e-mail invalide", v6SaveFirst: "Enregistrez d'abord, puis choisissez les assurances.", v6Occupancy: "Occupation", v6Commission: "Commission",
   v6MethodPerCountry: "Méthode de calcul", v6MethodStandard: "— Standard —", v6MethodDE: "Méthode Allemagne", v6MethodES: "Méthode Espagne",

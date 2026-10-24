@@ -8,7 +8,7 @@ import { isNotNull } from "drizzle-orm";
 import { technicians } from "../../server/src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
-let c: Ctx, A: string, n = 0, ins: string;
+let c: Ctx, A: string, CARRO: string, n = 0, ins: string;
 interface Phone { db: LocalDb; engine: SyncEngine; ctx: MutCtx; online: boolean; token: string }
 function phone(token: string): Phone {
   const db = new LocalDb(`p4-${++n}`);
@@ -31,10 +31,11 @@ const tokens: Record<string, string> = {};
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { report_emails: ["taller@example.test"], commission_pct: 20 } });
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; // the place
+  CARRO = st.find((s) => s.type === "carrosserie").id; // the customer
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { report_emails: ["taller@example.test"], commission_pct: 20 } });
   ins = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Mutua", report_emails: ["mutua@example.test"], send_reports: true, reports_to_send: "both" } })).body.id;
-  await call(c, "PUT", `/admin/stations/${A}/insurers`, { token: c.superToken, org: c.orgES, body: { insurer_ids: [ins] } });
+  await call(c, "PUT", `/admin/stations/${CARRO}/insurers`, { token: c.superToken, org: c.orgES, body: { insurer_ids: [ins] } });
   await call(c, "POST", "/admin/campaigns", { token: c.superToken, org: c.orgES, body: { name: "Camp 1", country: "ES", station_ids: [A] } });
   await call(c, "POST", "/admin/technicians", { token: c.superToken, org: c.orgES, body: { name: "Luis", default_pct_pdr: 55, default_pct_demontage: 80 } });
   tokens.assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
@@ -50,11 +51,11 @@ describe("master data on the phone", () => {
     await sync(p);
     const refs = await refsOf(p);
     expect(refs.insurers.map((i) => i.name)).toEqual(["Mutua"]);
-    expect(refs.stationInsurers).toEqual([{ stationId: A, insurerId: ins }]);
+    expect(refs.stationInsurers).toEqual([{ stationId: CARRO, insurerId: ins }]);
     expect(refs.campaigns.map((x) => x.name)).toEqual(["Camp 1"]);
     expect(refs.companies.map((x) => x.name).sort()).toEqual(["Neutral (ohne Logo)", "PDR Team GmbH"]);
     expect(refs.technicians).toEqual([expect.objectContaining({ name: "Luis", defaultPctPdr: 55, defaultPctDemontage: 80 })]);
-    const id = await createVehicle(p.ctx, { stationId: A });
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: CARRO });
     const v = (await p.db.vehicles.get(id))!;
     expect((v as any).companyId).toBe(refs.companies.find((x) => x.name === "PDR Team GmbH")!.id);
     await setHeader(p.ctx, id, { insurerId: ins, campaignId: refs.campaigns[0].id, claimNumber: "SIN-1" });
@@ -71,7 +72,7 @@ describe("master data on the phone", () => {
     await sync(p);
     const refs = await refsOf(p);
     const pdr = refs.companies.find((x) => x.name === "PDR Team GmbH")!, neutral = refs.companies.find((x) => x.name.startsWith("Neutral"))!;
-    const id = await createVehicle(p.ctx, { stationId: A });
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: CARRO });
     const v = (await p.db.vehicles.get(id))!;
     const lh = await letterheadFor({ ...v, companyId: pdr.id } as any, refs, p.db, p.engine);
     expect(lh?.name).toBe("PDR Team GmbH");
@@ -91,7 +92,7 @@ describe("sending a report (offline capable)", () => {
   it("queued offline → accepted and uploaded when online → e-mailed with the PDF; the local copy of the PDF is dropped", async () => {
     const p = phone(tokens.assessor);
     await sync(p);
-    const id = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "SEND 1", modell: "Leon" } });
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: CARRO, header: { kennzeichen: "SEND 1", modell: "Leon" } });
     await setHeader(p.ctx, id, { insurerId: ins });
     await sync(p);
     p.online = false;
@@ -112,9 +113,9 @@ describe("sending a report (offline capable)", () => {
   it("no recipients: the server refuses, the phone cleans up and reports it", async () => {
     const p = phone(tokens.assessor);
     await sync(p);
-    // a vehicle whose customer is the hall (no report e-mails) and no insurer
-    const hall = ((await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[]).find((s) => s.type === "hall").id;
-    const id = await createVehicle(p.ctx, { stationId: hall, clientStationId: hall });
+    // a vehicle whose customer is a body shop without report e-mails and no insurer
+    const noMail = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgES, body: { name: "Taller sin correo" } })).body.id;
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: noMail });
     await sync(p);
     c.mailer.sent.length = 0;
     const rid = await sendReport(p.ctx, { vehicleId: id, type: "kva", lang: "de", pdf: PDF, fileName: "x.pdf" });
@@ -129,7 +130,7 @@ describe("sending a report (offline capable)", () => {
     const p = phone(tokens.assessor);
     (p.engine as any).now = () => now;
     await sync(p);
-    const id = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "RETRY 1" } });
+    const id = await createVehicle(p.ctx, { stationId: A, clientStationId: CARRO, header: { kennzeichen: "RETRY 1" } });
     await sync(p);
     c.mailer.sent.length = 0;
     c.mailer.fail = new Error("down");
@@ -150,7 +151,7 @@ describe("sending a report (offline capable)", () => {
   it("a technician cannot queue a report (refused, cleaned up)", async () => {
     const pa = phone(tokens.assessor), pt = phone(tokens.tech);
     await sync(pa);
-    const id = await createVehicle(pa.ctx, { stationId: A });
+    const id = await createVehicle(pa.ctx, { stationId: A, clientStationId: CARRO });
     await sync(pa);
     const { assignVehicle } = await import("../src/sync/mutations");
     const techId = (await call(c, "GET", "/admin/users", { token: c.superToken, org: c.orgES })).body.find((u: any) => u.email === "tech@example.test").id;

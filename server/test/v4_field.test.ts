@@ -6,7 +6,7 @@ import { photos, technicians, users, vehicles } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;
-let A: string;
+let A: string, CARRO: string; // A = hall (place), CARRO = carrosserie (customer)
 let assessor: string, chef: string, tech: string, tech2: string, head: string, admin: string;
 let techUser: string, tech2User: string, headUser: string;
 
@@ -18,7 +18,7 @@ const stageOf = async (id: string) => (await c.h.db.select().from(vehicles).wher
 /** a car in repair, at `stage`, PDR technician "Test Tech" (account assigned), removal/refit "Test Head" (account assigned for demontage) */
 async function car(stage: string, o: { assignTech?: boolean; assignHead?: boolean } = {}) {
   const id = uuid();
-  await ok(assessor, [op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: hdr(), panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) },
+  await ok(assessor, [op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: hdr(), panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) },
     shares: { techName: "Test Tech", techPct: 50, demTechName: "Test Head", demTechPct: 80 }, statut: "besichtigung" } })]);
   expect((await one(assessor, op("vehicle.repairStage", { vehicleId: id, stage: "bereit" }))).status).toBe("ok");
   if (o.assignTech !== false) await one(assessor, op("vehicle.assign", { vehicleId: id, kind: "pdr", userIds: [techUser] }));
@@ -42,8 +42,9 @@ const move = (token: string, id: string, stage: string) => one(token, op("vehicl
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10 } });
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 10 } });
   admin = await inviteAndAccept(c, c.orgES, "admin@example.test", { role_id: c.roleId.org_admin });
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   chef = await inviteAndAccept(c, c.orgES, "chef@example.test", { role_id: c.roleId.chef_site, station_id: A });
@@ -101,7 +102,7 @@ describe("moves", () => {
     await photo(tech, id, "pdr");
     for (const to of ["demontage", "bereit", "remontage", "bodyshop", "finish"]) expect((await move(tech, id, to)).code, to).toBe("move_not_allowed");
     const fresh = uuid();
-    await ok(assessor, [op("vehicle.create", { vehicle: { id: fresh, stationId: A, clientStationId: A, header: hdr(), panels: {}, shares: {}, statut: "besichtigung" } })]);
+    await ok(assessor, [op("vehicle.create", { vehicle: { id: fresh, stationId: A, clientStationId: CARRO, header: hdr(), panels: {}, shares: {}, statut: "besichtigung" } })]);
     await one(assessor, op("vehicle.assign", { vehicleId: fresh, kind: "pdr", userIds: [techUser] }));
     expect((await move(tech, fresh, "bereit")).code).toBe("move_not_allowed"); // never puts a car into repair
     expect(await stageOf(id)).toBe("pdr");

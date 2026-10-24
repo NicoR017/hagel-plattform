@@ -9,7 +9,7 @@ import { syncAzure } from "../../server/src/azure_sync";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
 const PDF = new Uint8Array(readFileSync(new URL("../../fixtures/real/colibri_en_9547LPV.pdf", import.meta.url)));
-let c: Ctx, A: string, n = 0;
+let c: Ctx, A: string, CARRO: string, n = 0;
 const tokens: Record<string, string> = {};
 
 function phone(token: string) {
@@ -29,9 +29,12 @@ beforeAll(async () => {
   az.add("Insurance", { PartitionKey: "x", RowKey: "ins-1", Insurance: "Allianz" });
   az.add("BusinessCustomersInsurance", { PartitionKey: "x", RowKey: "l-1", BusinessCustomerInsurance: "Talavera - Allianz", BusinessCustomerId: "bc-1", InsuranceId: "ins-1" });
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["TenantA"] } });
-  A = ((await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[]).find((s) => s.type === "carrosserie").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
-  az.add("AllScanResults", { PartitionKey: "20261019-1627", RowKey: "9547 LPV", Tenant: "TenantA", BusinessCustomer: "Talavera - Allianz", LicensePlate: "9547 LPV", DentsTotalNumber: 618, ScanDateTime: "2026-10-19T16:27:00Z", ScanFailed: false, urlPdf: "allscans/20261019-1627.pdf", ClaimNumber: "X-1" });
+  const sts = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
+  CARRO = sts.find((s) => s.type === "carrosserie").id; // the customer, mapped by its Colibri business customer
+  A = sts.find((s) => s.type === "hall" && s.name === "Nave Test A").id; // the place, mapped by the scan's Location alias
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", country: "ES" } });
+  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["Nave Test A"], country: "ES" } });
+  az.add("AllScanResults", { PartitionKey: "20261019-1627", RowKey: "9547 LPV", Tenant: "TenantA", Location: "Nave Test A", BusinessCustomer: "Talavera - Allianz", LicensePlate: "9547 LPV", DentsTotalNumber: 618, ScanDateTime: "2026-10-19T16:27:00Z", ScanFailed: false, urlPdf: "allscans/20261019-1627.pdf", ClaimNumber: "X-1" });
   az.putBlob("allscans", "20261019-1627.pdf", PDF);
   const jpg = new Uint8Array(await sharp({ create: { width: 2000, height: 1500, channels: 3, background: "#456" } }).jpeg().toBuffer());
   az.putBlob("scan-color-pictures", "20261019-1627_Overview_Pictures_FRONT-0.jpg", jpg);
@@ -61,7 +64,7 @@ describe("imported scan reaches the phones", () => {
     const p = phone(tokens.viewer);
     await p.engine.syncNow(c.orgES);
     const v = (await p.db.vehicles.get(r.vehicleId))!;
-    expect(v).toMatchObject({ kennzeichen: "9547 LPV", statut: "besichtigung", stationId: A, clientStationId: A, claimNumber: "X-1" });
+    expect(v).toMatchObject({ kennzeichen: "9547 LPV", statut: "besichtigung", stationId: A, clientStationId: CARRO, claimNumber: "X-1" });
     expect(colibriBadge(v)).toBe("ok");
     const ph = await p.db.photos.where("vehicleId").equals(r.vehicleId).toArray();
     expect(ph.map((x) => x.label).sort()).toEqual(["Heckansicht", "Vorderansicht"]);

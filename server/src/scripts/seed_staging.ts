@@ -37,10 +37,12 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
         { orgId: org.id, type: "carrosserie", name: "Karosserie Zwei (Bodyshop)", country, capacite: 0, commissionMode: "pct", commissionPct: "10" },
       ]).returning();
     }
-    const site = sts.find((s) => s.type === "carrosserie" && s.name === "Karosserie Teststadt") ?? sts.find((s) => s.type === "carrosserie") ?? sts[0];
+    // V5: cars stand in a PLACE (hall); the body shop is their customer
+    const shop = sts.find((s) => s.type === "carrosserie" && s.name === "Karosserie Teststadt") ?? sts.find((s) => s.type === "carrosserie") ?? sts[0];
+    const site = sts.find((s) => s.type === "hall") ?? sts.find((s) => s.type === "parc") ?? shop;
     // one fake insurer (receives reports, fake address) linked to the carrosserie: shows the automatic recipient of the station list
     const [fakeIns] = await db.insert(insurers).values({ orgId: org.id, name: "Test Versicherung", reportEmails: ["schaden@versicherung.staging.test"], sendReports: true, reportsToSend: "both" }).returning();
-    await db.insert(stationInsurers).values({ stationId: site.id, insurerId: fakeIns.id });
+    await db.insert(stationInsurers).values({ stationId: shop.id, insurerId: fakeIns.id });
     const roleRows = await db.select().from(roles).where(eq(roles.orgId, org.id));
     const people: Record<string, string> = {};
     for (const p of PEOPLE) {
@@ -63,9 +65,9 @@ export async function seedStaging(db: Db, o: { password: string; superadminEmail
       const id = crypto.randomUUID();
       const panels = Object.fromEntries(PANELS.slice(0, 2 + (i % 4)).map((k) => [k, { key: k, dents: { "20": 4 + (i % 7), "30": 2 + (i % 3), "40": i % 3 } }]));
       await db.insert(vehicles).values({
-        id, orgId: org.id, stationId: site.id, clientStationId: site.id, statut, statutDepuis: new Date(), seq: await nextSeq(db),
+        id, orgId: org.id, stationId: site.id, clientStationId: shop.id, statut, statutDepuis: new Date(), seq: await nextSeq(db),
         repAt: statut === "reparatur" || statut === "fertig" ? new Date() : null,
-        header: { land: country, kennzeichen: country === "ES" ? `${1000 + i} TST` : `TS-T ${100 + i}`, modell: MODELS[i % MODELS.length], kunde: site.name, leistungsdatum: "2026-10-20", teiler: 10, stundensatz: country === "ES" ? 69 : 83 },
+        header: { land: country, kennzeichen: country === "ES" ? `${1000 + i} TST` : `TS-T ${100 + i}`, modell: MODELS[i % MODELS.length], kunde: shop.name, leistungsdatum: "2026-10-20", teiler: 10, stundensatz: country === "ES" ? 69 : 83 },
         panels, panelsAt: {}, shares: { techName: "Test Techniker", techPct: 50, werkPct: 10, werkMode: "pct" }, groupAt: {},
         methodId: method?.id ?? null, methodVersion: method?.version ?? null,
       });

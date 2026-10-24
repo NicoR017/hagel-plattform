@@ -4,25 +4,27 @@ import { eq } from "drizzle-orm";
 import { repairEvents, stations } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
-let c: Ctx, A: string, B: string, OTHER_TENANT: string, HALL: string, chef: string, aufnehmer: string, carro: string, vid: string;
+let c: Ctx, A: string, CARRO: string, B: string, OTHER_TENANT: string, HALL: string, chef: string, aufnehmer: string, carro: string, vid: string;
 const one = async (token: string, o: unknown) => ((await push(c, token, [o])).body.results as { status: string; code?: string }[])[0];
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
+  const nameOf = (s: any) => s.name;
+  A = (st as any[]).find((s) => s.type === "hall" && nameOf(s) === "Nave Test A").id; // the place where the car stands
+  CARRO = st.find((s) => s.type === "carrosserie")!.id; // a body shop is only a customer
   HALL = st.find((s) => s.type === "hall")!.id;
-  B = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "carrosserie", name: "Taller Dos", capacite: 10 } })).body.id;
-  OTHER_TENANT = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgES, body: { type: "carrosserie", name: "Taller Otro", capacite: 10 } })).body.id;
+  B = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgES, body: { name: "Taller Dos" } })).body.id;
+  OTHER_TENANT = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgES, body: { name: "Taller Otro", azure_tenant: "tenant-2" } })).body.id;
   // A and B share a tenant, the third one is in another tenant
   await c.h.db.update(stations).set({ azureTenant: "tenant-1" }).where(eq(stations.id, A));
   await c.h.db.update(stations).set({ azureTenant: "tenant-1" }).where(eq(stations.id, B));
   await c.h.db.update(stations).set({ azureTenant: "tenant-2" }).where(eq(stations.id, OTHER_TENANT));
   chef = await inviteAndAccept(c, c.orgES, "chef-bs@example.test", { role_id: c.roleId.chef_site, station_id: A });
   aufnehmer = await inviteAndAccept(c, c.orgES, "auf-bs@example.test", { role_id: c.roleId.aufnehmer });
-  carro = await inviteAndAccept(c, c.orgES, "carro-bs@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  carro = await inviteAndAccept(c, c.orgES, "carro-bs@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: CARRO });
   vid = uuid();
-  expect((await one(aufnehmer, op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: A, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 12 }) }, header: { land: "ES", kennzeichen: "BS 1", modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } }))).status).toBe("ok");
+  expect((await one(aufnehmer, op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: CARRO, statut: "besichtigung", panels: { haube: dentsPanel("haube", { "20": 12 }) }, header: { land: "ES", kennzeichen: "BS 1", modell: "Seat", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } }))).status).toBe("ok");
 });
 afterAll(async () => { await c.h.close(); });
 
@@ -37,7 +39,7 @@ describe("body shop of a car", () => {
     expect((await one(chef, op("vehicle.repairStage", { vehicleId: vid, stage: "bereit" }))).status).toBe("ok");
     const p = await pull(c, chef, c.orgES);
     const ids = p.refs.bodyshops.map((b: { id: string }) => b.id);
-    expect(ids).toEqual(expect.arrayContaining([A, B, OTHER_TENANT]));
+    expect(ids).toEqual(expect.arrayContaining([CARRO, B, OTHER_TENANT]));
     expect(ids).not.toContain(HALL);
     const pc = await pull(c, carro, c.orgES);
     expect(pc.refs.bodyshops).toEqual([]); // the external body shop account has no repair board

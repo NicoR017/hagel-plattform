@@ -1,5 +1,6 @@
 // Verwaltung in the new interface: left menu + content, like the vehicle detail. The existing screens (users, roles, stations, insurers,
 // letterheads, Azure, audit, organisations) are reused inside it; new here: overview, calculation methods, weekly report.
+import { isPlace } from "../field/places";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { computeVehicle, DEFAULT_AW_PARAMS, DEFAULT_SETTINGS, ES_MATRIX_DEFAULT, type CalcMethodDef, type CalcVehicle, type EsMatrix } from "@hagel/calc";
 import { generateTechnicianWorksheets, techPdfFileName, eur, type TechSheetData } from "@hagel/documents";
@@ -14,6 +15,7 @@ import { toast } from "../field/toast";
 import { confirmDialog } from "../field/ui";
 import { fmtDateTime, getLang, locale, t, tOr, type Key } from "../i18n";
 import { Shell3 } from "./Shell3";
+import { BodyShopsPage } from "./BodyShops";
 
 interface Me {
   user: { id: string; email: string; name: string; isSuperadmin: boolean };
@@ -21,7 +23,7 @@ interface Me {
   grants: { orgId: string; stationId: string | null; permissions: string[] }[];
 }
 
-type Section = "overview" | "users" | "roles" | "sites" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
+type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
 
 /** Map of the old tab names (bookmarks) to the new sections */
 const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
@@ -29,6 +31,8 @@ const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: 
 export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: (id: string) => void; route: Route }) {
   const perms = new Set(me.grants.filter((g) => g.orgId === org && g.stationId === null).flatMap((g) => g.permissions));
   const has = (p: string) => me.user.isSuperadmin || perms.has(p);
+  // org-wide data managed from one site (a station manager has the right through his station's grant)
+  const hasAny = (p: string) => me.user.isSuperadmin || me.grants.some((g) => g.orgId === org && g.permissions.includes(p));
   // "sites" and the prices are open to every manager of something; the rest follows its permission
   const groups: { title: Key; items: { k: Section; label: string; show: boolean }[] }[] = [
     { title: "v6MenuOverview", items: [{ k: "overview", label: t("v6MenuOverview"), show: true }] },
@@ -38,6 +42,7 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     ] },
     { title: "v6MenuStructure", items: [
       { k: "sites", label: t("sites"), show: true },
+      { k: "bodyshops", label: t("v8BodyShops"), show: hasAny("bodyshops.gerer") },
       { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
       { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
     ] },
@@ -81,6 +86,7 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     case "users": body = <UsersPage canManage={has("utilisateurs.gerer")} />; break;
     case "roles": body = <RolesPage />; break;
     case "sites": body = <SitesPage canManage={has("stations.gerer")} canInsurers={has("assurances.gerer")} />; break;
+    case "bodyshops": body = <BodyShopsPage canManage={hasAny("bodyshops.gerer")} canInsurers={hasAny("assurances.gerer") || hasAny("bodyshops.gerer")} />; break;
     case "insurers": body = <InsurersPage canMethods={has("methoden.gerer")} />; break;
     case "letterheads": body = <CompaniesPage />; break;
     case "methods": body = <MethodsPage />; break;
@@ -142,13 +148,13 @@ function Overview({ has, open }: { has: (p: string) => boolean; open: (k: Sectio
   const roles = useMaybe<{ isSystem: boolean }[]>("/admin/roles", has("roles.gerer"));
   const az = useMaybe<{ configured: boolean; unmappedCustomers: unknown[]; unmappedLocations: unknown[]; lastRuns: { ok: boolean | null; at: string }[] }>("/admin/azure/status", has("stations.gerer"));
   const log = useMaybe<{ id: string; at: string; action: string; entity: string }[]>("/admin/audit?limit=8", has("audit.voir"));
-  const full = (sites.data ?? []).filter((s) => s.capacite > 0 && (s.present ?? 0) >= s.capacite).length;
+  const full = (sites.data ?? []).filter((s) => isPlace(s) && s.capacite > 0 && (s.present ?? 0) >= s.capacite).length;
   const lastRun = az.data?.lastRuns?.[0];
   const azState = !az.data ? "…" : !az.data.configured ? t("v6AzureOff") : lastRun && lastRun.ok === false ? t("v6AzureErr") : t("v6AzureOk");
   const cards: { k: Section; show: boolean; title: string; big: ReactNode; sub: string }[] = [
     { k: "users", show: has("utilisateurs.gerer"), title: t("v6KpiUsers"), big: (users.data ?? []).filter((u) => u.status === "active").length, sub: `${invs.data?.length ?? 0} ${t("v6KpiInvites")}` },
     { k: "azure", show: has("stations.gerer"), title: t("v6KpiAzure"), big: azState, sub: `${(az.data?.unmappedCustomers.length ?? 0) + (az.data?.unmappedLocations.length ?? 0)} ${t("v6KpiAzureOpen")}` },
-    { k: "sites", show: true, title: t("v6KpiStations"), big: sites.data?.length ?? "…", sub: `${full} ${t("v6KpiFull")}` },
+    { k: "sites", show: true, title: t("v6KpiStations"), big: sites.data?.filter(isPlace).length ?? "…", sub: `${full} ${t("v6KpiFull")}` },
     { k: "roles", show: has("roles.gerer"), title: t("v6KpiRoles"), big: roles.data?.length ?? "…", sub: t("v6KpiRolesSub") },
   ];
   return (

@@ -9,6 +9,7 @@ import { Dialog, Field, NumInput, Seg } from "./ui";
 import { useField, useIssues, useVehicle } from "./store";
 import { toast } from "./toast";
 import { Occ } from "./occupancy";
+import { isPlace } from "./places";
 import { Picker, type PickItem } from "./Picker";
 import { TechPicker } from "./TechPicker";
 import { snapshotVehicles, undoMove, undoStatus } from "./undo";
@@ -64,7 +65,7 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
 /** Move to another site (right on the source site is checked by the server; the customer does not change). */
 export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from?: string | null; onClose: () => void; onDone?: () => void }) {
   const f = useField();
-  const sites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from);
+  const sites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from && isPlace(s));
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
   const dest = sites.find((s) => s.id === to);

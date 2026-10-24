@@ -4,18 +4,19 @@ import { auditLog, vehicleAssignments, vehicles, users } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;
-let A: string, B: string, MINI: string;
+let A: string, B: string, MINI: string, CARRO: string; // A = hall, B = other hall, CARRO = customer carrosserie
 let chefA: string, chefB: string, tech: string, techId: string, assessor: string;
 
 const mk = (id: string, o: Record<string, unknown> = {}, h: Record<string, unknown> = {}) =>
-  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: { land: "ES", kennzeichen: "P-" + id.slice(0, 4), leistungsdatum: "2026-10-19", stundensatz: 69, ...h }, panels: { haube: dentsPanel("haube", { "20": 10, "40": 2 }) }, shares: { techName: "Ana", techPct: 50 }, ...o } });
+  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: { land: "ES", kennzeichen: "P-" + id.slice(0, 4), leistungsdatum: "2026-10-19", stundensatz: 69, ...h }, panels: { haube: dentsPanel("haube", { "20": 10, "40": 2 }) }, shares: { techName: "Ana", techPct: 50 }, ...o } });
 const dash = (token: string, q = "") => call(c, "GET", `/dashboard${q}`, { token, org: c.orgES });
 const status = (token: string, id: string, statut: string, motif?: string) => push(c, token, [op("vehicle.status", { vehicleId: id, statut, ...(motif ? { motif } : {}) })]);
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; B = st.find((s) => s.type === "hall").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; B = st.find((s) => s.type === "hall" && s.id !== A).id;
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["T1", "T2"] } });
   await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "T1", capacite: 10 } });
   await call(c, "PUT", `/admin/stations/${B}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "T2", capacite: 10 } });
@@ -65,7 +66,7 @@ describe("moves", () => {
   });
   it("the customer does not change with a move, and the occupancy follows", async () => {
     const [v] = await c.h.db.select().from(vehicles).where(eq(vehicles.id, ids.b));
-    expect(v.stationId).toBe(B); expect(v.clientStationId).toBe(A);
+    expect(v.stationId).toBe(B); expect(v.clientStationId).toBe(CARRO);
     const p = await pull(c, assessor, c.orgES);
     expect(p.refs.occupancy[B]).toBe(1); expect(p.refs.occupancy[MINI]).toBe(1); expect(p.refs.occupancy[A]).toBe(1);
   });
@@ -97,7 +98,7 @@ describe("dashboard", () => {
     const all = (await dash(c.superToken)).body;
     expect(all.vehicles).toBe(4);
     expect((await dash(c.superToken, `?sites=${B}`)).body.vehicles).toBe(1);
-    expect((await dash(c.superToken, `?client=${A}&sites=${A}`)).body.vehicles).toBe(2); // c (attente) and d (rendu)
+    expect((await dash(c.superToken, `?client=${CARRO}&sites=${A}`)).body.vehicles).toBe(2); // c (attente) and d (rendu)
     expect((await dash(c.superToken, `?insurer=${uuid()}`)).body.vehicles).toBe(0);
   });
 

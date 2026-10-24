@@ -4,22 +4,23 @@ import { eq } from "drizzle-orm";
 import { users } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
-let c: Ctx, A: string, vid: string;
+let c: Ctx, A: string, CARRO: string, vid: string;
 const tokens: Record<string, string> = {};
 const ROLES = ["org_admin", "chef_site", "aufnehmer", "technicien", "freelance", "carrosserie", "assureur"] as const;
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as { id: string; type: string }[];
-  A = st.find((s) => s.type === "carrosserie")!.id;
+  A = (st as any[]).find((s) => s.type === "hall" && s.name === "Nave Test A").id; // the place
+  CARRO = st.find((s) => s.type === "carrosserie")!.id; // the customer
   const [ins] = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Versicherung H", report_emails: [], send_reports: false } })).body ? [(await call(c, "GET", "/admin/insurers", { token: c.superToken, org: c.orgES })).body[0]] : [];
   const camp = (await call(c, "POST", "/admin/campaigns", { token: c.superToken, org: c.orgES, body: { name: "Kampagne H", country: "ES", station_ids: [A] } })).body.id;
   for (const r of ROLES) {
-    const extra = r === "carrosserie" ? { scope_client_station_id: A } : r === "assureur" ? { scope_insurer_id: ins.id } : r === "freelance" ? { scope_campaign_id: camp } : r === "org_admin" ? {} : { station_id: A };
+    const extra = r === "carrosserie" ? { scope_client_station_id: CARRO } : r === "assureur" ? { scope_insurer_id: ins.id } : r === "freelance" ? { scope_campaign_id: camp } : r === "org_admin" ? {} : { station_id: A };
     tokens[r] = await inviteAndAccept(c, c.orgES, `${r}@h.example.test`, { role_id: c.roleId[r], ...extra });
   }
   vid = uuid();
-  const created = ((await push(c, tokens.aufnehmer, [op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: A, insurerId: ins.id, campaignId: camp, statut: "reparatur", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Geheim Techniker", techPct: 61, demTechName: "Geheim Headliner" }, header: { land: "ES", kennzeichen: "HD 1", modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
+  const created = ((await push(c, tokens.aufnehmer, [op("vehicle.create", { vehicle: { id: vid, stationId: A, clientStationId: CARRO, insurerId: ins.id, campaignId: camp, statut: "reparatur", panels: { haube: dentsPanel("haube", { "20": 12, "30": 6 }) }, shares: { techName: "Geheim Techniker", techPct: 61, demTechName: "Geheim Headliner" }, header: { land: "ES", kennzeichen: "HD 1", modell: "Seat Leon", kunde: "Taller", leistungsdatum: "2026-10-19", stundensatz: 69 } } })])).body.results as { status: string }[])[0];
   expect(created.status).toBe("ok");
   const tech = (await c.h.db.select().from(users).where(eq(users.email, "technicien@h.example.test")))[0];
   expect(((await push(c, tokens.aufnehmer, [op("vehicle.assign", { vehicleId: vid, kind: "pdr", userIds: [tech.id] })])).body.results as { status: string }[])[0].status).toBe("ok");
