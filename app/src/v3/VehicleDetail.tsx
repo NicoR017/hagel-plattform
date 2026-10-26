@@ -22,7 +22,7 @@ interface Repair { comments: { id: string; userName: string; at: string; text: s
 export function sectionsFor(mode: Mode, v: { statut: string; repairStage?: unknown }, can: (p: string) => boolean): Tab[] {
   const booking = can("termine.buchen"); // the appointment stays reachable at every status (to take one, or to move / cancel it)
   const kalk: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];
-  const rep: Tab[] = ["basis", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "verlauf"];
+  const rep: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "verlauf"];
   const all: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];
   return mode === "kalk" ? kalk : mode === "rep" ? rep : all;
 }
