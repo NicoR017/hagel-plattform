@@ -41,9 +41,14 @@ interface Station { id: string; type: string; name: string; capacite: number; pr
 interface RoleLite { id: string; name: string; key: string | null; scope: string }
 
 /** role + place of each assignment of a user (edit in place) and a row to add one; the place is never a body shop */
-function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload }: { user?: UserRow; roles: RoleLite[]; places: Station[]; bodyShops: Station[]; setErr: (m: string) => void; reload: () => void }) {
-  const [draft, setDraft] = useState<Record<string, { role: string; station: string }>>({});
-  const [add, setAdd] = useState({ role: "", station: "", client: "" });
+type AssignDraft = Record<string, { role: string; station: string }>;
+type AssignAdd = { role: string; station: string; client: string };
+const EMPTY_ADD: AssignAdd = { role: "", station: "", client: "" };
+/** the changes of the edit form are only kept in the draft: the Save button of the form writes them all */
+function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload, draft, setDraft, add, setAdd }: {
+  user?: UserRow; roles: RoleLite[]; places: Station[]; bodyShops: Station[]; setErr: (m: string) => void; reload: () => void;
+  draft: AssignDraft; setDraft: (d: AssignDraft) => void; add: AssignAdd; setAdd: (a: AssignAdd) => void;
+}) {
   if (!user) return null;
   const addRole = roles.find((r) => r.id === add.role);
   const cur = (a: UserRow["assignments"][number]) => draft[a.id] ?? { role: a.roleId, station: a.stationId ?? "" };
@@ -57,7 +62,7 @@ function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload }: {
   return (
     <div style={{ marginBottom: 12 }}>
       {user.assignments.map((a) => {
-        const d = cur(a), dirty = d.role !== a.roleId || d.station !== (a.stationId ?? "");
+        const d = cur(a);
         return (
           <div className="row" key={a.id} style={{ alignItems: "flex-end", marginBottom: 6 }}>
             <div className="grow"><label>{t("role")}</label>
@@ -66,7 +71,6 @@ function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload }: {
               </select></div>
             <div className="grow"><label>{t("site")}</label>
               <select value={d.station} onChange={(e) => setDraft({ ...draft, [a.id]: { ...d, station: e.target.value } })}>{placeOpts(d.station)}</select></div>
-            <button className="btn" disabled={!dirty} onClick={() => act(() => api("PUT", `/admin/assignments/${a.id}`, { role_id: d.role, station_id: d.station || null }), setErr, () => { setDraft((x) => { const { [a.id]: _o, ...rest } = x; return rest; }); reload(); })}>{t("save")}</button>
             <button className="btn danger" onClick={() => act(() => api("DELETE", `/admin/assignments/${a.id}`), setErr, reload)}>{t("delete")}</button>
           </div>
         );
@@ -84,7 +88,6 @@ function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload }: {
               <option value="">—</option>{bodyShops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select></div>
         )}
-        <button className="btn sec" disabled={!add.role} onClick={() => act(() => api("POST", "/admin/assignments", { user_id: user.id, role_id: add.role, station_id: add.station || null, scope_client_station_id: add.client || null }), setErr, () => { setAdd({ role: "", station: "", client: "" }); reload(); })}>{t("uaAddRole")}</button>
       </div>
     </div>
   );
@@ -97,6 +100,22 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
   const sites = useLoad<Station[]>("/admin/stations");
   const [err, setErr] = useState("");
   const [editU, setEditU] = useState<{ id: string; name: string; language: string } | null>(null);
+  const [draft, setDraft] = useState<AssignDraft>({});
+  const [addA, setAddA] = useState<AssignAdd>(EMPTY_ADD);
+  const openEdit = (u: { id: string; name: string; language: string }) => { setDraft({}); setAddA(EMPTY_ADD); setErr(""); setEditU(u); };
+  /** one Save for the whole form: name + language, then every changed role/place, then the added role */
+  const saveEdit = async (u: { id: string; name: string; language: string }) => {
+    try {
+      await api("PUT", `/admin/users/${u.id}`, { name: u.name.trim(), language: u.language });
+      const row = users.data?.find((x) => x.id === u.id);
+      for (const a of row?.assignments ?? []) {
+        const d = draft[a.id];
+        if (d && (d.role !== a.roleId || d.station !== (a.stationId ?? ""))) await api("PUT", `/admin/assignments/${a.id}`, { role_id: d.role, station_id: d.station || null });
+      }
+      if (addA.role) await api("POST", "/admin/assignments", { user_id: u.id, role_id: addA.role, station_id: addA.station || null, scope_client_station_id: addA.client || null });
+      setErr(""); setEditU(null); setDraft({}); setAddA(EMPTY_ADD); reload();
+    } catch (e) { setErr((e as Error).message); reload(); }
+  };
   const [form, setForm] = useState({ email: "", role_id: "", station_id: "", client: "", expires: "", language: getLang() as Lang, kind: "pdr" });
   const role = roles.data?.find((r) => r.id === form.role_id);
   const reload = () => { void users.reload(); void invs.reload(); };
@@ -113,7 +132,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
             </select></div>
           <div className="grow"><label>{t("site")}</label>
             <select value={form.station_id} onChange={(e) => setForm({ ...form, station_id: e.target.value })}>
-              <option value="">{t("allSites")}</option>{sites.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="">{t("allSites")}</option>{sites.data?.filter((s) => s.type !== "carrosserie").map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select></div>
           {role?.scope === "client" && (
             <div className="grow"><label>{t("clientStation")}</label>
@@ -157,9 +176,9 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
           <h4 style={{ marginBottom: 4 }}>{t("uaAccess")}</h4>
           <p className="muted" style={{ marginTop: 0 }}>{t("uaPlaceHint")}</p>
           <AssignmentsEditor user={users.data?.find((x) => x.id === editU.id)} roles={roles.data ?? []} places={(sites.data ?? []).filter((s) => s.type !== "carrosserie")}
-            bodyShops={(sites.data ?? []).filter((s) => s.type === "carrosserie")} setErr={setErr} reload={reload} />
+            bodyShops={(sites.data ?? []).filter((s) => s.type === "carrosserie")} setErr={setErr} reload={reload} draft={draft} setDraft={setDraft} add={addA} setAdd={setAddA} />
           <Err msg={err} />
-          <p className="row"><button className="btn" disabled={!editU.name.trim()} onClick={() => act(() => api("PUT", `/admin/users/${editU.id}`, { name: editU.name.trim(), language: editU.language }), setErr, () => { setEditU(null); reload(); })}>{t("save")}</button>
+          <p className="row"><button className="btn" disabled={!editU.name.trim()} onClick={() => void saveEdit(editU)}>{t("save")}</button>
             <button className="btn sec" onClick={() => setEditU(null)}>{t("cancel")}</button></p>
         </Card>
       )}
@@ -178,7 +197,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
               ))}</td>
               <td><span className={"pill" + (u.status === "active" ? "" : " off")}>{u.status === "active" ? t("active") : u.status === "invited" ? t("v6Invited") : t("inactive")}</span></td>
               <td style={{ whiteSpace: "nowrap" }}>
-                <button className="btn sec" onClick={() => setEditU({ id: u.id, name: u.name, language: (u as unknown as { language?: string }).language ?? getLang() })}>{t("v6Edit")}</button>{" "}
+                <button className="btn sec" onClick={() => openEdit({ id: u.id, name: u.name, language: (u as unknown as { language?: string }).language ?? getLang() })}>{t("v6Edit")}</button>{" "}
                 {!u.isSuperadmin && (u.status === "active"
                   ? <button className="btn danger" onClick={() => act(() => api("POST", `/admin/users/${u.id}/deactivate`), setErr, reload)}>{t("deactivate")}</button>
                   : <button className="btn sec" onClick={() => act(() => api("POST", `/admin/users/${u.id}/reactivate`), setErr, reload)}>{t("reactivate")}</button>)}{" "}
