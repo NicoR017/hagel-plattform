@@ -40,6 +40,56 @@ interface UserRow { id: string; email: string; name: string; status: string; isS
 interface Station { id: string; type: string; name: string; capacite: number; present?: number; country: string; azureTenant: string | null; active: boolean; commissionPct: string; reportEmails: string[]; excludedInsurerEmails?: string[]; repairsPerDay?: number; address: string }
 interface RoleLite { id: string; name: string; key: string | null; scope: string }
 
+/** role + place of each assignment of a user (edit in place) and a row to add one; the place is never a body shop */
+function AssignmentsEditor({ user, roles, places, bodyShops, setErr, reload }: { user?: UserRow; roles: RoleLite[]; places: Station[]; bodyShops: Station[]; setErr: (m: string) => void; reload: () => void }) {
+  const [draft, setDraft] = useState<Record<string, { role: string; station: string }>>({});
+  const [add, setAdd] = useState({ role: "", station: "", client: "" });
+  if (!user) return null;
+  const addRole = roles.find((r) => r.id === add.role);
+  const cur = (a: UserRow["assignments"][number]) => draft[a.id] ?? { role: a.roleId, station: a.stationId ?? "" };
+  const placeOpts = (selected: string) => (
+    <>
+      <option value="">{t("allSites")}</option>
+      {places.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      {selected && !places.some((s) => s.id === selected) && <option value={selected}>?</option>}
+    </>
+  );
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {user.assignments.map((a) => {
+        const d = cur(a), dirty = d.role !== a.roleId || d.station !== (a.stationId ?? "");
+        return (
+          <div className="row" key={a.id} style={{ alignItems: "flex-end", marginBottom: 6 }}>
+            <div className="grow"><label>{t("role")}</label>
+              <select value={d.role} onChange={(e) => setDraft({ ...draft, [a.id]: { ...d, role: e.target.value } })}>
+                {roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.key, r.name)}</option>)}
+              </select></div>
+            <div className="grow"><label>{t("site")}</label>
+              <select value={d.station} onChange={(e) => setDraft({ ...draft, [a.id]: { ...d, station: e.target.value } })}>{placeOpts(d.station)}</select></div>
+            <button className="btn" disabled={!dirty} onClick={() => act(() => api("PUT", `/admin/assignments/${a.id}`, { role_id: d.role, station_id: d.station || null }), setErr, () => { setDraft((x) => { const { [a.id]: _o, ...rest } = x; return rest; }); reload(); })}>{t("save")}</button>
+            <button className="btn danger" onClick={() => act(() => api("DELETE", `/admin/assignments/${a.id}`), setErr, reload)}>{t("delete")}</button>
+          </div>
+        );
+      })}
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <div className="grow"><label>{t("uaAddRole")}</label>
+          <select value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value })}>
+            <option value="">—</option>{roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.key, r.name)}</option>)}
+          </select></div>
+        <div className="grow"><label>{t("site")}</label>
+          <select value={add.station} onChange={(e) => setAdd({ ...add, station: e.target.value })}>{placeOpts("")}</select></div>
+        {addRole?.scope === "client" && (
+          <div className="grow"><label>{t("clientStation")}</label>
+            <select value={add.client} onChange={(e) => setAdd({ ...add, client: e.target.value })}>
+              <option value="">—</option>{bodyShops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select></div>
+        )}
+        <button className="btn sec" disabled={!add.role} onClick={() => act(() => api("POST", "/admin/assignments", { user_id: user.id, role_id: add.role, station_id: add.station || null, scope_client_station_id: add.client || null }), setErr, () => { setAdd({ role: "", station: "", client: "" }); reload(); })}>{t("uaAddRole")}</button>
+      </div>
+    </div>
+  );
+}
+
 export function UsersPage({ canManage }: { canManage: boolean }) {
   const users = useLoad<UserRow[]>("/admin/users");
   const invs = useLoad<{ id: string; email: string; roleId: string; stationId: string | null; expiresAt: string }[]>("/admin/invitations");
@@ -104,6 +154,10 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
           <label>{t("name")}</label><input value={editU.name} onChange={(e) => setEditU({ ...editU, name: e.target.value })} />
           <label>{t("invitationLanguage")}</label>
           <select value={editU.language} onChange={(e) => setEditU({ ...editU, language: e.target.value })}>{LANG_LIST.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}</select>
+          <h4 style={{ marginBottom: 4 }}>{t("uaAccess")}</h4>
+          <p className="muted" style={{ marginTop: 0 }}>{t("uaPlaceHint")}</p>
+          <AssignmentsEditor user={users.data?.find((x) => x.id === editU.id)} roles={roles.data ?? []} places={(sites.data ?? []).filter((s) => s.type !== "carrosserie")}
+            bodyShops={(sites.data ?? []).filter((s) => s.type === "carrosserie")} setErr={setErr} reload={reload} />
           <Err msg={err} />
           <p className="row"><button className="btn" disabled={!editU.name.trim()} onClick={() => act(() => api("PUT", `/admin/users/${editU.id}`, { name: editU.name.trim(), language: editU.language }), setErr, () => { setEditU(null); reload(); })}>{t("save")}</button>
             <button className="btn sec" onClick={() => setEditU(null)}>{t("cancel")}</button></p>

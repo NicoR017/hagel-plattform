@@ -384,6 +384,33 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     await audit(db, { orgId, userId: p.id, action: "assign_role", entity: "role_assignment", entityId: a.id, after: a });
     return c.json(a, 201);
   });
+  // change the role and/or the station of an assignment. The station is a place (hall), never a body shop: with a place the account sees every
+  // car that is at this place whatever its body shop; no place = all places.
+  org.put("/assignments/:id", require("utilisateurs.gerer"), zValidator("json", z.object({
+    role_id: z.string().uuid(), station_id: z.string().uuid().nullable().default(null),
+    scope_client_station_id: z.string().uuid().nullable().optional(), scope_insurer_id: z.string().uuid().nullable().optional(), scope_campaign_id: z.string().uuid().nullable().optional(),
+  }), validationHook), async (c) => {
+    const b = c.req.valid("json"), orgId = c.get("orgId"), p = c.get("principal");
+    const [cur] = await db.select({ a: roleAssignments, r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+      .where(and(eq(roleAssignments.id, c.req.param("id") ?? ""), eq(roleAssignments.orgId, orgId)));
+    if (!cur) throw new HttpError(404, "assignment_not_found");
+    const [role] = await db.select().from(roles).where(and(eq(roles.id, b.role_id), eq(roles.orgId, orgId)));
+    if (!role) throw new HttpError(404, "role_not_found");
+    assertCanGrant(p, orgId, cur.r.permissions); // you cannot change what you could not remove...
+    assertCanGrant(p, orgId, role.permissions); // ...nor give a role you could not give
+    if (b.station_id) await assertStationInOrg(b.station_id, orgId);
+    const scopes = {
+      scope_client_station_id: b.scope_client_station_id === undefined ? cur.a.scopeClientStationId : b.scope_client_station_id,
+      scope_insurer_id: b.scope_insurer_id === undefined ? cur.a.scopeInsurerId : b.scope_insurer_id,
+      scope_campaign_id: b.scope_campaign_id === undefined ? cur.a.scopeCampaignId : b.scope_campaign_id,
+    };
+    await assertScopeFields(role.scope, scopes, orgId);
+    const [a] = await db.update(roleAssignments).set({
+      roleId: role.id, stationId: b.station_id, scopeClientStationId: scopes.scope_client_station_id, scopeInsurerId: scopes.scope_insurer_id, scopeCampaignId: scopes.scope_campaign_id,
+    }).where(eq(roleAssignments.id, cur.a.id)).returning();
+    await audit(db, { orgId, userId: p.id, action: "update_assignment", entity: "role_assignment", entityId: a.id, before: cur.a, after: a });
+    return c.json(a);
+  });
   org.delete("/assignments/:id", require("utilisateurs.gerer"), async (c) => {
     const orgId = c.get("orgId");
     const [a] = await db.select({ a: roleAssignments, r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId))
