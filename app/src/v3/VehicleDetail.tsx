@@ -10,7 +10,7 @@ import { BookingForm } from "../field/BookingForm";
 import { Bilder } from "../field/Bilder";
 import { Erfassung } from "../field/Erfassung";
 import { Kva, SharesBox } from "../field/Kva";
-import { bookableStatus, dayLabel, todayIn, tzOfCountry } from "../field/calendar";
+import { dayLabel, todayIn, tzOfCountry } from "../field/calendar";
 import { go, type Ctx, type Mode, type Tab } from "../field/route";
 import { useField, usePhotos, useVehicle } from "../field/store";
 import { STATUS_STYLE } from "./modes";
@@ -20,7 +20,7 @@ interface Repair { comments: { id: string; userName: string; at: string; text: s
 
 /** sections of the vehicle detail, by mode (Alle Fahrzeuge shows all of them) */
 export function sectionsFor(mode: Mode, v: { statut: string; repairStage?: unknown }, can: (p: string) => boolean): Tab[] {
-  const booking = can("termine.buchen") && bookableStatus(v);
+  const booking = can("termine.buchen"); // the appointment stays reachable at every status (to take one, or to move / cancel it)
   const kalk: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];
   const rep: Tab[] = ["basis", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "verlauf"];
   const all: Tab[] = ["basis", ...(booking ? ["termin" as Tab] : []), "erfassung", "techniker", "planung", "bilder", "kva", "dokumente", "kommunikation", "gtmotive", "verlauf"];

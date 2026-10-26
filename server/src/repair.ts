@@ -128,6 +128,11 @@ async function bookedCount(tx: Tx, stationId: string, date: string, exceptId?: s
 async function startBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, row: VehicleRow, byUser: string | null, why: string) {
   const now = new Date();
   await tx.update(repairBookings).set({ status: "started", startedAt: now }).where(eq(repairBookings.id, booking.id));
+  // a car that is already in repair, finished or returned keeps its status and its place: the appointment is honoured, nothing else changes
+  if (!(BOOKABLE as readonly string[]).includes(row.statut) || row.repairStage != null) {
+    await event(tx, row.id, byUser, "booking_started", { bookingId: booking.id, date: booking.date, why, statusKept: row.statut });
+    return touchVehicle(tx, null, row);
+  }
   const stamps: Record<string, number> = { ...(row.groupAt as Record<string, number>), status: Date.now(), repairStage: Date.now() };
   const set: Partial<typeof vehicles.$inferInsert> = {};
   // the repair takes place in another station than the assessment: the car goes there now (a move, like any other, in the history)
@@ -348,7 +353,7 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       const b = op.booking;
       const [ex] = await tx.select().from(repairBookings).where(eq(repairBookings.id, b.id));
       if (ex) { if (ex.vehicleId !== row.id) throw new Reject("not_allowed"); return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id }; }
-      if (!(BOOKABLE as readonly string[]).includes(row.statut) || row.repairStage != null || !row.stationId) throw new Reject("booking_status");
+      if (!row.stationId) throw new Reject("booking_status"); // any status: an appointment can always be taken (a car already in repair / finished / returned keeps its status)
       // where the repair takes place: the station of the assessment, or another PDR hall / body shop of the organisation
       const placeId = b.stationId ?? row.stationId;
       const [open] = await tx.select().from(repairBookings).where(and(eq(repairBookings.vehicleId, row.id), eq(repairBookings.status, "booked")));
@@ -406,7 +411,7 @@ export async function runDueBookings(db: Db, now = new Date(), notify?: (orgId: 
       const [cur] = await tx.select().from(repairBookings).where(eq(repairBookings.id, b.id)).for("update");
       if (!cur || cur.status !== "booked") return null;
       const [row] = await tx.select().from(vehicles).where(eq(vehicles.id, cur.vehicleId)).for("update");
-      const ok = row && !row.deletedAt && (row.stationId === cur.stationId || row.stationId === (cur.originStationId ?? cur.stationId)) && (BOOKABLE as readonly string[]).includes(row.statut) && row.repairStage == null;
+      const ok = row && !row.deletedAt && (row.stationId === cur.stationId || row.stationId === (cur.originStationId ?? cur.stationId));
       if (!ok) {
         await cancelBooking(tx, cur, null, row ? (row.deletedAt ? "vehicle_deleted" : !(row.stationId === cur.stationId || row.stationId === (cur.originStationId ?? cur.stationId)) ? "vehicle_moved" : `vehicle_status_${row.statut}`) : "vehicle_missing");
         return { kind: "cancelled" as const, out: null };

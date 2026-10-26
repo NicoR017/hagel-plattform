@@ -60,7 +60,6 @@ export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => voi
   const weekdays = Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(loc(), { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 9, 19 + i))).replace(/\.$/, ""));
 
   if (!f.can("termine.buchen")) return null;
-  if (!bookableStatus(v as { statut: string; repairStage?: unknown })) return <div className="notice warn">{t("v4BookStatus")}</div>;
   if (!f.status.online) return <div className="notice warn">{t("v4BookOnline")}</div>;
 
   /** run an operation, wait for the server's answer (sync), and tell the user what happened */
@@ -108,6 +107,7 @@ export function BookingForm({ v, onDone }: { v: LocalVehicle; onDone?: () => voi
 
   return (
     <div className="bk">
+      {!moving && !bookableStatus(v as { statut: string; repairStage?: unknown }) && <div className="notice" style={{ marginBottom: 10 }}>{t("bkKeepStatus")}</div>}
       {!moving && places.length > 1 && (
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginBottom: 10 }}>📍 {t("v6RepairAt")}
           <select className="sel" value={station?.id ?? ""} onChange={(e) => { setPlaceId(e.target.value); setDay(null); setCal(null); }}>

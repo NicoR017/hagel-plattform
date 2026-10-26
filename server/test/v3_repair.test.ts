@@ -365,12 +365,13 @@ describe("repair calendar: bookings", () => {
     // a malformed booking (phone / e-mail / time) never reaches the rules: the whole batch is a 400, as for every other malformed op
     for (const bad of [{ phone: "123" }, { email: "nope" }, { time: "25:00" }]) expect((await push(c, assessor, [book(id, workday(2), bad)])).status).toBe(400);
   });
-  it("a vehicle in repair, fertig or returned cannot be booked; roles without the permission are refused", async () => {
+  it("an appointment can be taken at any status (the car keeps its status); roles without the permission are refused", async () => {
     const inRepair = await newVehicle({}, { kennzeichen: "REP 9" });
     await one(assessor, op("vehicle.repairStage", { vehicleId: inRepair, stage: "bereit" }));
-    expect(await one(assessor, book(inRepair, workday(4)))).toMatchObject({ code: "booking_status" });
+    expect((await one(assessor, book(inRepair, workday(4)))).status).toBe("ok");
     const rendu = await newVehicle({ statut: "rendu" }, { kennzeichen: "REN 9" });
-    expect(await one(assessor, book(rendu, workday(4)))).toMatchObject({ code: "booking_status" });
+    expect((await one(assessor, book(rendu, workday(4)))).status).toBe("ok");
+    expect(await vrow(rendu)).toMatchObject({ statut: "rendu" });
     const plain = await newVehicle({}, { kennzeichen: "PERM 9" });
     expect(await one(carro, book(plain, workday(4)))).toMatchObject({ status: "rejected" });
   });
@@ -418,7 +419,7 @@ describe("repair calendar: bookings", () => {
     expect((await vrow(id)).repairStage).toBe("bereit");
   });
 
-  it("a vehicle that is no longer eligible (moved to another station, deleted, already in repair) is left alone; the booking is cancelled with the reason", async () => {
+  it("a vehicle that is no longer eligible (moved to another station, deleted) is left alone and the booking is cancelled with the reason; one already in repair keeps its status and the appointment is honoured", async () => {
     const moved = await newVehicle({}, { kennzeichen: "GONE 1" }), inRepair = await newVehicle({}, { kennzeichen: "GONE 2" }), deleted = await newVehicle({}, { kennzeichen: "GONE 3" });
     const days = [workday(18), workday(19), workday(20)], day = days[2];
     const ids: string[] = [moved, inRepair, deleted];
@@ -427,11 +428,12 @@ describe("repair calendar: bookings", () => {
     await c.h.db.update(vehicles).set({ statut: "reparatur", repairStage: "pdr" }).where(eq(vehicles.id, inRepair)); // e.g. started by hand meanwhile
     expect((await one(chefA, op("vehicle.delete", { vehicleId: deleted }))).status).toBe("ok");
     const res = await runDueBookings(c.h.db, new Date(day + "T12:00:00Z"));
-    expect(res.cancelled).toBe(3);
+    expect(res.cancelled).toBe(2);
     const rows = await c.h.db.select().from(repairBookings).where(eq(repairBookings.status, "cancelled"));
     const reasons = Object.fromEntries(rows.filter((r) => ids.includes(r.vehicleId)).map((r) => [r.vehicleId, r.cancelReason]));
-    expect(reasons).toEqual({ [moved]: "vehicle_moved", [inRepair]: "vehicle_status_reparatur", [deleted]: "vehicle_deleted" });
-    expect((await vrow(inRepair)).repairStage).toBe("pdr"); // untouched
+    expect(reasons).toEqual({ [moved]: "vehicle_moved", [deleted]: "vehicle_deleted" });
+    expect((await c.h.db.select().from(repairBookings).where(eq(repairBookings.vehicleId, inRepair)))[0]).toMatchObject({ status: "started" });
+    expect(await vrow(inRepair)).toMatchObject({ statut: "reparatur", repairStage: "pdr" }); // untouched
     expect((await vrow(moved)).repairStage).toBeNull();
   });
 
