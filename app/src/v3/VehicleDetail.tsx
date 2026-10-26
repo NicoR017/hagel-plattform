@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { STATUSES } from "@hagel/shared";
 import { api } from "../api";
 import { fmtDateTime, t } from "../i18n";
-import { addAppointment, addComment, deleteAppointment } from "../sync/mutations";
+import { addAppointment, addComment, deleteAppointment, deleteVehicle } from "../sync/mutations";
+import { confirmDialog } from "../field/ui";
 import type { LocalVehicle } from "../sync/db";
 import { AssignDialog, MoveDialog, StatusDialog, holdReasonLabel, statusLabel } from "../field/Dialogs";
 import { Basis } from "../field/Basis";
@@ -209,6 +210,9 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {f.can("vehicules.changer_statut") && <button className="btn" onClick={() => setDlg("status")}>{t("v3ChangeStatus")}</button>}
           {f.can("vehicules.deplacer") && <button className="btn" onClick={() => setDlg("move")}>{t("move")}</button>}
           {f.can("kommentare.schreiben") && <button className="btn" onClick={() => open("kommunikation")}>💬 {t("v4Comments")}{comments ? ` (${comments})` : ""}</button>}
+          {f.can("vehicules.supprimer") && (
+            <button className="btn" style={{ color: "#8F1D14" }} onClick={() => { if (confirmDialog(`${t("deleteVehicleQ")} ${String(x.kennzeichen || "")}?`)) { void deleteVehicle(f.mut, id); window.history.back(); } }}>🗑 {t("delete")}</button>
+          )}
         </div>
       </div>
       <div className="vd">
