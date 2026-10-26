@@ -336,3 +336,56 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
   }).sort((a, b) => a.technician.localeCompare(b.technician, "de"));
   return { from: f.from ?? null, to: f.to ?? null, sheets };
 }
+
+// ------------------------------------------------------------------ export of the finished / returned cars
+
+export interface FinishedExportRow { id: string; plate: string; model: string; insurer: string; bodyshop: string; station: string; end: string; total: number; technician: number; headliner: number; referrer: number; pdr: number }
+
+/**
+ * The cars that are "fertig" or "rendu" right now and became finished in [from, to] (date of the first "fertig", else "rendu" entry in the status
+ * history), with the agreed net price and its split: technician, headliner (de-/re-mounting), referring body shop (commission) and the rest for
+ * PDR Team. Only cars where `u` may see prices, the internal split and export to Excel; nothing else is ever returned.
+ */
+export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; rows: FinishedExportRow[] }> {
+  const settings = await loadOrgSettings(db, orgId);
+  const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
+  const allRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), inArray(vehicles.statut, ["fertig", "rendu"])));
+  const assign = allRows.length ? await db.select().from(vehicleAssignments).where(inArray(vehicleAssignments.vehicleId, allRows.map((r) => r.id))) : [];
+  const assignees = new Map<string, string[]>();
+  for (const a of assign) assignees.set(a.vehicleId, [...(assignees.get(a.vehicleId) ?? []), a.userId]);
+  const siteSet = f.sites?.length ? new Set(f.sites) : null;
+  const rows = allRows.filter((r) => {
+    const eff = effectivePermissions(u, refOf(r, assignees.get(r.id) ?? []));
+    if (!eff.has("vehicules.voir") || !eff.has("prix.voir") || !eff.has("repartition_interne.voir") || !eff.has("export.excel")) return false;
+    if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
+    return (!f.campaign || r.campaignId === f.campaign) && (!f.client || r.clientStationId === f.client) && (!f.insurer || r.insurerId === f.insurer);
+  });
+  const ids = rows.map((r) => r.id);
+  const history = ids.length ? await db.select().from(vehicleStatusHistory).where(inArray(vehicleStatusHistory.vehicleId, ids)).orderBy(asc(vehicleStatusHistory.at)) : [];
+  const histBy = new Map<string, typeof history>();
+  for (const h of history) histBy.set(h.vehicleId, [...(histBy.get(h.vehicleId) ?? []), h]);
+  const stName = new Map((await db.select().from(stations).where(eq(stations.orgId, orgId))).map((s) => [s.id, s.name]));
+  const insName = new Map((await db.select().from(insurers).where(eq(insurers.orgId, orgId))).map((i) => [i.id, i.name]));
+
+  const out: FinishedExportRow[] = [];
+  for (const r of rows) {
+    const h = histBy.get(r.id) ?? [];
+    const at = h.find((x) => x.statut === "fertig")?.at ?? h.find((x) => x.statut === "rendu")?.at ?? r.updatedAt;
+    const end = berlinDate(at);
+    if ((f.from && end < f.from) || (f.to && end > f.to)) continue;
+    const flat = flatten(r, assignees.get(r.id) ?? [], null);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
+    const sh = computeShares(flat as never, calc);
+    const header = r.header as Record<string, unknown>;
+    out.push({
+      id: r.id, plate: String(header.kennzeichen ?? ""), model: String(header.modell ?? ""),
+      insurer: r.insurerId ? insName.get(r.insurerId) ?? "" : "",
+      bodyshop: (r.clientStationId ? stName.get(r.clientStationId) : "") || String(header.kunde ?? ""),
+      station: r.stationId ? stName.get(r.stationId) ?? "" : "", end,
+      total: round2(calc.netto), technician: round2(sh.techEur), headliner: round2(sh.demTechEur), referrer: round2(sh.werkEur), pdr: round2(sh.rest),
+    });
+  }
+  out.sort((a, b) => a.station.localeCompare(b.station, "de") || a.end.localeCompare(b.end) || a.plate.localeCompare(b.plate));
+  return { from: f.from ?? null, to: f.to ?? null, rows: out };
+}

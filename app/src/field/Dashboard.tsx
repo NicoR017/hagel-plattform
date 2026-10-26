@@ -1,7 +1,7 @@
 import { isPlace } from "./places";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
-import { buildTechnicianWorkbook, eur, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
+import { buildFinishedWorkbook, buildTechnicianWorkbook, eur, finishedFileName, type FinishedExportData, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
 import { api } from "../api";
 import { getLang, t } from "../i18n";
 import { go } from "./route";
@@ -183,6 +183,15 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
     } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
   };
 
+  const exportFinished = async () => {
+    setBusy(true);
+    try {
+      const d = await api<FinishedExportData>("GET", `/dashboard/finished-export${query()}`);
+      if (!d.rows.length) { toast(t("exportEmpty")); return; }
+      await shareOrDownload(buildFinishedWorkbook(d, getLang()), finishedFileName(d.from, d.to, getLang()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
+  };
+
   const refs = f.refs;
   const stations = refs?.stations ?? [];
   const money = (n: number) => eur(n);
@@ -354,6 +363,11 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
                   <Bars title={t("revByInsurer")} rows={data.revenue.byInsurer} money={money} />
                   <Bars title={t("revByMonth")} rows={data.revenue.byMonth.map((m) => ({ id: m.month, name: m.month, net: m.net, n: m.n, ids: m.ids }))} money={money} />
                 </div>
+              </Section>
+            )}
+            {f.can("export.excel") && f.can("prix.voir") && f.can("repartition_interne.voir") && (
+              <Section title={t("finExportTitle")} right={<button className="chip on" disabled={busy} onClick={() => void exportFinished()} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📊 ${t("finExportBtn")}`}</button>}>
+                <div className="muted" style={{ fontSize: 13 }}>{t("finExportHint")} ({range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")})</div>
               </Section>
             )}
             <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("back")}</button>

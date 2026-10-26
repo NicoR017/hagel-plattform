@@ -29,7 +29,7 @@ import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
-import { buildDashboard, buildTechSheets } from "./dashboard";
+import { buildDashboard, buildFinishedExport, buildTechSheets } from "./dashboard";
 import { handoverRoutes } from "./handover";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
@@ -214,6 +214,17 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const day = /^\d{4}-\d{2}-\d{2}$/;
     const uuidOrUndef = (x?: string) => (x && z.string().uuid().safeParse(x).success ? x : undefined);
     return c.json(await buildTechSheets(db, c.get("principal"), c.get("orgId"), {
+      sites: (q.sites ?? "").split(",").filter((x) => z.string().uuid().safeParse(x).success),
+      campaign: uuidOrUndef(q.campaign), client: uuidOrUndef(q.client), insurer: uuidOrUndef(q.insurer),
+      from: q.from && day.test(q.from) ? q.from : undefined, to: q.to && day.test(q.to) ? q.to : undefined,
+    }));
+  });
+
+  app.get("/dashboard/finished-export", needAuth, needOrg, mayDashboard, async (c) => {
+    const q = c.req.query();
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const uuidOrUndef = (x?: string) => (x && z.string().uuid().safeParse(x).success ? x : undefined);
+    return c.json(await buildFinishedExport(db, c.get("principal"), c.get("orgId"), {
       sites: (q.sites ?? "").split(",").filter((x) => z.string().uuid().safeParse(x).success),
       campaign: uuidOrUndef(q.campaign), client: uuidOrUndef(q.client), insurer: uuidOrUndef(q.insurer),
       from: q.from && day.test(q.from) ? q.from : undefined, to: q.to && day.test(q.to) ? q.to : undefined,

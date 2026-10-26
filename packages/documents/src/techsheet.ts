@@ -49,7 +49,7 @@ function colL(i: number): string {
 }
 
 // cell styles (index into cellXfs below)
-const S = { def: 0, title: 1, bold: 2, head: 3, money: 4, num: 5, totMoney: 6, totLabel: 7, int: 8, line: 9, headRight: 10, totNum: 11 } as const;
+export const S = { def: 0, title: 1, bold: 2, head: 3, money: 4, num: 5, totMoney: 6, totLabel: 7, int: 8, line: 9, headRight: 10, totNum: 11 } as const;
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -79,9 +79,9 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </styleSheet>`;
 
 type Cell = string | number | null | undefined;
-type Row = { ht?: number; cells: [Cell, number][] };
+export type Row = { ht?: number; cells: [Cell, number][] };
 
-function sheetXml(widths: number[], rows: Row[]): string {
+export function sheetXml(widths: number[], rows: Row[]): string {
   const body = rows.map((r, ri) => {
     const rr = ri + 1;
     const cells = r.cells.map(([v, st], ci) => {
@@ -99,14 +99,14 @@ function sheetXml(widths: number[], rows: Row[]): string {
 <sheetData>${body}</sheetData><pageSetup orientation="portrait" fitToHeight="0"/></worksheet>`;
 }
 
-const sheetName = (s: string, used: Set<string>) => {
+export const sheetName = (s: string, used: Set<string>) => {
   const base = (s.replace(/[\\/?*[\]:]/g, "-").trim().slice(0, 28) || "Sheet");
   let n = base, i = 2;
   while (used.has(n.toLowerCase())) n = `${base.slice(0, 26)} ${i++}`;
   used.add(n.toLowerCase());
   return n;
 };
-const r2 = (n: number) => Math.round(n * 100) / 100;
+export const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** `Abrechnung_<from>_<to>.xlsx` style name for the download. */
 export function techWorkbookFileName(from: string | null, to: string | null, lang: TechLang = "de"): string {
@@ -160,6 +160,11 @@ export function buildTechnicianWorkbook(data: { from: string | null; to: string 
     sheets.push({ name: sheetName(t.technician, used), xml: sheetXml([14, 14, 16, 22, 10, 16, 20, 18], rows) });
   }
 
+  return packSheets(sheets);
+}
+
+/** zips worksheets (name + xml) into a workbook with the shared styles */
+export function packSheets(sheets: { name: string; xml: string }[]): Uint8Array {
   const enc = new TextEncoder();
   const NS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`;
   const F = (name: string, str: string) => ({ name, data: enc.encode(str) });
