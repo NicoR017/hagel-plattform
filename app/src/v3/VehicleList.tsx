@@ -2,14 +2,13 @@ import { useMemo, useRef, useState } from "react";
 import { eur, fmtDate, h1, num } from "@hagel/documents";
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
-import { deleteVehicle, setPrefs } from "../sync/mutations";
+import { setPrefs } from "../sync/mutations";
 import type { LocalVehicle } from "../sync/db";
 import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, statusLabel } from "../field/Dialogs";
 import { ScansDialog } from "../field/Scans";
 import { go, type Mode } from "../field/route";
 import { useField, useVehicles } from "../field/store";
 import { toast } from "../field/toast";
-import { confirmDialog } from "../field/ui";
 import { bulkColibri, exportVehiclesXlsx, holdLabel, modeTitle } from "./listActions";
 import { MODE_STATUSES, STATUS_STYLE, inMode, matchesChip } from "./modes";
 import { useNewScans } from "./useScans";
@@ -155,10 +154,6 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
               <span className="acts">
                 {f.can("vehicules.changer_statut") && <button className="btn" aria-label={`${t("v3ChangeStatusOf")} ${plate}`} onClick={() => ask("status", [v.id])}>{t("status")}</button>}
                 {f.can("vehicules.deplacer") && <button className="btn" aria-label={`${plate} ${t("v3MoveOf")}`} onClick={() => ask("move", [v.id])}>{t("move")}</button>}
-                {f.can("vehicules.supprimer") && (
-                  <button className="btn" style={{ color: "#8F1D14" }} aria-label={`${t("v3Delete")} ${plate}`}
-                    onClick={() => { if (confirmDialog(`${t("deleteVehicleQ")} ${plate}?`)) { void deleteVehicle(f.mut, v.id); setSel((s) => { const n = new Set(s); n.delete(v.id); return n; }); } }}>🗑</button>
-                )}
               </span>
             </div>
           );

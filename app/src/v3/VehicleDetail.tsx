@@ -3,7 +3,6 @@ import { STATUSES } from "@hagel/shared";
 import { api } from "../api";
 import { fmtDateTime, t } from "../i18n";
 import { addAppointment, addComment, deleteAppointment, deleteVehicle } from "../sync/mutations";
-import { confirmDialog } from "../field/ui";
 import type { LocalVehicle } from "../sync/db";
 import { AssignDialog, MoveDialog, StatusDialog, holdReasonLabel, statusLabel } from "../field/Dialogs";
 import { Basis } from "../field/Basis";
@@ -160,18 +159,48 @@ function evText(e: Ev): string {
   return map[k] ?? k;
 }
 
-export function Verlauf({ id }: { id: string }) {
+/** the only place a vehicle can be deleted: needs the right "Delete vehicles", and the plate typed again */
+function DeleteVehicle({ id, plate, ctx }: { id: string; plate: string; ctx?: Ctx }) {
   const f = useField();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  if (!f.can("vehicules.supprimer")) return null;
+  const norm = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const match = !!norm(plate) && norm(typed) === norm(plate);
+  return (
+    <section className="panel" style={{ padding: 16, marginTop: 16, borderColor: "#E3B7B2" }}>
+      {!open ? (
+        <button className="btn" style={{ color: "#8F1D14" }} onClick={() => setOpen(true)}>🗑 {t("delete")}</button>
+      ) : (
+        <>
+          <p style={{ margin: "0 0 8px" }}>{t("vdDeleteType")} <b>{plate}</b></p>
+          <div className="row">
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus style={{ flex: 1, minWidth: 140 }} />
+            <button className="btn" style={{ color: "#8F1D14" }} disabled={!match} onClick={() => { void deleteVehicle(f.mut, id); go(ctx ? { page: "list", stationId: ctx.stationId, mode: ctx.mode } : { page: "list" }); }}>🗑 {t("delete")}</button>
+            <button className="btn sec" onClick={() => { setOpen(false); setTyped(""); }}>{t("cancel")}</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function Verlauf({ id, ctx, deletable }: { id: string; ctx?: Ctx; deletable?: boolean }) {
+  const f = useField();
+  const v = useVehicle(id);
   const [list, setList] = useState<Ev[] | null>(null);
   const stamp = f.status.lastSyncAt ?? 0;
   useEffect(() => { api<Ev[]>("GET", `/vehicles/${id}/verlauf`).then(setList).catch(() => setList([])); }, [id, stamp]);
   return (
+    <>
     <section className="panel" style={{ padding: 16 }}>
       <h3 style={{ margin: "0 0 8px" }}>🕘 {t("v4SecHistory")}</h3>
       {list === null && <p className="muted">{t("loading")}</p>}
       {list && !list.length && <p className="muted">{f.status.online ? t("noData") : t("v4HistOnline")}</p>}
       <div className="tl">{(list ?? []).map((e, i) => <div key={i}><time>{fmtDateTime(e.at)}</time><span style={{ flex: 1 }}>{evText(e)}</span><span className="muted">{e.who}</span></div>)}</div>
     </section>
+    {deletable && v && <DeleteVehicle id={id} ctx={ctx} plate={String((v as Record<string, unknown>).kennzeichen ?? "")} />}
+    </>
   );
 }
 
@@ -210,9 +239,6 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {f.can("vehicules.changer_statut") && <button className="btn" onClick={() => setDlg("status")}>{t("v3ChangeStatus")}</button>}
           {f.can("vehicules.deplacer") && <button className="btn" onClick={() => setDlg("move")}>{t("move")}</button>}
           {f.can("kommentare.schreiben") && <button className="btn" onClick={() => open("kommunikation")}>💬 {t("v4Comments")}{comments ? ` (${comments})` : ""}</button>}
-          {f.can("vehicules.supprimer") && (
-            <button className="btn" style={{ color: "#8F1D14" }} onClick={() => { if (confirmDialog(`${t("deleteVehicleQ")} ${String(x.kennzeichen || "")}?`)) { void deleteVehicle(f.mut, id); window.history.back(); } }}>🗑 {t("delete")}</button>
-          )}
         </div>
       </div>
       <div className="vd">
@@ -246,7 +272,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {cur === "dokumente" && <Documents v={v} />}
           {cur === "kommunikation" && <Comments v={v} />}
           {cur === "gtmotive" && <GtMotive />}
-          {cur === "verlauf" && <Verlauf id={id} />}
+          {cur === "verlauf" && <Verlauf id={id} ctx={ctx} deletable />}
         </div>
       </div>
       {dlg === "status" && <StatusDialog ids={[id]} current={v.statut} onClose={() => setDlg(null)} />}

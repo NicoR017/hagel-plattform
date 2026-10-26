@@ -4,7 +4,7 @@ import { STATUSES } from "@hagel/shared";
 import { buildXlsx, eur, fmtDate, h1, num, xlsxFileName } from "@hagel/documents";
 import { t } from "../i18n";
 import { applyColibriToVehicle, colibriBadge, readColibriFile } from "../sync/colibriImport";
-import { createVehicle, deleteVehicle, getPrefs } from "../sync/mutations";
+import { createVehicle, getPrefs } from "../sync/mutations";
 import { go, useRoute } from "./route";
 import { Occ } from "./occupancy";
 import { readDashFilter } from "./dashFilter";
@@ -14,7 +14,6 @@ import { BackupImport } from "./BackupImport";
 import { ScansDialog } from "./Scans";
 import { useField, useVehicles } from "./store";
 import { toast } from "./toast";
-import { confirmDialog } from "./ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -210,10 +209,6 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
                     </div>
                   </div>
                 </div>
-                {!sel && f.can("vehicules.supprimer") && (
-                  <button style={{ width: "100%", padding: 8, background: "transparent", border: "none", borderTop: "1px solid var(--line)", color: "var(--brick)", fontSize: 13, minHeight: 44 }}
-                    onClick={() => { if (confirmDialog(`${t("deleteVehicleQ")} ${v.kennzeichen ?? ""}?`)) void deleteVehicle(f.mut, v.id); }}>🗑 {t("delete")}</button>
-                )}
               </div>
             );
           })}
