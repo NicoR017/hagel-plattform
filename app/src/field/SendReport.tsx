@@ -10,7 +10,7 @@ import { useField } from "./store";
 import { toast } from "./toast";
 import { Dialog } from "./ui";
 
-interface Hist { id: string; type: string; status: string; error: string | null; recipients: string[]; sentAt: string | null; createdAt: string; sentBy: string | null }
+interface Hist { id: string; type: string; status: string; error: string | null; recipients: string[]; sentAt: string | null; createdAt: string; sentBy: string | null; replyTo?: string | null }
 
 /**
  * "Senden": the server e-mails the PDF to the customer carrosserie (always) and to the insurer (if it wants this kind of report).
@@ -19,13 +19,14 @@ interface Hist { id: string; type: string; status: string; error: string | null;
 export function SendReportDialog({ v, c, type, onClose }: { v: LocalVehicle; c: CalcResult; type: "kva" | "reparation"; onClose: () => void }) {
   const f = useField();
   const [rec, setRec] = useState<string[] | null | "offline">(null);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
   const [hist, setHist] = useState<Hist[]>([]);
   const [busy, setBusy] = useState(false);
   const land: "DE" | "ES" = (v as Record<string, unknown>).land === "ES" ? "ES" : "DE";
 
   useEffect(() => {
     let live = true;
-    api<{ recipients: string[] }>("GET", `/reports/recipients?vehicleId=${v.id}&type=${type}`).then((r) => live && setRec(r.recipients)).catch(() => live && setRec("offline"));
+    api<{ recipients: string[]; replyTo?: string | null }>("GET", `/reports/recipients?vehicleId=${v.id}&type=${type}`).then((r) => { if (live) { setRec(r.recipients); setReplyTo(r.replyTo ?? null); } }).catch(() => live && setRec("offline"));
     api<Hist[]>("GET", `/reports?vehicleId=${v.id}`).then((h) => live && setHist(h.filter((x) => x.type === type))).catch(() => undefined);
     return () => { live = false; };
   }, [v.id, type]);
@@ -49,6 +50,7 @@ export function SendReportDialog({ v, c, type, onClose }: { v: LocalVehicle; c: 
       <div style={{ background: "var(--bg)", borderRadius: 12, padding: "10px 12px", marginTop: 6, fontSize: 14, minHeight: 44 }}>
         {rec === null ? t("loading") : rec === "offline" ? t("recipientsOffline") : none ? <b style={{ color: "var(--brick)" }}>{t("noRecipients")}</b> : rec.map((r) => <div key={r}>✉ {r}</div>)}
       </div>
+      {replyTo && Array.isArray(rec) && <div style={{ fontSize: 13, marginTop: 8 }}>↩ {t("rcRepliesTo")}: <b>{replyTo}</b></div>}
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{type === "kva" ? t("sendKvaHint") : t("sendRepairHint")}</div>
       <button className="pbtn green" disabled={busy || none} onClick={() => void send()}>{busy ? t("preparing") : `✉️ ${t("sendNow")}`}</button>
       {hist.length > 0 && (
@@ -57,7 +59,7 @@ export function SendReportDialog({ v, c, type, onClose }: { v: LocalVehicle; c: 
           {hist.map((h) => (
             <div key={h.id} style={{ fontSize: 12, borderTop: "1px solid var(--line)", padding: "6px 0" }}>
               {h.status === "sent" ? "✓" : h.status === "failed" ? "⚠" : "⏳"} {fmtDateTime(h.sentAt ?? h.createdAt)} · {h.sentBy ?? ""}
-              <div className="muted">{h.recipients.join(", ")}{h.status === "failed" ? ` — ${t("failedWord")}` : h.status === "awaiting_file" ? ` — ${t("waitingWord")}` : ""}</div>
+              <div className="muted">{h.recipients.join(", ")}{h.replyTo ? ` · ↩ ${h.replyTo}` : ""}{h.status === "failed" ? ` — ${t("failedWord")}` : h.status === "awaiting_file" ? ` — ${t("waitingWord")}` : ""}</div>
             </div>
           ))}
         </div>

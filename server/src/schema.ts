@@ -11,6 +11,8 @@ export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
   country: text("country").notNull().default("DE"),
+  /** v5: the shared mailbox that receives the replies to the reports / receipts of the roles (or users) set to "contact address" */
+  contactEmail: text("contact_email"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -32,6 +34,8 @@ export const users = pgTable("users", {
 export const memberships = pgTable("memberships", {
   userId: uuid("user_id").notNull().references(() => users.id),
   orgId: uuid("org_id").notNull().references(() => organizations.id),
+  /** v5: where the replies to this person's reports go: null = follow the roles, "contact" = the contact address of the organisation, "own" = this person's e-mail */
+  replyMode: text("reply_mode"),
   createdAt: createdAt(),
 }, (t) => ({ pk: primaryKey({ columns: [t.userId, t.orgId] }) }));
 
@@ -46,6 +50,8 @@ export const roles = pgTable("roles", {
   isSystem: boolean("is_system").notNull().default(false),
   /** v5: repair steps (demontage | pdr | remontage) the role works on; empty = the rule of the technician record (pdr / headliner) */
   repairSteps: text("repair_steps").array().notNull().default(sql`'{}'::text[]`),
+  /** v5: the replies to what accounts of this role send (reports, receipts) go to the contact address of the organisation */
+  replyFromContact: boolean("reply_from_contact").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => ({ byOrg: index("roles_org_idx").on(t.orgId) }));
@@ -345,6 +351,8 @@ export const reportSends = pgTable("report_sends", {
   fileKey: text("file_key"),
   sentBy: uuid("sent_by").references(() => users.id),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  /** v5: the address that receives the replies (Reply-To of the mail) */
+  replyTo: text("reply_to"),
   createdAt: createdAt(),
 }, (t) => ({ byVehicle: index("report_sends_vehicle_idx").on(t.vehicleId) }));
 

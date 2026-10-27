@@ -12,6 +12,7 @@ import type { Mailer } from "./email";
 import { reportMail } from "./mails";
 import { loadMethodMap, methodOf } from "./methods";
 import { recipientsOfVehicle } from "./reports";
+import { replyToFor } from "./reply_to";
 import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicleHandovers, vehicles } from "./schema";
 import type { Storage } from "./storage";
 import { calcSettings, flatten, loadOrgSettings } from "./sync";
@@ -97,21 +98,22 @@ export async function sendRepairReport(deps: ReportDeps, vehicleId: string, by: 
     await logEvent(db, vehicleId, by, "report_no_recipients", {});
     return { id, status: "no_recipients", recipients: [] };
   }
-  let key: string | null = null;
+  let key: string | null = null, replyTo: string | undefined;
   try {
     const pdf = await buildRepairReportPdf(deps, row);
     key = `reports/${row.orgId}/${vehicleId}/${id}.pdf`;
     await storage.put(key, pdf.bytes, "application/pdf");
     const [me] = by ? await db.select().from(users).where(eq(users.id, by)) : [];
+    replyTo = await replyToFor(db, by, row.orgId); // the contact address of the organisation or the sender's own e-mail (see reply_to.ts)
     const mail = reportMail(pdf.lang, "reparation", { plate: h.kennzeichen ?? "", model: h.modell ?? "", vin: h.fin ?? "", hasScan: false, senderName: me?.name ?? "" });
-    await mailer.send({ to: recipients, subject: mail.subject, text: mail.text, replyTo: me?.email, attachments: [{ filename: pdf.filename, content: pdf.bytes, contentType: "application/pdf" }] });
+    await mailer.send({ to: recipients, subject: mail.subject, text: mail.text, replyTo, attachments: [{ filename: pdf.filename, content: pdf.bytes, contentType: "application/pdf" }] });
   } catch (e) {
     const error = String((e as Error).message).slice(0, 300);
-    await db.insert(reportSends).values({ id, orgId: row.orgId, vehicleId, type: "reparation", lang, recipients, status: "failed", error, fileKey: key, sentBy: by, sentAt: new Date() });
+    await db.insert(reportSends).values({ id, orgId: row.orgId, vehicleId, type: "reparation", lang, recipients, status: "failed", error, fileKey: key, sentBy: by, sentAt: new Date(), replyTo: replyTo ?? null });
     await logEvent(db, vehicleId, by, "report_failed", { error });
     return { id, status: "failed", recipients, error };
   }
-  await db.insert(reportSends).values({ id, orgId: row.orgId, vehicleId, type: "reparation", lang, recipients, status: "sent", fileKey: key, sentBy: by, sentAt: new Date() });
+  await db.insert(reportSends).values({ id, orgId: row.orgId, vehicleId, type: "reparation", lang, recipients, status: "sent", fileKey: key, sentBy: by, sentAt: new Date(), replyTo: replyTo ?? null });
   await logEvent(db, vehicleId, by, by ? "report_resent" : "report_sent", { recipients: recipients.length });
   await audit(db, { orgId: row.orgId, userId: by, action: by ? "report.resent" : "report.auto_sent", entity: "report", entityId: id, after: { type: "reparation", recipients } });
   return { id, status: "sent", recipients };

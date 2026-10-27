@@ -36,7 +36,7 @@ export async function act(fn: () => Promise<unknown>, setErr: (m: string) => voi
 }
 
 // ---------------- Users ----------------
-interface UserRow { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: { id: string; stationId: string | null; roleId: string; roleName: string; roleKey: string | null; scope: string; expiresAt: string | null }[] }
+interface UserRow { id: string; email: string; name: string; status: string; isSuperadmin: boolean; replyMode?: string | null; assignments: { id: string; stationId: string | null; roleId: string; roleName: string; roleKey: string | null; scope: string; expiresAt: string | null }[] }
 interface Station { id: string; type: string; name: string; capacite: number; present?: number; country: string; azureTenant: string | null; active: boolean; commissionPct: string; reportEmails: string[]; excludedInsurerEmails?: string[]; repairsPerDay?: number; address: string }
 interface RoleLite { id: string; name: string; key: string | null; scope: string }
 
@@ -99,14 +99,14 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
   const roles = useLoad<RoleLite[]>("/admin/roles-lite");
   const sites = useLoad<Station[]>("/admin/stations");
   const [err, setErr] = useState("");
-  const [editU, setEditU] = useState<{ id: string; name: string; language: string } | null>(null);
+  const [editU, setEditU] = useState<{ id: string; name: string; language: string; replyMode: string } | null>(null);
   const [draft, setDraft] = useState<AssignDraft>({});
   const [addA, setAddA] = useState<AssignAdd>(EMPTY_ADD);
-  const openEdit = (u: { id: string; name: string; language: string }) => { setDraft({}); setAddA(EMPTY_ADD); setErr(""); setEditU(u); };
+  const openEdit = (u: { id: string; name: string; language: string; replyMode: string }) => { setDraft({}); setAddA(EMPTY_ADD); setErr(""); setEditU(u); };
   /** one Save for the whole form: name + language, then every changed role/place, then the added role */
-  const saveEdit = async (u: { id: string; name: string; language: string }) => {
+  const saveEdit = async (u: { id: string; name: string; language: string; replyMode: string }) => {
     try {
-      await api("PUT", `/admin/users/${u.id}`, { name: u.name.trim(), language: u.language });
+      await api("PUT", `/admin/users/${u.id}`, { name: u.name.trim(), language: u.language, reply_mode: u.replyMode === "contact" || u.replyMode === "own" ? u.replyMode : null });
       const row = users.data?.find((x) => x.id === u.id);
       for (const a of row?.assignments ?? []) {
         const d = draft[a.id];
@@ -173,6 +173,11 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
           <label>{t("name")}</label><input value={editU.name} onChange={(e) => setEditU({ ...editU, name: e.target.value })} />
           <label>{t("invitationLanguage")}</label>
           <select value={editU.language} onChange={(e) => setEditU({ ...editU, language: e.target.value })}>{LANG_LIST.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}</select>
+          <label>{t("rcUser")}</label>
+          <select value={editU.replyMode} onChange={(e) => setEditU({ ...editU, replyMode: e.target.value })}>
+            <option value="">{t("rcFollowRole")}</option><option value="contact">{t("rcContact")}</option><option value="own">{t("rcOwn")}</option>
+          </select>
+          <div className="muted" style={{ fontSize: 12, margin: "2px 0 10px" }}>{t("rcUserHint")}</div>
           <h4 style={{ marginBottom: 4 }}>{t("uaAccess")}</h4>
           <p className="muted" style={{ marginTop: 0 }}>{t("uaPlaceHint")}</p>
           <AssignmentsEditor user={users.data?.find((x) => x.id === editU.id)} roles={roles.data ?? []} places={(sites.data ?? []).filter((s) => s.type !== "carrosserie")}
@@ -197,7 +202,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
               ))}</td>
               <td><span className={"pill" + (u.status === "active" ? "" : " off")}>{u.status === "active" ? t("active") : u.status === "invited" ? t("v6Invited") : t("inactive")}</span></td>
               <td style={{ whiteSpace: "nowrap" }}>
-                <button className="btn sec" onClick={() => openEdit({ id: u.id, name: u.name, language: (u as unknown as { language?: string }).language ?? getLang() })}>{t("v6Edit")}</button>{" "}
+                <button className="btn sec" onClick={() => openEdit({ id: u.id, name: u.name, language: (u as unknown as { language?: string }).language ?? getLang(), replyMode: u.replyMode ?? "" })}>{t("v6Edit")}</button>{" "}
                 {!u.isSuperadmin && (u.status === "active"
                   ? <button className="btn danger" onClick={() => act(() => api("POST", `/admin/users/${u.id}/deactivate`), setErr, reload)}>{t("deactivate")}</button>
                   : <button className="btn sec" onClick={() => act(() => api("POST", `/admin/users/${u.id}/reactivate`), setErr, reload)}>{t("reactivate")}</button>)}{" "}
@@ -227,7 +232,7 @@ const PERM_GROUPS = (() => {
   const rest = PERMISSIONS.filter((p) => !known.has(p));
   return GROUPS_DEF.map((g, i) => ({ title: g.title, keys: (i === GROUPS_DEF.length - 1 ? [...g.keys, ...rest] : g.keys).filter((k) => (PERMISSIONS as readonly string[]).includes(k)) }));
 })();
-interface RoleRow { id: string; key: string | null; name: string; description: string; scope: string; permissions: string[]; repairSteps?: string[]; isSystem: boolean }
+interface RoleRow { id: string; key: string | null; name: string; description: string; scope: string; permissions: string[]; repairSteps?: string[]; replyFromContact?: boolean; isSystem: boolean }
 
 export function RolesPage() {
   const roles = useLoad<RoleRow[]>("/admin/roles");
@@ -294,11 +299,14 @@ export function RolesPage() {
               onChange={(e) => setEdit({ ...edit, repairSteps: e.target.checked ? [...steps, s] : steps.filter((x) => x !== s) })} />
               <span>{t(("rs_" + s) as never)}<small style={{ display: "block", color: "var(--sub)" }}>{t(("rsMove_" + s) as never)}</small></span></label>
           ))}</div>
+          <h4 style={{ margin: "14px 0 4px" }}>{t("rcTitle")}</h4>
+          <label><input type="checkbox" checked={!!edit.replyFromContact} onChange={(e) => setEdit({ ...edit, replyFromContact: e.target.checked })} />
+            <span>{t("rcRole")}<small style={{ display: "block", color: "var(--sub)" }}>{t("rcRoleHint")}</small></span></label>
           <Err msg={err} />
           <p className="row">
             <button className="btn" onClick={() => act(() => edit.id
-              ? api("PUT", `/admin/roles/${edit.id}`, { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps })
-              : api("POST", "/admin/roles", { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps }),
+              ? api("PUT", `/admin/roles/${edit.id}`, { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps, reply_from_contact: !!edit.replyFromContact })
+              : api("POST", "/admin/roles", { name: edit.name, description: edit.description ?? "", scope: edit.scope, permissions: edit.permissions, repair_steps: steps, reply_from_contact: !!edit.replyFromContact }),
             setErr, () => { setEdit(null); void roles.reload(); })}>{t("save")}</button>
             <button className="btn sec" onClick={() => setEdit(null)}>{t("cancel")}</button>
           </p>
@@ -472,11 +480,13 @@ export function AuditPage() {
 
 // ---------------- Organisations (super-admin) ----------------
 export function OrgsPage() {
-  const orgs = useLoad<{ id: string; name: string; country: string }[]>("/admin/orgs");
+  const orgs = useLoad<{ id: string; name: string; country: string; contactEmail?: string | null }[]>("/admin/orgs");
   const [name, setName] = useState("");
   const [country, setCountry] = useState("DE");
   const [tenants, setTenants] = useState<Record<string, string>>({});
+  const [contacts, setContacts] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
+  useEffect(() => { setContacts(Object.fromEntries((orgs.data ?? []).map((o) => [o.id, o.contactEmail ?? ""]))); }, [orgs.data]);
   useEffect(() => {
     orgs.data?.forEach((o) => api<string[]>("GET", `/admin/orgs/${o.id}/tenants`).then((tt) => setTenants((p) => ({ ...p, [o.id]: tt.join(", ") }))).catch(() => undefined));
   }, [orgs.data]);
@@ -488,7 +498,12 @@ export function OrgsPage() {
           <tr key={o.id}><td><b>{o.name}</b> ({o.country}){getOrg() === o.id && <span className="pill">{t("current")}</span>}</td>
             <td style={{ minWidth: 260 }}><label>{t("tenantsComma")}</label>
               <input value={tenants[o.id] ?? ""} onChange={(e) => setTenants({ ...tenants, [o.id]: e.target.value })} /></td>
-            <td><button className="btn sec" onClick={() => act(() => api("PUT", `/admin/orgs/${o.id}/tenants`, { tenants: (tenants[o.id] ?? "").split(",").map((x) => x.trim()).filter(Boolean) }), setErr)}>{t("save")}</button></td></tr>
+            <td style={{ minWidth: 260 }}><label>{t("rcOrgContact")}</label>
+              <input type="email" placeholder="contact-spain@pdr-team.com" value={contacts[o.id] ?? ""} onChange={(e) => setContacts({ ...contacts, [o.id]: e.target.value })} /></td>
+            <td><button className="btn sec" onClick={() => act(async () => {
+              await api("PUT", `/admin/orgs/${o.id}/tenants`, { tenants: (tenants[o.id] ?? "").split(",").map((x) => x.trim()).filter(Boolean) });
+              await api("PUT", `/admin/orgs/${o.id}/contact`, { contact_email: (contacts[o.id] ?? "").trim() || null });
+            }, setErr, () => void orgs.reload())}>{t("save")}</button></td></tr>
         ))}</tbody></table>
       </Card>
       <Card title={t("org")}>

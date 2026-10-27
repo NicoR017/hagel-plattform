@@ -10,7 +10,7 @@ import { useField, usePhotos } from "../field/store";
 import { toast } from "../field/toast";
 import { downloadReceipt, useHandovers } from "./HandoverDialog";
 
-interface Send { id: string; type: "kva" | "reparation"; lang: string; status: string; error: string | null; recipients: string[]; sentAt: string | null; createdAt: string; sentBy: string | null; hasFile: boolean }
+interface Send { id: string; type: "kva" | "reparation"; lang: string; status: string; error: string | null; recipients: string[]; sentAt: string | null; createdAt: string; sentBy: string | null; hasFile: boolean; replyTo?: string | null }
 interface Doc { key: string; at: string; title: string; sub: string[]; status?: string; download?: () => Promise<void>; again?: () => void; againLabel?: Key }
 
 const STATUS_KEY: Record<string, Key> = { sent: "dcSent", failed: "dcFailed", no_recipients: "dcNoRecipients", awaiting_file: "dcWaiting" };
@@ -60,7 +60,7 @@ export function Documents({ v }: { v: LocalVehicle }) {
     const isKva = s.type === "kva";
     docs.push({
       key: "s" + s.id, at: s.sentAt ?? s.createdAt, title: t(isKva ? "dcEstimate" : "dcRepairReport"), status: s.status,
-      sub: [s.lang.toUpperCase(), s.recipients.length ? `${t("dcTo")} ${s.recipients.join(", ")}` : "", s.sentBy ? t("hoBy").replace("{user}", s.sentBy) : "", s.error ?? ""].filter(Boolean),
+      sub: [s.lang.toUpperCase(), s.recipients.length ? `${t("dcTo")} ${s.recipients.join(", ")}` : "", s.replyTo ? `↩ ${s.replyTo}` : "", s.sentBy ? t("hoBy").replace("{user}", s.sentBy) : "", s.error ?? ""].filter(Boolean),
       download: s.hasFile ? saveStored(`/reports/${s.id}/file`, `${isKva ? (s.lang === "es" ? "Presupuesto" : "Kostenvoranschlag") : s.lang === "es" ? "Informe_reparacion" : "Fotobericht_Reparatur"}_${plate}.pdf`) : undefined,
       again: (isKva ? mayKva : mayRep) ? () => setDlg(s.type) : undefined, againLabel: "hoResend",
     });

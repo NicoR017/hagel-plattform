@@ -14,6 +14,7 @@ import { photos, reportSends, users, vehicleAssignments, vehicles } from "./sche
 import type { Mailer } from "./email";
 import { reportMail } from "./mails";
 import { recipientsOfVehicle } from "./reports";
+import { replyToInfo } from "./reply_to";
 import { audit } from "./audit";
 import type { Storage } from "./storage";
 import { colibriKey, nextSeq, photoKey, photoToClient, processPull, processPush, refOf } from "./sync";
@@ -146,7 +147,8 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const v = await vehicleFor(c.get("principal"), c.req.query("vehicleId") ?? "", "vehicules.voir");
     const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
     if (!can(c.get("principal"), reportPerm(type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(403, "forbidden");
-    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation") });
+    const reply = await replyToInfo(db, c.get("principal").id, v.orgId);
+    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation"), replyTo: reply.address ?? null, replyToSource: reply.source });
   });
 
   /** History of what was sent for a vehicle. */
@@ -156,7 +158,7 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const ref = refOf(v, as.map((a) => a.userId));
     if (!can(c.get("principal"), "kva.envoyer", ref) && !can(c.get("principal"), "rapport_reparation.envoyer", ref)) throw new HttpError(403, "forbidden");
     const rows = await db.select({ r: reportSends, name: users.name, email: users.email }).from(reportSends).leftJoin(users, eq(users.id, reportSends.sentBy)).where(eq(reportSends.vehicleId, v.id));
-    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, lang: x.lang, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email, hasFile: !!x.fileKey })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, lang: x.lang, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email, hasFile: !!x.fileKey, replyTo: x.replyTo })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
   });
 
   /** The stored PDF of a report that was sent from the server (same permission as the history). */
@@ -199,7 +201,7 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const safe = (c.req.header("x-filename") ?? "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80);
     const filename = safe.toLowerCase().endsWith(".pdf") ? safe : `${rep.type === "kva" ? (lang === "es" ? "Presupuesto" : "Kostenvoranschlag") : (lang === "es" ? "Informe_reparacion" : "Fotobericht_Reparatur")}_${(h.kennzeichen ?? "Fahrzeug").replace(/[^A-Za-z0-9]+/g, "-")}.pdf`;
     try {
-      await mailer.send({ to: rep.recipients, subject: mail.subject, text: mail.text, replyTo: me?.email, attachments: [{ filename, content: bytes, contentType: "application/pdf" }] });
+      await mailer.send({ to: rep.recipients, subject: mail.subject, text: mail.text, replyTo: rep.replyTo ?? me?.email, attachments: [{ filename, content: bytes, contentType: "application/pdf" }] });
     } catch (e) {
       await db.update(reportSends).set({ status: "failed", error: String((e as Error).message).slice(0, 300), fileKey: key }).where(eq(reportSends.id, rep.id));
       throw new HttpError(502, "report_failed");

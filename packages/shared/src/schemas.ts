@@ -12,6 +12,8 @@ export const roleInput = z.object({
   permissions: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length),
   /** repair steps the role works on (technician / headliner accounts); empty = the rule of the technician record */
   repair_steps: z.array(z.enum(ROLE_REPAIR_STEPS)).max(ROLE_REPAIR_STEPS.length).default([]),
+  /** replies to what this role's accounts send (reports, receipts) go to the contact address of the organisation; absent = unchanged */
+  reply_from_contact: z.boolean().optional(),
 });
 
 export const stationInput = z.object({

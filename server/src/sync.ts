@@ -11,6 +11,7 @@ import type { Mailer } from "./email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
 import { applyRepairOp, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor } from "./repair";
 import { recipientsOfVehicle } from "./reports";
+import { replyToFor } from "./reply_to";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
 import { can, canOrg, effectivePermissions, fieldProfile, filterFields, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
@@ -416,7 +417,8 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       }
       const recipients = await recipientsOfVehicle(tx, row, op.report.type);
       if (!recipients.length) throw new Reject("report_no_recipients");
-      await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id });
+      const replyTo = await replyToFor(tx, u.id, row.orgId); // the contact address of the organisation or the sender's own e-mail (see reply_to.ts)
+      await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id, replyTo: replyTo ?? null });
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "report", entityId: op.report.id, after: { vehicleId: row.id, type: op.report.type, recipients } });
       return { status: "ok", orgId: row.orgId, seq: row.seq };
     }

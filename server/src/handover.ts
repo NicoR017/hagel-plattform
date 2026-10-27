@@ -9,6 +9,7 @@ import type { Env } from "./env";
 import type { Mailer } from "./email";
 import { handoverMail } from "./mails";
 import { can, fieldProfile, type Principal } from "./permissions";
+import { replyToFor } from "./reply_to";
 import { letterheadOf } from "./repair_report";
 import { insurers, stations, users, vehicleAssignments, vehicleHandovers, vehicles } from "./schema";
 import type { Storage } from "./storage";
@@ -87,7 +88,8 @@ export async function sendHandoverMail(deps: { db: Db; storage: Storage; mailer?
     const [st] = h.stationId ? await db.select().from(stations).where(eq(stations.id, h.stationId)) : [];
     const [me] = h.signedBy ? await db.select().from(users).where(eq(users.id, h.signedBy)) : [];
     const mail = handoverMail(pdf.lang, h.kind as "drop_off" | "pick_up", { plate: flat.kennzeichen ?? "", model: flat.modell ?? "", stationName: st?.name ?? "", customerName: h.customerName, senderName: me?.name ?? "" });
-    await deps.mailer.send({ to: h.customerEmail, subject: mail.subject, text: mail.text, replyTo: me?.email, attachments: [{ filename: pdf.filename, content: pdf.bytes, contentType: "application/pdf" }] });
+    const replyTo = row ? await replyToFor(db, h.signedBy ?? null, row.orgId) : me?.email; // the contact address of the organisation or the signer's own e-mail
+    await deps.mailer.send({ to: h.customerEmail, subject: mail.subject, text: mail.text, replyTo, attachments: [{ filename: pdf.filename, content: pdf.bytes, contentType: "application/pdf" }] });
   } catch (e) { return fail(String((e as Error).message)); }
   await db.update(vehicleHandovers).set({ mailStatus: "sent", mailError: null, mailedAt: new Date() }).where(eq(vehicleHandovers.id, h.id));
   return { status: "sent" };
