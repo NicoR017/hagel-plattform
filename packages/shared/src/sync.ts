@@ -134,7 +134,7 @@ export const opSchema = z.discriminatedUnion("type", [
       id: uuidStr, stationId: uuidStr, clientStationId: uuidStr.nullable().default(null),
       campaignId: uuidStr.nullable().default(null), insurerId: uuidStr.nullable().default(null),
       header: headerFields, panels: z.record(z.string(), panelSchema).default({}), shares: sharesFields.default({}),
-      statut: z.enum(STATUSES).default("arrive"),
+      statut: z.enum(STATUSES).exclude(["refuse"]).default("arrive"), // a car is refused after its assessment, with a reason (vehicle.status)
     }).strict(),
   }),
   z.object({ ...base, type: z.literal("vehicle.header"), vehicleId: uuidStr, fields: headerFields }),

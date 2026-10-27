@@ -16,13 +16,14 @@ import { snapshotVehicles, undoMove, undoStatus } from "./undo";
 import { resolveUi, setUiMode, useUiMode } from "./uiMode";
 import { useAppConfig } from "../env";
 import type { Key } from "../i18n";
-import { STATUSES } from "@hagel/shared";
+import { REFUSE_REASONS, STATUSES } from "@hagel/shared";
 
 /** how long the "Rückgängig" button stays on screen */
 export const UNDO_MS = 6000;
 export const statusLabel = (s: string) => t(("st." + s) as Key);
 export const HOLD_REASONS = ["Teile", "Freigabe", "Demontage", "Sonstiges"] as const;
 export const holdReasonLabel = (r: string) => tOr("hold." + r, r);
+export const refuseReasonLabel = (r: string) => tOr("rf_" + r, r);
 
 /** Change status of one or many vehicles. "On hold" requires a reason. */
 export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[]; current?: string; onClose: () => void; onDone?: () => void }) {
@@ -30,17 +31,32 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
   const [statut, setSt] = useState(current ?? "besichtigung");
   // leaving 'on hold' offers the status the car had before (the server remembers it)
   const before = useVehicle(ids[0] ?? "");
-  const prev = current === "attente" && ids.length === 1 ? ((before?.statutAvant as string | null | undefined) ?? null) : null;
+  const prev = (current === "attente" || current === "refuse") && ids.length === 1 ? ((before?.statutAvant as string | null | undefined) ?? null) : null;
   useEffect(() => { if (prev) setSt(prev); }, [prev]);
   const [reason, setReason] = useState<string>("Teile");
   const [other, setOther] = useState("");
-  const motif = statut === "attente" ? (reason === "Sonstiges" ? other.trim() : reason) : "";
-  const valid = statut !== "attente" || !!motif;
+  const [refuseKey, setRefuseKey] = useState<string>(REFUSE_REASONS[0]);
+  const [refuseNote, setRefuseNote] = useState("");
+  // a refusal is only possible before the repair: the chip is greyed out for a car that is in repair, finished or returned
+  const canRefuse = ids.length !== 1 || !current || current === "arrive" || current === "besichtigung" || current === "attente" || current === "refuse";
+  const motif = statut === "attente" ? (reason === "Sonstiges" ? other.trim() : reason) : statut === "refuse" ? refuseKey + (refuseNote.trim() ? ": " + refuseNote.trim() : "") : "";
+  const valid = (statut !== "attente" || !!motif) && (statut !== "refuse" || canRefuse);
   return (
     <Dialog title={t("changeStatus")} onClose={onClose}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} onClick={() => setSt(s)}>{s === prev ? "↩ " : ""}{statusLabel(s)}</button>)}
+        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} disabled={s === "refuse" && !canRefuse} onClick={() => setSt(s)}>{s === prev ? "↩ " : ""}{statusLabel(s)}</button>)}
       </div>
+      {statut === "refuse" && (
+        <div style={{ marginTop: 14 }}>
+          <Field label={t("rfTitle")}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {REFUSE_REASONS.map((r) => <button key={r} className={"chip" + (r === refuseKey ? " on" : "")} onClick={() => setRefuseKey(r)}>{refuseReasonLabel(r)}</button>)}
+            </div>
+          </Field>
+          <input className="inp" value={refuseNote} placeholder={t("rfComment")} maxLength={200} onChange={(e) => setRefuseNote(e.target.value)} />
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t("rfHint")}</div>
+        </div>
+      )}
       {statut === "attente" && (
         <div style={{ marginTop: 14 }}>
           <Field label={t("holdReason")}>

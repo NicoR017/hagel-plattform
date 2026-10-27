@@ -2,14 +2,14 @@ import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { ES_MATRIX_DEFAULT, computeShares, computeVehicle, type CalcVehicle, type Settings } from "@hagel/calc";
 import {
-  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, isPlaceType, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
+  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, REFUSABLE_FROM, isPlaceType, parseRefuseMotif, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "./audit";
 import { finishHandover } from "./handover";
 import type { Mailer } from "./email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
-import { applyRepairOp, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor } from "./repair";
+import { applyRepairOp, cancelWhenRefused, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor, sendBookingMail, sendRefusalMail } from "./repair";
 import { recipientsOfVehicle } from "./reports";
 import { replyToFor } from "./reply_to";
 import type { Db } from "./db";
@@ -291,13 +291,19 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       need(u, "vehicules.changer_statut", ref);
       if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // a technician / headliner never changes a status ("Fertig" would skip the Finish checks)
       if (op.statut === "attente" && !(op.motif ?? "").trim()) throw new Reject("motif_required");
+      const refuse = op.statut === "refuse";
+      if (refuse) {
+        if (!parseRefuseMotif(op.motif).valid) throw new Reject("motif_required"); // one of the reasons, with an optional comment
+        if (!(REFUSABLE_FROM as readonly string[]).includes(row.statut) || row.repairStage != null) throw new Reject("refuse_status"); // not once the repair started
+      }
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.status ?? 0) > at) return commit(tx, u, row, {}, [], ["status"], op.type, {}, true);
       stamps.status = at;
       const now = new Date();
       const set: Partial<typeof vehicles.$inferInsert> = {
-        statut: op.statut, statutMotif: op.statut === "attente" ? (op.motif ?? "").trim() : null, statutDepuis: now, groupAt: stamps,
-        statutAvant: op.statut === "attente" ? row.statut : null,
+        statut: op.statut, statutMotif: op.statut === "attente" ? (op.motif ?? "").trim() : refuse ? (op.motif ?? "").trim() : null, statutDepuis: now, groupAt: stamps,
+        // leaving "on hold" / "refused" offers the status the car had before
+        statutAvant: op.statut === "attente" ? row.statut : refuse ? (row.statut === "refuse" ? row.statutAvant : row.statut) : null,
       };
       if (op.statut === "reparatur") set.repAt = now;
       else if (op.statut === "arrive" || op.statut === "besichtigung") set.repAt = null;
@@ -306,7 +312,11 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       else if (op.statut === "fertig") set.repairStage = "finish";
       else if (op.statut === "arrive" || op.statut === "besichtigung") set.repairStage = null;
       await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: op.statut, motif: set.statutMotif ?? null, userId: u.id });
-      return commit(tx, u, row, set, ["status"], [], op.type, { before: { statut: row.statut }, after: { statut: op.statut, motif: set.statutMotif } });
+      const cancelled = refuse && row.statut !== "refuse" ? await cancelWhenRefused(tx, row, u.id) : [];
+      const out = await commit(tx, u, row, set, ["status"], [], op.type, { before: { statut: row.statut }, after: { statut: op.statut, motif: set.statutMotif } });
+      if (!refuse || row.statut === "refuse") return out;
+      const mc = { db: deps.db, mailer: deps.mailer };
+      return { ...out, after: async () => { for (const id of cancelled) await sendBookingMail(mc, "cancelled", id, u.id); await sendRefusalMail(mc, row.id, set.statutMotif ?? null, u.id); } };
     }
 
     case "vehicle.handover": {

@@ -96,6 +96,25 @@ export function reportMail(lang: "de" | "es", type: "kva" | "reparation", i: Rep
 export interface BookingMailInfo { date: string; time: string; station: string; address: string; plate: string; model: string; claim: string }
 
 /** Repair-calendar e-mail for the customer and the carrosserie: confirmation, new date, or cancellation (DE or ES). */
+const REFUSE_WORDS: Record<Lang, Record<string, string>> = {
+  de: { non_pdr: "Nicht per PDR reparierbar", client: "Der Kunde lehnt ab", assurance: "Die Versicherung lehnt ab", epave: "Totalschaden" },
+  en: { non_pdr: "Not repairable with PDR", client: "The customer declines", assurance: "The insurer declines", epave: "Write-off" },
+  fr: { non_pdr: "Non réparable en PDR", client: "Le client refuse", assurance: "L'assurance refuse", epave: "Épave" },
+  es: { non_pdr: "No reparable con PDR", client: "El cliente rechaza", assurance: "La aseguradora rechaza", epave: "Siniestro total" },
+};
+/** To the body shop of a car that was assessed but will not be repaired (the reason, never amounts). */
+export function refusalMail(lang: Lang, i: { plate: string; model: string; claim: string; reason: string; comment: string }): MailBody {
+  const veh = [i.model, i.plate].filter(Boolean).join(" · ");
+  const why = REFUSE_WORDS[lang][i.reason] ?? i.reason;
+  const note = i.comment ? `\n${i.comment}` : "";
+  switch (lang) {
+    case "es": return { subject: `Vehículo no será reparado${veh ? " – " + veh : ""}`, text: `Estimados señores:\n\nTras la peritación, el vehículo ${veh} no será reparado.\n\nMotivo: ${why}${note}${i.claim ? `\nN.º de siniestro: ${i.claim}` : ""}\n\nUn saludo cordial` };
+    case "fr": return { subject: `Véhicule non réparé${veh ? " – " + veh : ""}`, text: `Bonjour,\n\nAprès l'expertise, le véhicule ${veh} ne sera pas réparé.\n\nMotif : ${why}${note}${i.claim ? `\nN° de sinistre : ${i.claim}` : ""}\n\nCordialement` };
+    case "en": return { subject: `Vehicle will not be repaired${veh ? " – " + veh : ""}`, text: `Dear Sir or Madam,\n\nAfter the assessment, the vehicle ${veh} will not be repaired.\n\nReason: ${why}${note}${i.claim ? `\nClaim number: ${i.claim}` : ""}\n\nKind regards` };
+    default: return { subject: `Fahrzeug wird nicht repariert${veh ? " – " + veh : ""}`, text: `Sehr geehrte Damen und Herren,\n\nnach der Begutachtung wird das Fahrzeug ${veh} nicht repariert.\n\nGrund: ${why}${note}${i.claim ? `\nSchadennummer: ${i.claim}` : ""}\n\nMit freundlichen Grüßen` };
+  }
+}
+
 export function bookingMail(lang: "de" | "es", kind: "created" | "moved" | "cancelled", i: BookingMailInfo): MailBody {
   const [y, m, d] = i.date.split("-");
   const date = lang === "es" ? `${d}/${m}/${y}` : `${d}.${m}.${y}`;

@@ -21,7 +21,7 @@ interface LinkRow {
 }
 interface Dash {
   generatedAt: string; vehicles: number; delayDays: Record<string, number>;
-  kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
+  kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; refused?: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
   sites: { id: string; name: string; type: string; capacity: number; present: number; presentIds: string[]; byStatus: Record<string, Ids>; arrivalsToday: Ids; departuresToday: Ids; byStage?: Record<string, Ids>; repairsToday?: { booked: number; capacity: number } }[];
   durations: { avgArrivalToReturnedDays: number | null; avgRepairDays: number | null; returnedSamples: number; repairSamples: number };
   delayed: { id: string; plate: string; statut: string; motif: string | null; days: number; stationName: string; thresholdDays: number }[];
@@ -35,7 +35,7 @@ interface Dash {
   };
 }
 
-const STATUS_COLOR: Record<string, string> = { arrive: "#8aa0c0", besichtigung: "#5b8fd6", attente: "#e0a02c", reparatur: "#7b5bd6", fertig: "#5e8c63", rendu: "#cfd6df" };
+const STATUS_COLOR: Record<string, string> = { arrive: "#8aa0c0", besichtigung: "#5b8fd6", attente: "#e0a02c", reparatur: "#7b5bd6", fertig: "#5e8c63", rendu: "#cfd6df", refuse: "#c98a84" };
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const monday = (d: Date) => addDays(d, -((d.getDay() + 6) % 7));
@@ -247,6 +247,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
               <Tile label={t("departuresToday")} value={data.kpis.departuresToday.n} ids={data.kpis.departuresToday.ids} />
               <Tile label={t("kpiDelayed")} value={data.kpis.delayed.n} ids={data.kpis.delayed.ids} tone={data.kpis.delayed.n ? "bad" : "good"} />
               <Tile label={t("finishedN")} value={data.kpis.finished.n} ids={data.kpis.finished.ids} tone="good" />
+              {data.kpis.refused && <Tile label={t("kpiRefused")} value={data.kpis.refused.n} ids={data.kpis.refused.ids} />}
               {data.revenue && <Tile label={t("kpiNet")} value={money(data.revenue.total)} ids={data.revenue.ids} sub={`${data.revenue.n} ${t("vehiclesCount")}`} />}
             </div>
 
@@ -335,7 +336,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
                 <details style={{ marginTop: 10 }}>
                   <summary style={{ cursor: "pointer" }}>{t("delayThresholds")}</summary>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-                    {STATUSES.filter((s) => s !== "rendu").map((s) => (
+                    {STATUSES.filter((s) => s !== "rendu" && s !== "refuse").map((s) => (
                       <label key={s} style={{ display: "flex", gap: 4, alignItems: "center" }}>{statusLabel(s)}
                         <input className="inp" type="number" min={0} max={365} style={{ width: 70, minHeight: 36 }} value={thr[s] ?? ""} placeholder="—"
                           onChange={(e) => { const next = { ...thr }; if (e.target.value === "") delete next[s]; else next[s] = Number(e.target.value); setThr(next); }}

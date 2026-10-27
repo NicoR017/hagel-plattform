@@ -42,7 +42,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   for (const a of assign) assignees.set(a.vehicleId, [...(assignees.get(a.vehicleId) ?? []), a.userId]);
 
   const siteSet = f.sites?.length ? new Set(f.sites) : null;
-  const rows = allRows.filter((r) => {
+  const filteredRows = allRows.filter((r) => {
     const ref = refOf(r, assignees.get(r.id) ?? []);
     if (!effectivePermissions(u, ref).has("vehicules.voir")) return false;
     if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
@@ -51,6 +51,9 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     if (f.insurer && r.insurerId !== f.insurer) return false;
     return true;
   });
+  // refused cars (assessed, never repaired) are out of every figure: only their own counter below knows them
+  const rows = filteredRows.filter((r) => r.statut !== "refuse");
+  const refusedRows = filteredRows.filter((r) => r.statut === "refuse");
   const ids = rows.map((r) => r.id);
   const inPeriod = (d: Date | string) => {
     const day = typeof d === "string" ? d.slice(0, 10) : berlinDate(d);
@@ -255,6 +258,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     departuresToday: { n: depIds.length, ids: depIds },
     delayed: { n: delayed.length, ids: delayed.map((d) => d.id) },
     finished: { n: finishedIds.length, ids: finishedIds },
+    refused: (() => { const ids = refusedRows.filter((r) => inPeriod(r.statutDepuis ?? r.updatedAt)).map((r) => r.id); return { n: ids.length, ids }; })(),
     fullSites: sitesOut.filter((x) => x.capacity > 0 && x.present >= x.capacity).map((x) => ({ id: x.id, name: x.name, present: x.present, capacity: x.capacity })),
   };
 
@@ -287,7 +291,7 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
   const siteSet = f.sites?.length ? new Set(f.sites) : null;
   const rows = allRows.filter((r) => {
     const eff = effectivePermissions(u, refOf(r, assignees.get(r.id) ?? []));
-    if (!eff.has("vehicules.voir") || !eff.has("repartition_interne.voir")) return false;
+    if (r.statut === "refuse" || !eff.has("vehicules.voir") || !eff.has("repartition_interne.voir")) return false;
     if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
     return (!f.campaign || r.campaignId === f.campaign) && (!f.client || r.clientStationId === f.client) && (!f.insurer || r.insurerId === f.insurer);
   });

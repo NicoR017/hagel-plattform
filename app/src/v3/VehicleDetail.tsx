@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { STATUSES } from "@hagel/shared";
+import { STATUSES, parseRefuseMotif } from "@hagel/shared";
 import { api } from "../api";
 import { fmtDateTime, t } from "../i18n";
 import { addAppointment, addComment, deleteAppointment, deleteVehicle } from "../sync/mutations";
 import type { LocalVehicle } from "../sync/db";
-import { AssignDialog, MoveDialog, StatusDialog, holdReasonLabel, statusLabel } from "../field/Dialogs";
+import { AssignDialog, MoveDialog, StatusDialog, holdReasonLabel, refuseReasonLabel, statusLabel } from "../field/Dialogs";
 import { Basis } from "../field/Basis";
 import { BookingForm } from "../field/BookingForm";
 import { Bilder } from "../field/Bilder";
@@ -233,7 +233,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           <h1>{String(x.kennzeichen || "—")}</h1>
           <div style={{ color: "#B9C4D6", fontSize: 13 }}>{String(x.modell || x.fin || "")}{x.claimNumber ? ` · ${t("v3Claim")} ${String(x.claimNumber)}` : ""}</div>
         </div>
-        <span className="badge" style={{ background: st.bg, color: st.fg }}>{statusLabel(v.statut)}{v.statut === "attente" && v.statutMotif ? ` · ${holdReasonLabel(String(v.statutMotif))}` : ""}</span>
+        <span className="badge" style={{ background: st.bg, color: st.fg }}>{statusLabel(v.statut)}{v.statut === "attente" && v.statutMotif ? ` · ${holdReasonLabel(String(v.statutMotif))}` : ""}{v.statut === "refuse" && v.statutMotif ? ` · ${refuseReasonLabel(parseRefuseMotif(String(v.statutMotif)).key)}` : ""}</span>
         {booking && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8" }}>{t("v4BadgeTermin")} {dayLabel(booking.date, todayIn(tzOfCountry(f.refs?.stations.find((s) => s.id === v.stationId)?.country ?? "DE")), "de-DE")}</span>}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginLeft: "auto" }}>
           {f.can("vehicules.changer_statut") && <button className="btn" onClick={() => setDlg("status")}>{t("v3ChangeStatus")}</button>}
@@ -254,7 +254,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
         <div className="vd-body">
           {cur === "basis" && (
             <>
-              <div className="stepper" aria-label={t("status")}>{STATUSES.map((s) => <span key={s} className={s === v.statut ? "on" : ""}>{statusLabel(s)}</span>)}</div>
+              <div className="stepper" aria-label={t("status")}>{STATUSES.filter((s) => s !== "refuse").map((s) => <span key={s} className={s === v.statut ? "on" : ""}>{statusLabel(s)}</span>)}</div>
               {embed(<Basis v={v} />)}
             </>
           )}

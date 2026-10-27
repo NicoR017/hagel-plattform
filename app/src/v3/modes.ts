@@ -7,21 +7,21 @@ const holdsForParts = (v: ModeVehicle) => v.statut === "attente" && String(v.sta
 
 /**
  * Which vehicles each mode shows:
- *  Kalkulation = Angekommen, Besichtigung, Wartet (Freigabe …)
+ *  Kalkulation = Angekommen, Besichtigung, Wartet (Freigabe …), Abgelehnt (assessed, will not be repaired)
  *  Reparatur   = Reparatur, Wartet (Teile), Fertig
  *  Alle Fahrzeuge = everything, including Zurückgegeben
  */
 export function inMode(v: ModeVehicle, mode: Mode): boolean {
   if (mode === "all") return true;
-  if (mode === "kalk") return v.statut === "arrive" || v.statut === "besichtigung" || (v.statut === "attente" && !holdsForParts(v));
+  if (mode === "kalk") return v.statut === "arrive" || v.statut === "besichtigung" || v.statut === "refuse" || (v.statut === "attente" && !holdsForParts(v));
   return v.statut === "reparatur" || v.statut === "fertig" || holdsForParts(v);
 }
 
 /** status filter chips of each mode (the "all" chip is always first) */
 export const MODE_STATUSES: Record<Mode, string[]> = {
-  kalk: ["arrive", "besichtigung", "attente"],
+  kalk: ["arrive", "besichtigung", "attente", "refuse"],
   rep: ["reparatur", "attente", "fertig"],
-  all: ["arrive", "besichtigung", "attente", "reparatur", "fertig", "rendu"],
+  all: ["arrive", "besichtigung", "attente", "reparatur", "fertig", "rendu", "refuse"],
 };
 
 /** does a vehicle of this mode match a status chip? ("attente" is split by reason between the two modes) */
@@ -32,10 +32,10 @@ export interface StationCounts { kalk: number; rep: number; wait: number; presen
 export function stationCounts(vehicles: ModeVehicle[], stationId: string): StationCounts {
   const here = vehicles.filter((v) => v.stationId === stationId);
   return {
-    kalk: here.filter((v) => inMode(v, "kalk")).length,
+    kalk: here.filter((v) => inMode(v, "kalk") && v.statut !== "refuse").length,
     rep: here.filter((v) => v.statut === "reparatur").length,
     wait: here.filter((v) => v.statut === "attente").length,
-    present: here.filter((v) => v.statut !== "rendu").length,
+    present: here.filter((v) => v.statut !== "rendu" && v.statut !== "refuse").length,
   };
 }
 
@@ -46,4 +46,5 @@ export const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   reparatur: { bg: "#E2F3F6", fg: "#0B5F73" },
   fertig: { bg: "#E3F4EA", fg: "#17663F" },
   rendu: { bg: "#EEF0F3", fg: "#3B4555" },
+  refuse: { bg: "#FBE9E7", fg: "#8F1D14" },
 };

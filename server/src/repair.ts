@@ -2,16 +2,17 @@
 // daily job that moves due bookings into "Bereit". Every rule is enforced HERE, not only in the UI.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { NEXT_AFTER_STEP, ROLE_REPAIR_STEPS, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
+import { NEXT_AFTER_STEP, ROLE_REPAIR_STEPS, parseRefuseMotif, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
 import { audit } from "./audit";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
-import { bookingMail } from "./mails";
+import { bookingMail, refusalMail } from "./mails";
 import { effectivePermissions, fieldProfile, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
 import { loadMethodMap, methodOf } from "./methods";
 import { autoRepairReport } from "./repair_report";
 import type { Storage } from "./storage";
-import { recipientsForStation } from "./reports";
+import { recipientsForStation, recipientsOfVehicle } from "./reports";
+import { replyToFor } from "./reply_to";
 import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
   vehicleComments, vehicleMoves, vehicleStatusHistory, vehicles,
@@ -147,14 +148,39 @@ async function startBooking(tx: Tx, booking: typeof repairBookings.$inferSelect,
   return touchVehicle(tx, null, row, { ...set, statut: "reparatur", statutMotif: null, statutAvant: null, statutDepuis: now, repAt: row.repAt ?? now, repairStage: "bereit", repairEnteredAt: now, groupAt: stamps });
 }
 
-async function cancelBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, byUser: string | null, reason: string) {
+export async function cancelBooking(tx: Tx, booking: typeof repairBookings.$inferSelect, byUser: string | null, reason: string) {
   await tx.update(repairBookings).set({ status: "cancelled", cancelledBy: byUser, cancelledAt: new Date(), cancelReason: reason }).where(eq(repairBookings.id, booking.id));
   await event(tx, booking.vehicleId, byUser, "booking_cancelled", { bookingId: booking.id, date: booking.date, reason });
+}
+
+/** A car that is refused will not be repaired: its open repair appointment is cancelled (the place is free again) and so are the technician appointments. Returns the cancelled bookings (their e-mails go out after the commit). */
+export async function cancelWhenRefused(tx: Tx, row: VehicleRow, byUser: string): Promise<string[]> {
+  const open = await tx.select().from(repairBookings).where(and(eq(repairBookings.vehicleId, row.id), eq(repairBookings.status, "booked")));
+  for (const b of open) await cancelBooking(tx, b, byUser, "vehicle_refused");
+  await tx.update(repairAppointments).set({ deletedAt: new Date() }).where(and(eq(repairAppointments.vehicleId, row.id), isNull(repairAppointments.deletedAt)));
+  return open.map((b) => b.id);
 }
 
 // ------------------------------------------------------------------ confirmation e-mails (after commit)
 
 interface MailCtx { db: Db; mailer: Mailer | undefined }
+/** The body shop of the car is told that it will not be repaired and why (its report e-mails only, never the insurer). Result kept in the repair events of the car. */
+export async function sendRefusalMail(c: MailCtx, vehicleId: string, motif: string | null, by: string | null) {
+  if (!c.mailer) return;
+  const [v] = await c.db.select().from(vehicles).where(eq(vehicles.id, vehicleId));
+  if (!v) return;
+  const log = (type: string, payload: Record<string, unknown>) => c.db.insert(repairEvents).values({ vehicleId, userId: by, type, payload: payload as never });
+  const recipients = await recipientsOfVehicle(c.db, v, "termin");
+  if (!recipients.length) { await log("refusal_mail_no_recipients", {}); return; }
+  const [st] = v.stationId ? await c.db.select().from(stations).where(eq(stations.id, v.stationId)) : [];
+  const h = v.header as Record<string, unknown>;
+  const r = parseRefuseMotif(motif);
+  const mail = refusalMail(st?.country === "ES" ? "es" : "de", { plate: String(h.kennzeichen ?? ""), model: String(h.modell ?? ""), claim: String(h.claimNumber ?? ""), reason: r.key, comment: r.comment });
+  try { await c.mailer.send({ to: recipients, subject: mail.subject, text: mail.text, replyTo: await replyToFor(c.db, by, v.orgId) }); }
+  catch (e) { await log("refusal_mail_failed", { error: (e as Error).message.slice(0, 300) }); return; }
+  await log("refusal_mail_sent", { recipients: recipients.length });
+}
+
 /** Customer + carrosserie (the station's own list; never the automatic insurer addresses). Logged in report_sends (type "termin"). */
 export async function sendBookingMail(c: MailCtx, kind: "created" | "moved" | "cancelled", bookingId: string, sentBy: string | null) {
   if (!c.mailer) return;

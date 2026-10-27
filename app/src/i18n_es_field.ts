@@ -83,7 +83,7 @@ export const esField: Record<string, string> = {
   exportBackup: "Exportar copia de seguridad (formato antiguo)", appUpdated: "App actualizada – se conservan todos los datos", stagingBanner: "STAGING – entorno de pruebas: sin correos reales, los datos pueden restablecerse en cualquier momento", commissionWord: "Comisión",
   "ps.haube": "Capó", "ps.dach": "Techo", "ps.dachholm_l": "Larguero", "ps.dachholm_r": "Larguero", "ps.heck": "Portón", "ps.heck_u": "Portón inf.", "ps.kfl_vl": "Aleta", "ps.kfl_vr": "Aleta",
   "ps.tuer_vl": "Puerta del.", "ps.tuer_vr": "Puerta del.", "ps.tuer_hl": "Puerta tras.", "ps.tuer_hr": "Puerta tras.", "ps.sw_hl": "Lateral", "ps.sw_hr": "Lateral",
-  "st.arrive": "Llegado", "st.besichtigung": "Peritaje", "st.attente": "En espera", "st.reparatur": "Reparación", "st.fertig": "Terminado", "st.rendu": "Entregado",
+  "st.arrive": "Llegado", "st.besichtigung": "Peritaje", "st.attente": "En espera", "st.reparatur": "Reparación", "st.fertig": "Terminado", "st.rendu": "Entregado", "st.refuse": "Rechazado",
   "hold.Teile": "Piezas", "hold.Freigabe": "Autorización aseguradora/cliente", "hold.Demontage": "Desmontaje", "hold.Sonstiges": "Otros",
   "ph.besichtigung": "Peritaje", "ph.reparatur": "Durante la reparación", "ph.fertig": "Tras la reparación",
   "z.dry": "Seco", "z.wet": "Mojado", "z.clean": "Limpio", "z.dirty": "Sucio", "z.good": "Bueno", "z.poor": "Deficiente", "z.bad": "Insuficiente",

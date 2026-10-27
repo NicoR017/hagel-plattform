@@ -31,7 +31,16 @@ export const PLACE_TYPES = ["hall", "parc"] as const;
 export type PlaceType = (typeof PLACE_TYPES)[number];
 export const isPlaceType = (t: unknown): t is PlaceType => (PLACE_TYPES as readonly unknown[]).includes(t);
 
-export const STATUSES = ["arrive", "besichtigung", "attente", "reparatur", "fertig", "rendu"] as const;
+export const STATUSES = ["arrive", "besichtigung", "attente", "reparatur", "fertig", "rendu", "refuse"] as const;
+/** why a car is refused (assessed but not repaired); the motif of a refused car is the key, optionally followed by ": comment" */
+export const REFUSE_REASONS = ["non_pdr", "client", "assurance", "epave"] as const;
+/** only a car that has not entered the repair can be refused */
+export const REFUSABLE_FROM = ["arrive", "besichtigung", "attente", "refuse"] as const;
+export const parseRefuseMotif = (m: string | null | undefined): { key: string; comment: string; valid: boolean } => {
+  const s = (m ?? "").trim(), i = s.indexOf(":");
+  const key = (i < 0 ? s : s.slice(0, i)).trim(), comment = i < 0 ? "" : s.slice(i + 1).trim();
+  return { key, comment, valid: (REFUSE_REASONS as readonly string[]).includes(key) };
+};
 export type VehicleStatus = (typeof STATUSES)[number];
 
 export interface SystemRole {

@@ -50,7 +50,7 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
     case "vehicle.status": {
       if (!v) return v;
       const n: LocalVehicle = {
-        ...v, statut: op.statut, statutMotif: op.statut === "attente" ? (op.motif ?? "").trim() : null, statutDepuis: at, updatedAt: at,
+        ...v, statut: op.statut, statutMotif: op.statut === "attente" || op.statut === "refuse" ? (op.motif ?? "").trim() : null, statutDepuis: at, updatedAt: at,
       };
       if (op.statut === "reparatur") n.repAt = at;
       else if (op.statut === "arrive" || op.statut === "besichtigung") n.repAt = null;

@@ -54,6 +54,7 @@ export const ERROR_MESSAGES = {
   field_not_allowed: { de: "Feld nicht erlaubt: {fields}", en: "Field not allowed: {fields}" },
   vehicle_exists: { de: "Fahrzeug existiert bereits", en: "Vehicle already exists" },
   motif_required: { de: "Für den Status „Wartet“ ist ein Grund erforderlich", en: "A reason is required for status “On hold”" },
+  refuse_status: { de: "Ablehnen ist nur vor der Reparatur möglich", en: "A car can only be refused before the repair" },
   station_unknown: { de: "Unbekannte Station", en: "Unknown station" },
   handover_not_found: { de: "Übergabe nicht gefunden", en: "Hand-over not found" },
   device_not_found: { de: "Colibri-Scanner nicht gefunden", en: "Colibri scanner not found" },

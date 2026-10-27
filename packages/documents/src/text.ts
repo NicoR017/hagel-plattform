@@ -85,10 +85,10 @@ export function plabel(land: Land | undefined, key: string): string {
 }
 
 export const STATUS_LABEL_DE: Record<VehicleStatus, string> = {
-  arrive: "Angekommen", besichtigung: "Besichtigung", attente: "Wartet", reparatur: "Reparatur", fertig: "Fertig", rendu: "Zurückgegeben",
+  arrive: "Angekommen", besichtigung: "Besichtigung", attente: "Wartet", reparatur: "Reparatur", fertig: "Fertig", rendu: "Zurückgegeben", refuse: "Abgelehnt",
 };
 export const STATUS_LABEL_ES: Record<VehicleStatus, string> = {
-  arrive: "Llegado", besichtigung: "Inspección", attente: "En espera", reparatur: "Reparación", fertig: "Terminado", rendu: "Entregado",
+  arrive: "Llegado", besichtigung: "Inspección", attente: "En espera", reparatur: "Reparación", fertig: "Terminado", rendu: "Entregado", refuse: "Rechazado",
 };
 export const statusLabel = (s: string | undefined, land: Land = "DE"): string => {
   const t: Record<string, string> = land === "ES" ? STATUS_LABEL_ES : STATUS_LABEL_DE;

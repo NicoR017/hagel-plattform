@@ -67,17 +67,20 @@ describe("modes", () => {
     expect(inMode(v("attente"), "kalk")).toBe(true);
   });
   it("status chips: one per status of the mode; 'Wartet' is split by reason", () => {
-    expect(MODE_STATUSES.kalk).toEqual(["arrive", "besichtigung", "attente"]);
+    expect(MODE_STATUSES.kalk).toEqual(["arrive", "besichtigung", "attente", "refuse"]); // a refused car is assessed, so it stays in the assessment list
     expect(MODE_STATUSES.rep).toEqual(["reparatur", "attente", "fertig"]);
-    expect(MODE_STATUSES.all).toHaveLength(6);
+    expect(MODE_STATUSES.all).toHaveLength(7);
+    expect(MODE_STATUSES.rep).not.toContain("refuse");
+    expect(matchesChip(v("refuse"), "kalk", "refuse")).toBe(true);
+    expect(matchesChip(v("refuse"), "rep", "refuse")).toBe(false); // not in the repair mode
     expect(matchesChip(v("attente", "Teile"), "rep", "attente")).toBe(true);
     expect(matchesChip(v("attente", "Teile"), "kalk", "attente")).toBe(false);
     expect(matchesChip(v("besichtigung"), "kalk", "all")).toBe(true);
     expect(matchesChip(v("besichtigung"), "kalk", "arrive")).toBe(false);
   });
   it("station card numbers: present = every status but Zurückgegeben; counts are per station", () => {
-    const list = [v("arrive"), v("besichtigung"), v("reparatur"), v("reparatur"), v("attente", "Teile"), v("fertig"), v("rendu"), { statut: "arrive", stationId: "other" }];
-    expect(stationCounts(list, S)).toEqual({ kalk: 2, rep: 2, wait: 1, present: 6 });
+    const list = [v("arrive"), v("besichtigung"), v("reparatur"), v("reparatur"), v("attente", "Teile"), v("fertig"), v("rendu"), v("refuse"), { statut: "arrive", stationId: "other" }];
+    expect(stationCounts(list, S)).toEqual({ kalk: 2, rep: 2, wait: 1, present: 6 }); // a refused car is neither to assess nor present
     expect(stationCounts(list, "other")).toEqual({ kalk: 1, rep: 0, wait: 0, present: 1 });
     expect(stationCounts([], S)).toEqual({ kalk: 0, rep: 0, wait: 0, present: 0 });
   });

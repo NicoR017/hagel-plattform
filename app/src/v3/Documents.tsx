@@ -56,7 +56,7 @@ export function Documents({ v }: { v: LocalVehicle }) {
   const repNow = () => guard("rep", async () => { await shareOrDownload(await buildRepairReport(f.db, f.engine, v, f.refs), `${land === "ES" ? "Informe_reparacion" : "Fotobericht_Reparatur"}_${plate}.pdf`, "application/pdf"); });
 
   const docs: Doc[] = [];
-  for (const s of sends) {
+  for (const s of sends.filter((x) => x.type === "kva" || x.type === "reparation")) {
     const isKva = s.type === "kva";
     docs.push({
       key: "s" + s.id, at: s.sentAt ?? s.createdAt, title: t(isKva ? "dcEstimate" : "dcRepairReport"), status: s.status,

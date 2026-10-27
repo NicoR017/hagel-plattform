@@ -1,6 +1,6 @@
 import type { CalcMethodDef, CalcVehicle, Land } from "@hagel/calc";
 
-export type VehicleStatus = "arrive" | "besichtigung" | "attente" | "reparatur" | "fertig" | "rendu";
+export type VehicleStatus = "arrive" | "besichtigung" | "attente" | "reparatur" | "fertig" | "rendu" | "refuse";
 export type PhotoPhase = "besichtigung" | "reparatur" | "fertig";
 
 export interface ColibriInfo {
