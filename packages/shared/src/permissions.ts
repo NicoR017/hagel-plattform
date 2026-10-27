@@ -42,6 +42,9 @@ export const parseRefuseMotif = (m: string | null | undefined): { key: string; c
   return { key, comment, valid: (REFUSE_REASONS as readonly string[]).includes(key) };
 };
 export type VehicleStatus = (typeof STATUSES)[number];
+/** "On hold" reasons that take the car off the repair side (board, dashboard columns): waiting for an appointment, waiting for the insurer / customer approval */
+export const OFF_REPAIR_HOLDS = ["termin", "freigabe"] as const;
+export const isOffRepairHold = (statut: string, motif: unknown): boolean => statut === "attente" && (OFF_REPAIR_HOLDS as readonly string[]).includes(String(motif ?? "").trim().toLowerCase());
 
 export interface SystemRole {
   key: string;

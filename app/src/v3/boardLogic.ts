@@ -1,5 +1,5 @@
 // Pure logic of the repair board (Kanban): which cards, in which column, and why "Finish" is refused. No React.
-import { REPAIR_STAGES, type RepairStage } from "@hagel/shared";
+import { REPAIR_STAGES, isOffRepairHold, type RepairStage } from "@hagel/shared";
 
 export { REPAIR_STAGES };
 export type { RepairStage };
@@ -9,8 +9,11 @@ export interface BoardVehicle {
   repair?: { todos?: { done: boolean }[]; finishBlockers?: string[]; autoStartedOn?: string | null } | null;
 }
 
-/** The car is on the board: in the repair flow (a stage is set) or at least in repair / finished; returned cars leave the board. */
-export const onBoard = (v: BoardVehicle) => v.statut !== "rendu" && (v.repairStage != null || v.statut === "reparatur" || v.statut === "fertig");
+/**
+ * The car is on the board: in the repair flow (a stage is set) or at least in repair / finished; returned cars leave the board,
+ * and so do the cars on hold for an appointment or for the insurer / customer approval.
+ */
+export const onBoard = (v: BoardVehicle) => v.statut !== "rendu" && !isOffRepairHold(v.statut, v.statutMotif) && (v.repairStage != null || v.statut === "reparatur" || v.statut === "fertig");
 
 /** Column of a card: the stored stage, else "Bereit" (or "Finish" for a finished car whose stage was never set). */
 export const stageOf = (v: BoardVehicle): RepairStage => (REPAIR_STAGES as readonly string[]).includes(v.repairStage ?? "") ? (v.repairStage as RepairStage) : v.statut === "fertig" ? "finish" : "bereit";

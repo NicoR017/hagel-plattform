@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { computeShares, computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
+import { REPAIR_STAGES, STATUSES, isOffRepairHold } from "@hagel/shared";
 import type { Db } from "./db";
 import { effectivePermissions, type Principal } from "./permissions";
 import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
@@ -94,10 +94,10 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
         if (r.createdAt >= today && (firstMove ? firstMove.fromStationId : r.stationId) === s.id) arrIds.add(r.id);
         if (r.stationId === s.id && (histBy.get(r.id) ?? []).some((h) => h.statut === "rendu" && h.at >= today)) depIds.add(r.id);
       }
-      // the repair board of the site: who stands in which column (cars in repair or finished, or in the repair flow; returned cars leave)
+      // the repair board of the site: who stands in which column (cars in repair or finished, or in the repair flow; returned cars and cars on hold for an appointment / an approval leave)
       const byStage: Record<string, { n: number; ids: string[] }> = Object.fromEntries(REPAIR_STAGES.map((x) => [x, { n: 0, ids: [] as string[] }]));
       for (const r of here) {
-        if (r.statut === "rendu" || !(r.repairStage != null || r.statut === "reparatur" || r.statut === "fertig")) continue;
+        if (r.statut === "rendu" || isOffRepairHold(r.statut, r.statutMotif) || !(r.repairStage != null || r.statut === "reparatur" || r.statut === "fertig")) continue;
         const stage = (REPAIR_STAGES as readonly string[]).includes(r.repairStage ?? "") ? r.repairStage! : r.statut === "fertig" ? "finish" : "bereit";
         byStage[stage].n++; byStage[stage].ids.push(r.id);
       }

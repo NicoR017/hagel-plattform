@@ -23,6 +23,14 @@ describe("columns", () => {
     expect(onBoard(car({ statut: "besichtigung", repairStage: null }))).toBe(false);
     expect(onBoard(car({ statut: "attente", repairStage: null }))).toBe(false);
   });
+  it("waiting for an appointment or for the insurer / customer approval: off the board; waiting for parts or another reason: still on it", () => {
+    expect(onBoard(car({ statut: "attente", statutMotif: "Termin", repairStage: "pdr" }))).toBe(false);
+    expect(onBoard(car({ statut: "attente", statutMotif: "Freigabe", repairStage: "bereit" }))).toBe(false);
+    expect(onBoard(car({ statut: "attente", statutMotif: " freigabe ", repairStage: "bereit" }))).toBe(false);
+    expect(onBoard(car({ statut: "attente", statutMotif: "Teile", repairStage: "pdr" }))).toBe(true);
+    expect(onBoard(car({ statut: "attente", statutMotif: "Sonstiges", repairStage: "pdr" }))).toBe(true);
+    expect(onBoard(car({ statut: "reparatur", statutMotif: "Termin", repairStage: "pdr" }))).toBe(true); // the reason only counts on hold
+  });
   it("board of one station: grouped by column, other stations ignored", () => {
     const list = [car({ repairStage: "bereit" }), car({ repairStage: "pdr" }), car({ repairStage: "pdr" }), car({ stationId: "other", repairStage: "pdr" }), car({ statut: "besichtigung", repairStage: null })];
     const b = boardOf(list, S);

@@ -183,4 +183,30 @@ describe("dashboard: the repair board per station", () => {
     expect(site.repairsToday).toMatchObject({ booked: 0 });
     expect(site.repairsToday.capacity).toBeGreaterThan(0);
   });
+
+  it("a car on hold for an appointment or for the approval leaves the repair columns; on hold for parts it stays", async () => {
+    const mk = async (plate: string) => {
+      const id = uuid();
+      const r = await push(c, assessor, [
+        op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: { land: "ES", kennzeichen: plate, leistungsdatum: "2026-10-19", stundensatz: 69 }, panels: { haube: dentsPanel("haube", { "20": 12 }) }, shares: {}, statut: "besichtigung" } }),
+        op("vehicle.repairStage", { vehicleId: id, stage: "bereit" }),
+      ]);
+      expect(r.body.results.map((x: any) => x.status)).toEqual(["ok", "ok"]);
+      return id;
+    };
+    const hold = async (id: string, motif: string) => expect((await push(c, assessor, [op("vehicle.status", { vehicleId: id, statut: "attente", motif })])).body.results[0].status).toBe("ok");
+    const inBoard = async (id: string) => {
+      const site = (await call(c, "GET", "/dashboard", { token: S(), org: org() })).body.sites.find((x: any) => x.id === A);
+      return Object.values(site.byStage as Record<string, { ids: string[] }>).some((col) => col.ids.includes(id));
+    };
+    const termin = await mk("OFF 1"), approval = await mk("OFF 2"), parts = await mk("OFF 3");
+    expect(await inBoard(termin)).toBe(true);
+    await hold(termin, "Termin"); await hold(approval, "Freigabe"); await hold(parts, "Teile");
+    expect(await inBoard(termin)).toBe(false);
+    expect(await inBoard(approval)).toBe(false);
+    expect(await inBoard(parts)).toBe(true);
+    // back to repair: on the board again
+    expect((await push(c, assessor, [op("vehicle.status", { vehicleId: termin, statut: "reparatur" })])).body.results[0].status).toBe("ok");
+    expect(await inBoard(termin)).toBe(true);
+  });
 });
