@@ -44,6 +44,8 @@ export const placeInput = stationInput.extend({ type: z.enum(PLACE_TYPES) });
 export const bodyshopInput = stationInput.omit({ type: true, capacite: true, repairs_per_day: true, citas_location_id: true, azure_location_aliases: true }).extend({
   contact_name: z.string().trim().max(120).nullable().default(null),
   contact_phone: z.string().trim().max(60).nullable().default(null),
+  /** tax number of the body shop (CIF / NIF); kept upper-case, no spaces */
+  cif: z.string().trim().max(20).transform((s) => s.replace(/\s+/g, "").toUpperCase()).nullable().default(null),
 });
 
 export const inviteInput = z.object({

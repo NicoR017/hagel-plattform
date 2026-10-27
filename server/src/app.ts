@@ -605,7 +605,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
       orgId, type: "carrosserie", name: b.name, address: b.address, country: b.country, azureTenant: b.azure_tenant,
       azureBusinessCustomerId: bcIdsOf(b)[0] ?? null, azureBcIds: bcIdsOf(b), azureLinkIds: b.azure_link_ids,
       reportEmails: b.report_emails, commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
-      excludedInsurerEmails: b.excluded_insurer_emails, contactName: b.contact_name, contactPhone: b.contact_phone,
+      excludedInsurerEmails: b.excluded_insurer_emails, contactName: b.contact_name, contactPhone: b.contact_phone, cif: b.cif || null,
     }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "bodyshop", entityId: s.id, after: s });
     hub.publish(orgId, 0);
@@ -631,6 +631,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.excluded_insurer_emails !== undefined) set.excludedInsurerEmails = b.excluded_insurer_emails;
     if (b.contact_name !== undefined) set.contactName = b.contact_name;
     if (b.contact_phone !== undefined) set.contactPhone = b.contact_phone;
+    if (b.cif !== undefined) set.cif = b.cif || null;
     const [s] = await db.update(stations).set(set).where(eq(stations.id, before.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "bodyshop", entityId: s.id, before, after: s });
     hub.publish(orgId, 0);

@@ -84,6 +84,8 @@ export const stations = pgTable("stations", {
   /** body shops (customers) only: who to call there */
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
+  /** body shops (customers) only: tax number (CIF / NIF) */
+  cif: text("cif"),
   citasLocationId: text("citas_location_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

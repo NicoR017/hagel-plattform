@@ -31,6 +31,23 @@ export function Card({ title, children, actions }: { title?: string; children: R
   return <div className="card">{(title || actions) && <div className="row"><h3 className="grow" style={{ margin: 0 }}>{title}</h3>{actions}</div>}{children}</div>;
 }
 
+/** Centred pop-up for the edit forms of the administration: no scrolling down the page to reach the form. Closes with Escape, the ✕ or a click beside it. */
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  }, [onClose]);
+  return (
+    <div className="admin-modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="admin-modal-box" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="row" style={{ flexWrap: "nowrap" }}><h3 className="grow" style={{ margin: 0 }}>{title}</h3><button className="btn sec" onClick={onClose} aria-label={t("close")}>✕</button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export async function act(fn: () => Promise<unknown>, setErr: (m: string) => void, done?: () => void) {
   try { await fn(); setErr(""); done?.(); } catch (e) { setErr((e as Error).message); }
 }

@@ -86,6 +86,13 @@ describe("routes: stations are places, body shops have their own", () => {
     expect(mk.body).toMatchObject({ type: "carrosserie", name: "Taller V5", capacite: 0, contactName: "Marta", contactPhone: "600 000 000", reportEmails: ["a@taller.test"] });
     const id = mk.body.id as string;
     expect((await sup("PUT", `/admin/bodyshops/${id}`, { commission_pct: 30, contact_name: null })).body).toMatchObject({ commissionPct: "30.00", contactName: null, contactPhone: "600 000 000" });
+    // CIF: optional, kept upper-case without spaces, not touched by an edit that does not send it, removable
+    expect(mk.body.cif).toBeNull();
+    expect((await sup("PUT", `/admin/bodyshops/${id}`, { cif: " b 12345678 " })).body.cif).toBe("B12345678");
+    expect((await sup("PUT", `/admin/bodyshops/${id}`, { contact_name: "Marta" })).body.cif).toBe("B12345678");
+    expect(((await sup("GET", "/admin/bodyshops")).body as { id: string; cif: string | null }[]).find((b) => b.id === id)!.cif).toBe("B12345678");
+    expect((await sup("PUT", `/admin/bodyshops/${id}`, { cif: "x".repeat(21) })).status).toBe(400);
+    expect((await sup("PUT", `/admin/bodyshops/${id}`, { cif: "" })).body.cif).toBeNull();
     // a car of this customer: counted open and in total; the shop cannot be deleted while a car belongs to it
     const vid = uuid();
     expect((await res(c.superToken, create(vid, { clientStationId: id })))[0].status).toBe("ok");

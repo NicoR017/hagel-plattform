@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { api } from "../api";
-import { act, Card, Err, matches, Recipients, useLoad } from "../admin";
+import { act, Card, Err, matches, Modal, Recipients, useLoad } from "../admin";
 import { confirmDialog } from "../field/ui";
 import { t } from "../i18n";
 
 interface BodyShop {
   id: string; name: string; address: string; country: string; azureTenant: string | null; active: boolean;
-  commissionPct: string; reportEmails: string[]; excludedInsurerEmails: string[]; contactName: string | null; contactPhone: string | null;
+  commissionPct: string; reportEmails: string[]; excludedInsurerEmails: string[]; contactName: string | null; contactPhone: string | null; cif: string | null;
   azureBcIds: string[]; azureLinkIds: string[]; openVehicles: number; totalVehicles: number; insurerIds: string[]; accounts: { email: string; name: string }[];
 }
 interface Form {
-  id?: string; name: string; address: string; country: string; azure_tenant: string; contact_name: string; contact_phone: string; commission_pct: number;
+  id?: string; name: string; address: string; country: string; azure_tenant: string; contact_name: string; contact_phone: string; cif: string; commission_pct: number;
   report_emails: string[]; excluded: string[]; bcs: string[]; links: string[]; bcFilter: string; accounts: { email: string; name: string }[];
 }
-const empty: Form = { name: "", address: "", country: "ES", azure_tenant: "", contact_name: "", contact_phone: "", commission_pct: 0, report_emails: [], excluded: [], bcs: [], links: [], bcFilter: "", accounts: [] };
+const empty: Form = { name: "", address: "", country: "ES", azure_tenant: "", contact_name: "", contact_phone: "", cif: "", commission_pct: 0, report_emails: [], excluded: [], bcs: [], links: [], bcFilter: "", accounts: [] };
 
 /** S39: Administration → Body shops. A body shop is a CUSTOMER (it sends us cars and gets the reports); it is never a place where a car stands. */
 export function BodyShopsPage({ canManage = true, canInsurers = true }: { canManage?: boolean; canInsurers?: boolean }) {
@@ -27,10 +27,10 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
   const names = (b: BodyShop) => (azBc.data ?? []).filter((x) => b.azureBcIds.includes(x.id) || (x.links ?? []).some((l) => b.azureLinkIds.includes(l.id))).map((x) => x.name);
   const insNames = (b: BodyShop) => (insurers.data ?? []).filter((i) => b.insurerIds.includes(i.id)).map((i) => i.name);
   const edit = (b: BodyShop) => setF({
-    id: b.id, name: b.name, address: b.address, country: b.country, azure_tenant: b.azureTenant ?? "", contact_name: b.contactName ?? "", contact_phone: b.contactPhone ?? "",
+    id: b.id, name: b.name, address: b.address, country: b.country, azure_tenant: b.azureTenant ?? "", contact_name: b.contactName ?? "", contact_phone: b.contactPhone ?? "", cif: b.cif ?? "",
     commission_pct: Number(b.commissionPct), report_emails: b.reportEmails, excluded: b.excludedInsurerEmails, bcs: b.azureBcIds, links: b.azureLinkIds, bcFilter: "", accounts: b.accounts,
   });
-  const rows = (list.data ?? []).filter((b) => matches(q, [b.name, b.address, b.azureTenant, b.country, ...names(b), ...insNames(b)]));
+  const rows = (list.data ?? []).filter((b) => matches(q, [b.name, b.cif, b.address, b.azureTenant, b.country, ...names(b), ...insNames(b)]));
 
   return (
     <>
@@ -39,10 +39,11 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
         <Err msg={list.err} />
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("v8SearchBodyShops")} aria-label={t("v8SearchBodyShops")} style={{ marginBottom: 10 }} />
         <table>
-          <thead><tr><th>{t("name")}</th><th>{t("address")}</th><th>{t("country")} · {t("tenant")}</th><th>{t("commission")}</th><th>{t("insurers")}</th><th>{t("v8Vehicles")}</th><th /></tr></thead>
+          <thead><tr><th>{t("name")}</th><th>{t("v8Cif")}</th><th>{t("address")}</th><th>{t("country")} · {t("tenant")}</th><th>{t("commission")}</th><th>{t("insurers")}</th><th>{t("v8Vehicles")}</th><th /></tr></thead>
           <tbody>{rows.map((b) => (
             <tr key={b.id}>
               <td>{b.name}{!b.active && <span className="pill off">{t("inactive")}</span>}</td>
+              <td>{b.cif || "—"}</td>
               <td>{b.address || "—"}</td>
               <td>{b.country}{b.azureTenant ? ` · ${b.azureTenant}` : ""}</td>
               <td>{Number(b.commissionPct)} %</td>
@@ -58,7 +59,7 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
         <Err msg={err} />
       </Card>
       {f && (
-        <Card title={f.id ? f.name : t("v8NewBodyShop")}>
+        <Modal title={f.id ? f.name : t("v8NewBodyShop")} onClose={() => { setF(null); setErr(""); }}>
           <div className="row">
             <div className="grow"><label>{t("name")}</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
             <div><label>{t("country")}</label><select value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })}><option>DE</option><option>ES</option></select></div>
@@ -72,6 +73,7 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
           <div className="row">
             <div className="grow"><label>{t("v8ContactName")}</label><input value={f.contact_name} onChange={(e) => setF({ ...f, contact_name: e.target.value })} /></div>
             <div className="grow"><label>{t("v8ContactPhone")}</label><input type="tel" value={f.contact_phone} onChange={(e) => setF({ ...f, contact_phone: e.target.value })} /></div>
+            <div className="grow"><label>{t("v8Cif")}</label><input value={f.cif} maxLength={20} onChange={(e) => setF({ ...f, cif: e.target.value.toUpperCase() })} placeholder="B12345678" /></div>
           </div>
           {/* report recipients + the insurers this body shop works with (same component as before, now for body shops only) */}
           <Recipients stationId={f.id} emails={f.report_emails} excluded={f.excluded} canInsurers={canInsurers} onChange={(emails, excluded) => setF({ ...f, report_emails: emails, excluded })} />
@@ -106,14 +108,14 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
             <div style={{ fontSize: 12, color: "var(--sub)", marginTop: 4 }}>{t("v8ExternalAccountsHint")}</div>
           </>}
           <Err msg={err} />
-          <p className="row"><button className="btn" onClick={() => {
+          <p className="row modal-actions"><button className="btn" onClick={() => {
             const body = {
-              name: f.name, address: f.address, country: f.country, azure_tenant: f.azure_tenant || null, contact_name: f.contact_name || null, contact_phone: f.contact_phone || null,
+              name: f.name, address: f.address, country: f.country, azure_tenant: f.azure_tenant || null, contact_name: f.contact_name || null, contact_phone: f.contact_phone || null, cif: f.cif.trim() || null,
               commission_pct: f.commission_pct, report_emails: f.report_emails, excluded_insurer_emails: f.excluded, azure_business_customer_ids: f.bcs, azure_link_ids: f.links,
             };
             void act(() => (f.id ? api("PUT", `/admin/bodyshops/${f.id}`, body) : api("POST", "/admin/bodyshops", body)), setErr, () => { setF(null); void list.reload(); });
           }}>{t("save")}</button><button className="btn sec" onClick={() => setF(null)}>{t("cancel")}</button></p>
-        </Card>
+        </Modal>
       )}
     </>
   );
