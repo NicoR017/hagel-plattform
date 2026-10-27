@@ -30,13 +30,30 @@ Le même `Dockerfile` sert les deux services ; seul le *Start Command* du `worke
 | `DATABASE_URL` | api, worker | Référence : `${{Postgres.DATABASE_URL}}` |
 | `SESSION_SECRET` | api | ≥ 32 caractères aléatoires (`openssl rand -base64 48`). **Obligatoire en production** (le serveur refuse de démarrer sinon). |
 | `APP_URL` | api | URL publique sans `/` final, ex. `https://hagel.pdr-team.de` — utilisée dans les liens des e-mails |
-| `EMAIL_API_KEY`, `EMAIL_FROM` | api | Resend. Sans clé, les e-mails sont seulement écrits dans les logs (utile pour un premier test, **à ne pas laisser en production**). Le domaine d'envoi doit être vérifié chez Resend (SPF/DKIM). |
+| `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` | api | Envoi des e-mails via **Microsoft Graph** (voir « Configuration Microsoft Graph » ci-dessous). Les trois ensemble ou aucune : une configuration partielle empêche le démarrage. Le worker n'envoie aucun e-mail, il n'en a pas besoin. |
+| `EMAIL_FROM` | api | Expéditeur. Avec Graph : `noreplay-spain@pdr-team.com` (ou `PDR Hagel <noreplay-spain@pdr-team.com>`), la boîte partagée dont l'app a le droit d'envoyer. |
+| `EMAIL_PROVIDER` | api | Optionnel : `graph`, `resend` ou `console` force le choix. Sans lui : `graph` si les trois `GRAPH_*` sont définies, sinon `resend` si `EMAIL_API_KEY` est définie, sinon `console`. Le fournisseur et l'expéditeur choisis sont écrits dans le log au démarrage (`provider=… from=…`, jamais de secret). |
+| `EMAIL_API_KEY` | api | Resend, en repli. Sans Graph ni clé, les e-mails sont seulement écrits dans les logs (utile pour un premier test, **à ne pas laisser en production**). Le domaine d'envoi doit être vérifié chez Resend (SPF/DKIM). |
 | `SEED_SUPERADMIN_EMAIL` | api | `nicolas.rasteiro@pdr-team.de` (peut être retiré après le premier démarrage) |
 | `SEED_TEST_SITES` | api | `1` seulement pour tester ; crée 2 sites d'exemple en ES |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | api **et** worker | Photos et PDF Colibri (api) ; sauvegardes (worker). Même bucket. Sans ces variables l'api garde les fichiers en mémoire (perdus au redémarrage). |
 | `BACKUP_ON_START` | worker | `1` pour lancer une sauvegarde immédiate (test) |
 | `ANTHROPIC_API_KEY`, `OCR_MODEL` | api | Reconnaissance photo plaque / FIN (proxy `/api/ocr`). Sans clé : l'app utilise la reconnaissance hors ligne (Tesseract), moins fiable. `OCR_MODEL` optionnel (défaut `claude-sonnet-5-5`). |
 | `AZURE_STORAGE_*` | api / worker | Phase 5 — pas encore utilisées |
+
+### Configuration Microsoft Graph
+
+Les e-mails partent de la boîte partagée **`noreplay-spain@pdr-team.com`** par `POST /users/{boîte}/sendMail`, en flux *client credentials* (aucun utilisateur connecté). `MAIL_MODE` (off / redirect / live) reste devant : en staging rien ne part en `live`.
+
+1. **Boîte partagée** Microsoft 365 `noreplay-spain@pdr-team.com` (pas besoin de licence).
+2. **Inscription d'application** (Entra ID → *Inscriptions d'applications* → *Nouvelle*), locataire unique. Noter l'**ID de l'annuaire (locataire)** → `GRAPH_TENANT_ID` et l'**ID de l'application (client)** → `GRAPH_CLIENT_ID`.
+3. **Secret client** (*Certificats et secrets* → *Nouveau secret client*) → `GRAPH_CLIENT_SECRET`. Copier la **valeur** tout de suite (elle ne s'affiche qu'une fois). Durée de vie **24 mois au maximum** : mettre la date d'expiration **dans l'agenda** ; après expiration plus aucun e-mail ne part (l'erreur `Graph token error 401 invalid_client` apparaît dans les logs de l'api).
+4. **Permission** : *Autorisations de l'API* → Microsoft Graph → **Autorisations de l'application** → `Mail.Send`, puis **consentement administrateur**.
+5. **Restreindre l'app à cette seule boîte** (sinon `Mail.Send` permet d'écrire depuis n'importe quelle boîte du locataire) : *Application Access Policy* (`New-ApplicationAccessPolicy -AccessRight RestrictAccess -AppId <client id> -PolicyScopeGroupId <groupe contenant la boîte> …`) ou *RBAC for Applications* d'Exchange Online. Cela se fait côté Exchange, sans rien changer dans le code. Tester avec `Test-ApplicationAccessPolicy`.
+6. Variables sur le service **api** (production) : `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `EMAIL_FROM=noreplay-spain@pdr-team.com`. Après le redéploiement, le log de démarrage doit contenir `provider=graph from=noreplay-spain@pdr-team.com`. Retirer `EMAIL_API_KEY` seulement une fois les envois Graph vérifiés (ou garder `EMAIL_PROVIDER=resend` pour revenir en arrière en une variable).
+7. **Staging** : ne **pas** copier les `GRAPH_*` de la production (comme `EMAIL_API_KEY`) ; `MAIL_MODE=off` ou `redirect`.
+
+Limites : une requête `sendMail` fait environ 4 Mo ; au-delà de 3 Mo de pièces jointes (rapports PDF), le serveur passe tout seul par un brouillon et des sessions de téléversement (plus lent, mêmes résultats). Les réponses vont toujours à l'expéditeur du rapport ou à l'adresse de contact de l'organisation (`Reply-To`), pas à la boîte `noreplay-spain`. Les mails envoyés sont gardés dans les éléments envoyés de la boîte.
 
 Health check : `GET /api/health`, réglé sur le service `api` uniquement (Settings → Deploy → Healthcheck Path) — pas dans `railway.json`, car le worker n’a pas de serveur HTTP.
 

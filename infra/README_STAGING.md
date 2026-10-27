@@ -26,7 +26,7 @@ Les téléphones : staging et production ont des adresses différentes, donc des
 | `MAIL_REDIRECT_TO` | api | obligatoire avec `MAIL_MODE=redirect` (ex. `nicolas.rasteiro@pdr-team.de`) |
 | `UI_V3_DEFAULT` | api | `true` (défaut) ou `false` : nouvelle interface par défaut ; l'ancienne reste ouverte avec `?ui=legacy` |
 
-Staging, jeu minimal : `APP_ENV=staging`, `MAIL_MODE=off`, `SESSION_SECRET` (nouveau, ≥ 32 car.), `APP_URL`, `DATABASE_URL` (référence au Postgres **staging**), `SEED_SUPERADMIN_EMAIL`. **Ne pas copier** `EMAIL_API_KEY`, `AZURE_STORAGE_SAS`, `S3_*` de la production.
+Staging, jeu minimal : `APP_ENV=staging`, `MAIL_MODE=off`, `SESSION_SECRET` (nouveau, ≥ 32 car.), `APP_URL`, `DATABASE_URL` (référence au Postgres **staging**), `SEED_SUPERADMIN_EMAIL`. **Ne pas copier** `EMAIL_API_KEY`, `GRAPH_TENANT_ID` / `GRAPH_CLIENT_ID` / `GRAPH_CLIENT_SECRET`, `AZURE_STORAGE_SAS`, `S3_*` de la production.
 
 ## 3. Données de test
 

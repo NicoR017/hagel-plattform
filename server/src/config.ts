@@ -4,6 +4,12 @@ export interface Config {
   sessionSecret: string;
   emailApiKey: string | null;
   emailFrom: string;
+  /** Microsoft Graph (client credentials, Mail.Send): all three or none */
+  graphTenantId: string | null;
+  graphClientId: string | null;
+  graphClientSecret: string | null;
+  /** who sends the mails: graph when the three GRAPH_* are set, else resend when EMAIL_API_KEY is set, else console (log only); EMAIL_PROVIDER forces it */
+  emailProvider: EmailProvider;
   port: number;
   accessTtlSec: number;
   refreshTtlDays: number;
@@ -23,6 +29,7 @@ export interface Config {
 
 export type AppEnv = "production" | "staging" | "development";
 export type MailMode = "off" | "redirect" | "live";
+export type EmailProvider = "graph" | "resend" | "console";
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const secret = env.SESSION_SECRET ?? "";
@@ -34,11 +41,21 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const mailRedirectTo = env.MAIL_REDIRECT_TO?.trim() || null;
   if (mailMode === "redirect" && !mailRedirectTo) throw new Error("MAIL_MODE=redirect needs MAIL_REDIRECT_TO");
   if (appEnv === "staging" && mailMode === "live") throw new Error("APP_ENV=staging must not use MAIL_MODE=live");
+  const graph = [env.GRAPH_TENANT_ID, env.GRAPH_CLIENT_ID, env.GRAPH_CLIENT_SECRET].map((x) => x?.trim() || null);
+  const graphSet = graph.filter(Boolean).length;
+  if (graphSet > 0 && graphSet < 3) throw new Error("GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET must all be set (or none)");
+  const forced = env.EMAIL_PROVIDER?.trim() || null;
+  if (forced && !["graph", "resend", "console"].includes(forced)) throw new Error("EMAIL_PROVIDER must be graph, resend or console");
+  const emailApiKey = env.EMAIL_API_KEY ?? null;
+  const emailProvider: EmailProvider = (forced as EmailProvider | null) ?? (graphSet === 3 ? "graph" : emailApiKey ? "resend" : "console");
+  if (emailProvider === "graph" && graphSet < 3) throw new Error("EMAIL_PROVIDER=graph needs GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET");
+  if (emailProvider === "resend" && !emailApiKey) throw new Error("EMAIL_PROVIDER=resend needs EMAIL_API_KEY");
   return {
     databaseUrl: env.DATABASE_URL ?? null,
     appUrl: (env.APP_URL ?? "http://localhost:3000").replace(/\/$/, ""),
     sessionSecret: secret || "dev-only-secret-dev-only-secret-dev-only",
-    emailApiKey: env.EMAIL_API_KEY ?? null,
+    emailApiKey,
+    graphTenantId: graph[0], graphClientId: graph[1], graphClientSecret: graph[2], emailProvider,
     emailFrom: env.EMAIL_FROM ?? "PDR Hagel <noreply@pdr-team.de>",
     port: Number(env.PORT ?? 3000),
     accessTtlSec: 15 * 60,
