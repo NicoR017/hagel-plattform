@@ -23,7 +23,7 @@ describe("field logic", () => {
     expect(isMine(v(), "pdr")).toBe(true);
     expect(isMine(v(), "headliner")).toBe(false);
     expect(isMine(v({ myAssign: ["demontage"] }), "headliner")).toBe(true);
-    expect(isMine(v({ myAssign: [], myEarn: { pdr: null, dem: { eur: 10, pct: 80 }, eur: 10 } }), "headliner")).toBe(true);
+    expect(isMine(v({ myAssign: [], myEarn: { pdr: null, dem: { eur: 10 }, eur: 10 } }), "headliner")).toBe(true);
     expect(alsoRemoval(v({ myEarn: { pdr: { eur: 5, pct: 50 }, dem: { eur: 10, pct: 100 }, eur: 15 } }))).toBe(true);
   });
   it("the only moves: technician Disassembly to PDR, headliner also Reassembly to At body shop, nothing for a finished or unstarted car", () => {

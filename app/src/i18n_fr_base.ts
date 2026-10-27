@@ -57,7 +57,7 @@ export const frBase: Record<string, string> = {
   // permissions
   "p.vehicules.voir": "Voir les véhicules", "p.vehicules.creer": "Créer des véhicules", "p.vehicules.modifier": "Modifier les véhicules", "p.vehicules.supprimer": "Supprimer des véhicules",
   "p.vehicules.assigner": "Assigner des véhicules", "p.vehicules.deplacer": "Déplacer des véhicules", "p.vehicules.changer_statut": "Changer le statut",
-  "p.prix.voir": "Voir les prix", "p.repartition_interne.voir": "Voir la répartition interne", "p.ma_part.voir": "Voir sa propre part", "p.ma_commission.voir": "Voir sa propre commission",
+  "p.prix.voir": "Voir les prix", "p.repartition_interne.voir": "Voir la répartition interne", "p.ma_part.voir": "Voir sa propre part", "p.ma_part_pct.voir": "Voir le pourcentage de sa propre part", "p.ma_commission.voir": "Voir sa propre commission",
   "p.commission.modifier": "Modifier la commission", "p.kva.envoyer": "Envoyer le devis (KVA)", "p.rapport_reparation.envoyer": "Envoyer le rapport de réparation",
   "p.photos.ajouter": "Ajouter des photos", "p.photos.supprimer": "Supprimer des photos", "p.colibri.importer": "Importer Colibri", "p.export.excel": "Export Excel",
   "p.assurances.gerer": "Gérer les assurances", "p.campagnes.gerer": "Gérer les campagnes", "p.stations.gerer": "Gérer les stations", "p.parametres.gerer": "Gérer les paramètres",

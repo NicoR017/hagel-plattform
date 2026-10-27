@@ -2,7 +2,7 @@
 export const PERMISSIONS = [
   "vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.supprimer", "vehicules.assigner",
   "vehicules.deplacer", "vehicules.changer_statut",
-  "prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_commission.voir", "commission.modifier",
+  "prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_part_pct.voir", "ma_commission.voir", "commission.modifier",
   "kva.envoyer", "rapport_reparation.envoyer",
   "photos.ajouter", "photos.supprimer",
   "colibri.importer", "export.excel",

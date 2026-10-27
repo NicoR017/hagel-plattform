@@ -222,7 +222,7 @@ export function UsersPage({ canManage }: { canManage: boolean }) {
 const GROUPS_DEF: { title: Key; keys: string[] }[] = [
   { title: "v6PermGroupVehicles", keys: ["vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.supprimer", "vehicules.assigner", "vehicules.deplacer", "vehicules.changer_statut", "kommentare.schreiben"] },
   { title: "v6PermGroupRepair", keys: ["reparatur.board", "reparatur.endabnahme", "termine.buchen"] },
-  { title: "v6PermGroupMoney", keys: ["prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_commission.voir", "commission.modifier", "methoden.gerer", "wochenbericht.voir"] },
+  { title: "v6PermGroupMoney", keys: ["prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_part_pct.voir", "ma_commission.voir", "commission.modifier", "methoden.gerer", "wochenbericht.voir"] },
   { title: "v6PermGroupDocs", keys: ["kva.envoyer", "rapport_reparation.envoyer", "photos.ajouter", "photos.supprimer", "export.excel"] },
   { title: "v6PermGroupDash", keys: ["colibri.importer", "dashboard.voir"] },
   { title: "v6PermGroupAdmin", keys: ["assurances.gerer", "stations.gerer", "parametres.gerer", "utilisateurs.gerer", "roles.gerer", "audit.voir"] },

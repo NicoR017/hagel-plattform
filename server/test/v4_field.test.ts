@@ -169,7 +169,7 @@ describe("what the field profile receives", () => {
     const mine = (await pull(c, tech, c.orgES)).vehicles.find((v: any) => v.id === id);
     expect(mine).toBeTruthy();
     expect(mine.myEarn.pdr.eur).toBeGreaterThan(0);
-    expect(mine.myEarn.pdr.pct).toBe(50);
+    expect(mine.myEarn.pdr).not.toHaveProperty("pct"); // the percentage needs its own right (ma_part_pct.voir)
     expect(mine.myEarn.dem).toBeNull(); // the removal/refit belongs to the headliner
     expect(mine.myAssign).toEqual(["pdr"]);
     expect(mine.myEarn.eur).toBe(mine.myEarn.pdr.eur);
@@ -180,7 +180,8 @@ describe("what the field profile receives", () => {
     expect(h.myEarn.pdr).toBeNull();
     expect(h.myAssign).toEqual(["demontage"]);
     expect(h.myEarn.dem.eur).toBeGreaterThan(0);
-    expect(h.myEarn.dem.pct).toBe(80);
+    expect(h.myEarn.dem).not.toHaveProperty("pct");
+    expect(JSON.stringify([mine, h])).not.toMatch(/techPct|demTechPct/);
     expect(h.myShare.techEur).toBe(0);
     // the chef and the assessor keep the full picture
     const full = (await pull(c, chef, c.orgES)).vehicles.find((v: any) => v.id === id);
@@ -192,8 +193,26 @@ describe("what the field profile receives", () => {
     await c.h.db.update(vehicles).set({ shares: { techName: "Test Tech", techPct: 50, demTechName: "Test Tech", demTechPct: 100 } as never }).where(eq(vehicles.id, id));
     const mine = (await pull(c, tech, c.orgES)).vehicles.find((v: any) => v.id === id);
     expect(mine.myEarn.pdr.eur).toBeGreaterThan(0);
-    expect(mine.myEarn.dem).toMatchObject({ pct: 100 });
+    expect(mine.myEarn.dem.eur).toBeGreaterThan(0);
     expect(mine.myEarn.eur).toBeCloseTo(mine.myEarn.pdr.eur + mine.myEarn.dem.eur, 2);
+  });
+
+  it("the percentages of his earnings travel only with the right \"View the percentage of the own share\", per role", async () => {
+    const id = await car("pdr");
+    const roles = (await call(c, "GET", "/admin/roles", { token: c.superToken, org: c.orgES })).body as any[];
+    const r = roles.find((x) => x.id === c.roleId.technicien);
+    const put = (permissions: string[]) => call(c, "PUT", `/admin/roles/${r.id}`, { token: c.superToken, org: c.orgES, body: { name: r.name, scope: r.scope, permissions } });
+    try {
+      expect((await put([...r.permissions, "ma_part_pct.voir"])).status).toBe(200);
+      const mine = (await pull(c, tech, c.orgES)).vehicles.find((v: any) => v.id === id);
+      expect(mine.myEarn.pdr.pct).toBe(50);
+      expect(mine.myEarn.pdr.eur).toBeGreaterThan(0);
+      expect(mine).not.toHaveProperty("shares");
+    } finally {
+      expect((await put(r.permissions)).status).toBe(200);
+    }
+    const back = (await pull(c, tech, c.orgES)).vehicles.find((v: any) => v.id === id);
+    expect(back.myEarn.pdr).not.toHaveProperty("pct");
   });
 
   it("he only sees his cars, and the global data stay closed (dashboard, split, admin)", async () => {

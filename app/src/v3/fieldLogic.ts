@@ -8,7 +8,7 @@ export type Intervention = "pdr" | "ptp" | "replace";
 
 export interface FieldVehicle {
   id: string; statut: string; stationId?: string | null; repairStage?: string | null;
-  panels?: Record<string, unknown>; myAssign?: ("pdr" | "demontage")[]; myEarn?: { pdr: { eur: number; pct: number } | null; dem: { eur: number; pct: number } | null; eur: number };
+  panels?: Record<string, unknown>; myAssign?: ("pdr" | "demontage")[]; myEarn?: { pdr: { eur: number; pct?: number } | null; dem: { eur: number; pct?: number } | null; eur: number };
   [k: string]: unknown;
 }
 

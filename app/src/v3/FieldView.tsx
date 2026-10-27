@@ -53,11 +53,12 @@ function Legend({ kind }: { kind: FieldKind }) {
 function Earn({ v, big }: { v: LocalVehicle; big?: boolean }) {
   const e = asField(v).myEarn;
   if (!e || (!e.pdr && !e.dem)) return null;
-  const parts = [e.pdr ? t("fvEarnPdr").replace("{pct}", String(Math.round(e.pdr.pct * 10) / 10)) : "", e.dem ? t("fvEarnDem").replace("{pct}", String(Math.round(e.dem.pct * 10) / 10)) : ""].filter(Boolean).join(" · ");
+  // the percentages are only there for a role with "View the percentage of the own share"
+  const parts = [e.pdr?.pct != null ? t("fvEarnPdr").replace("{pct}", String(Math.round(e.pdr.pct * 10) / 10)) : "", e.dem?.pct != null ? t("fvEarnDem").replace("{pct}", String(Math.round(e.dem.pct * 10) / 10)) : ""].filter(Boolean).join(" · ");
   return (
     <div className="fv-earn" style={{ fontSize: big ? 18 : 14 }}>
       <span>{t("fvEarn")} <b style={{ fontSize: big ? 26 : 17 }}>{eur(e.eur)}</b></span>
-      <small>{parts}</small>
+      {parts && <small>{parts}</small>}
     </div>
   );
 }
