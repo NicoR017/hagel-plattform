@@ -85,7 +85,7 @@ export const deField = {
   "ps.tuer_vl": "Tür v.", "ps.tuer_vr": "Tür v.", "ps.tuer_hl": "Tür h.", "ps.tuer_hr": "Tür h.", "ps.sw_hl": "Seite", "ps.sw_hr": "Seite",
   // statuses, hold reasons, photo phases, conditions, image labels, panels
   "st.arrive": "Angekommen", "st.besichtigung": "Besichtigung", "st.attente": "Wartet", "st.reparatur": "Reparatur", "st.fertig": "Fertig", "st.rendu": "Zurückgegeben", "st.refuse": "Abgelehnt",
-  "hold.Teile": "Teile", "hold.Freigabe": "Freigabe Versicherung/Kunde", "hold.Demontage": "Demontage", "hold.Sonstiges": "Sonstiges",
+  "hold.Teile": "Teile", "hold.Freigabe": "Freigabe Versicherung/Kunde", "hold.Termin": "Warten auf Termin", "hold.Demontage": "Demontage", "hold.Sonstiges": "Sonstiges",
   "ph.besichtigung": "Besichtigung", "ph.reparatur": "Während der Reparatur", "ph.fertig": "Nach der Reparatur",
   "z.dry": "Trocken", "z.wet": "Nass", "z.clean": "Sauber", "z.dirty": "Schmutzig", "z.good": "Gut", "z.poor": "Mangelhaft", "z.bad": "Ungenügend",
   "img.Vorderansicht": "Vorderansicht", "img.Heckansicht": "Heckansicht", "img.Seite links": "Seite links", "img.Seite rechts": "Seite rechts", "img.Dach": "Dach",
@@ -182,7 +182,7 @@ export const enField: Record<FieldKey, string> = {
   verbringung: "Transfer costs", verticalPanel: "Vertical panel", vin: "VIN", vinHas17: "a VIN has 17", vinHint: "17 characters (A–Z, 0–9, except I, O, Q)", windscreen: "Windscreen",
   tabBasis: "Basic information", tabCapture: "Hail damage capture", tabPhotos: "Photos", tabKva: "Estimate",
   "st.arrive": "Arrived", "st.besichtigung": "Inspection", "st.attente": "On hold", "st.reparatur": "Repair", "st.fertig": "Done", "st.rendu": "Returned", "st.refuse": "Refused",
-  "hold.Teile": "Parts", "hold.Freigabe": "Insurer/customer approval", "hold.Demontage": "Disassembly", "hold.Sonstiges": "Other",
+  "hold.Teile": "Parts", "hold.Freigabe": "Insurer/customer approval", "hold.Termin": "Waiting for appointment", "hold.Demontage": "Disassembly", "hold.Sonstiges": "Other",
   "ph.besichtigung": "Inspection", "ph.reparatur": "During repair", "ph.fertig": "After repair",
   "z.dry": "Dry", "z.wet": "Wet", "z.clean": "Clean", "z.dirty": "Dirty", "z.good": "Good", "z.poor": "Poor", "z.bad": "Insufficient",
   "img.Vorderansicht": "Front view", "img.Heckansicht": "Rear view", "img.Seite links": "Left side", "img.Seite rechts": "Right side", "img.Dach": "Roof",

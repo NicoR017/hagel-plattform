@@ -84,7 +84,7 @@ export const frField: Record<string, string> = {
   "ps.haube": "Capot", "ps.dach": "Toit", "ps.dachholm_l": "Longeron", "ps.dachholm_r": "Longeron", "ps.heck": "Hayon", "ps.heck_u": "Hayon bas", "ps.kfl_vl": "Aile", "ps.kfl_vr": "Aile",
   "ps.tuer_vl": "Porte av.", "ps.tuer_vr": "Porte av.", "ps.tuer_hl": "Porte arr.", "ps.tuer_hr": "Porte arr.", "ps.sw_hl": "Côté", "ps.sw_hr": "Côté",
   "st.arrive": "Arrivé", "st.besichtigung": "Expertise", "st.attente": "En attente", "st.reparatur": "Réparation", "st.fertig": "Terminé", "st.rendu": "Restitué", "st.refuse": "Refusé",
-  "hold.Teile": "Pièces", "hold.Freigabe": "Accord assurance/client", "hold.Demontage": "Dépose", "hold.Sonstiges": "Autre",
+  "hold.Teile": "Pièces", "hold.Freigabe": "Accord assurance/client", "hold.Termin": "Attente de rdv", "hold.Demontage": "Dépose", "hold.Sonstiges": "Autre",
   "ph.besichtigung": "Expertise", "ph.reparatur": "Pendant la réparation", "ph.fertig": "Après la réparation",
   "z.dry": "Sec", "z.wet": "Mouillé", "z.clean": "Propre", "z.dirty": "Sale", "z.good": "Bon", "z.poor": "Médiocre", "z.bad": "Insuffisant",
   "img.Vorderansicht": "Vue avant", "img.Heckansicht": "Vue arrière", "img.Seite links": "Côté gauche", "img.Seite rechts": "Côté droit", "img.Dach": "Toit",

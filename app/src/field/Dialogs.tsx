@@ -21,7 +21,7 @@ import { REFUSE_REASONS, STATUSES } from "@hagel/shared";
 /** how long the "Rückgängig" button stays on screen */
 export const UNDO_MS = 6000;
 export const statusLabel = (s: string) => t(("st." + s) as Key);
-export const HOLD_REASONS = ["Teile", "Freigabe", "Demontage", "Sonstiges"] as const;
+export const HOLD_REASONS = ["Teile", "Freigabe", "Termin", "Demontage", "Sonstiges"] as const;
 export const holdReasonLabel = (r: string) => tOr("hold." + r, r);
 export const refuseReasonLabel = (r: string) => tOr("rf_" + r, r);
 
