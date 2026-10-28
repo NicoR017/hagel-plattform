@@ -239,7 +239,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
-  app.route("/", insurerReportRoutes({ db, storage, needAuth, needOrg, validationHook }));
+  app.route("/", insurerReportRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, validationHook, now: citasNow }));
 
   // ---------- admin ----------

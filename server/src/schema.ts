@@ -419,6 +419,9 @@ export const insurerReportRuns = pgTable("insurer_report_runs", {
   kpis: jsonb("kpis"),
   sentBy: uuid("sent_by").references(() => users.id),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  /** automatic sends: how often it was tried (at most 3) and when */
+  attempts: integer("attempts").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => ({
   byReport: index("insurer_report_runs_report_idx").on(t.reportId, t.createdAt),

@@ -1,6 +1,8 @@
 export interface MailAttachment { filename: string; content: Uint8Array; contentType: string }
 export interface Mail {
   to: string | string[]; subject: string; text: string; html?: string;
+  /** copies (the insurer reports: a visible Cc, and an internal Bcc) */
+  cc?: string[]; bcc?: string[];
   /** replies go to the person who sent the report, not to the no-reply sender */
   replyTo?: string;
   attachments?: MailAttachment[];
@@ -36,6 +38,7 @@ export class ResendMailer implements Mailer {
       body: JSON.stringify({
         from: this.from, to: Array.isArray(m.to) ? m.to : [m.to], subject: m.subject, text: m.text, html: m.html,
         ...(m.replyTo ? { reply_to: m.replyTo } : {}),
+        ...(m.cc?.length ? { cc: m.cc } : {}), ...(m.bcc?.length ? { bcc: m.bcc } : {}),
         ...(m.attachments?.length ? { attachments: m.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content).toString("base64") })) } : {}),
       }),
     });
@@ -51,11 +54,12 @@ export class ModeMailer implements Mailer {
   constructor(private inner: Mailer, private mode: "off" | "redirect" | "live", private redirectTo: string | null) {}
   async send(m: Mail) {
     if (this.mode === "live") return this.inner.send(m);
-    const orig = (Array.isArray(m.to) ? m.to : [m.to]).join(", ");
+    // the copies are part of "who it was meant for": they are listed, and never sent in a mode that does not reach real people
+    const orig = [(Array.isArray(m.to) ? m.to : [m.to]).join(", "), m.cc?.length ? `Cc: ${m.cc.join(", ")}` : "", m.bcc?.length ? `Bcc: ${m.bcc.join(", ")}` : ""].filter(Boolean).join(" · ");
     if (this.mode === "off") { console.log(`[mail:off] not sent: to=${orig} subject=${m.subject}`); return; }
     if (!this.redirectTo) throw new Error("MAIL_REDIRECT_TO missing");
     return this.inner.send({
-      ...m, to: this.redirectTo, subject: `[STAGING → ${orig}] ${m.subject}`,
+      ...m, to: this.redirectTo, cc: undefined, bcc: undefined, subject: `[STAGING → ${orig}] ${m.subject}`,
       text: `[STAGING] Original recipients: ${orig}
 
 ${m.text}`,

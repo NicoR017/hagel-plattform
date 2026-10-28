@@ -13,6 +13,7 @@ import { seedStaging } from "./scripts/seed_staging";
 import { storageFromEnv } from "./storage";
 import { azureFromEnv } from "./azure";
 import { citasFromConfig } from "./citas";
+import { runDueInsurerReports } from "./insurer_report_send";
 import { FakeCitas } from "./citas_fake";
 
 const cfg = loadConfig();
@@ -37,6 +38,18 @@ const api = createApp({
   db: h.db, cfg, mailer, storage, az: azureFromEnv(), citas: process.env.CITAS_FAKE === "1" && cfg.appEnv !== "production" ? demoCitas() : citasFromConfig(cfg),
   ocr: { apiKey: process.env.ANTHROPIC_API_KEY ?? null, model: process.env.OCR_MODEL ?? "claude-sonnet-5-5", fetch: (url, init) => fetch(url, init) },
 });
+// V6: the automatic insurer reports, looked at every minute. One send per report and period is claimed in the database first, so a restart or a second server never sends twice.
+if (process.env.INSURER_REPORTS_SCHEDULER !== "off") {
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try { const r = await runDueInsurerReports({ db: h.db, storage, mailer }); if (r.sent || r.failed) console.log("[insurer-reports]", JSON.stringify(r)); }
+    catch (e) { console.error("[insurer-reports] FAILED", (e as Error).message); }
+    finally { busy = false; }
+  };
+  setInterval(() => void tick(), 60_000);
+}
 const root = new Hono();
 root.route("/api", api);
 

@@ -169,6 +169,13 @@
       "when": 1793226416050,
       "tag": "0023_v6_report_company",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793312816050,
+      "tag": "0024_v6_report_attempts",
+      "breakpoints": true
     }
   ]
 }

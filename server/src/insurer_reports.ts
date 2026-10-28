@@ -39,6 +39,17 @@ export function lastCompletePeriod(frequency: ReportFrequency, today: string): P
 /** the period before `period` of the same frequency (periods are complete calendar weeks, months or quarters) */
 export const previousPeriod = (frequency: ReportFrequency, period: Period): Period => lastCompletePeriod(frequency, period.from);
 
+/** the period after `period` of the same frequency */
+export function nextPeriod(frequency: ReportFrequency, period: Period): Period {
+  if (frequency === "week") return { from: addDays(period.from, 7), to: addDays(period.to, 7) };
+  const first = addDays(period.to, 1); // the first day of the next month / quarter
+  const y = Number(first.slice(0, 4)), m = Number(first.slice(5, 7));
+  const months = frequency === "month" ? 1 : 3;
+  const endMonth0 = m - 1 + months; // 0-based month after the period
+  const ey = y + Math.floor((endMonth0 - 1) / 12), em = ((endMonth0 - 1) % 12) + 1;
+  return { from: first, to: ymd(ey, em, lastDayOfMonth(ey, em)) };
+}
+
 /** the `n` periods up to and including `period`, oldest first */
 export function periodsUpTo(frequency: ReportFrequency, period: Period, n: number): Period[] {
   const out: Period[] = [period];
