@@ -188,7 +188,8 @@ describe("repair board: stages, to-dos, checks, Finish rules (server side)", () 
     const r = await stage(id, chefA, "finish");
     expect(r.status).toBe("rejected");
     expect(r.code).toBe("finish_blocked");
-    for (const reason of ["todos_open", "check:pdr", "check:teile", "check:chef", "photos:demontage", "photos:pdr", "photos:remontage"]) expect(r.message).toContain(reason);
+    for (const reason of ["todos_open", "check:pdr", "check:teile", "check:chef", "photos:demontage", "photos:pdr"]) expect(r.message).toContain(reason);
+    expect(r.message).not.toContain("photos:remontage"); // Reassembly needs no photo
     expect((await vrow(id)).statut).toBe("reparatur");
     expect((await refresh()).repair.finishBlockers).toContain("todos_open");
   });
@@ -214,7 +215,7 @@ describe("repair board: stages, to-dos, checks, Finish rules (server side)", () 
     expect((await one(chefA, op("repair.check", { vehicleId: id, key: "chef", done: true }))).status).toBe("ok");
     v = await refresh();
     expect(v.repair.checks.chef.by).toBeTruthy();
-    expect(v.repair.finishBlockers.sort()).toEqual(["photos:demontage", "photos:pdr", "photos:remontage"]);
+    expect(v.repair.finishBlockers.sort()).toEqual(["photos:demontage", "photos:pdr"]);
   });
 
   it("photos tagged with the stage and the role complete the automatic check; then 'Finish' works and the car is 'Fertig'", async () => {

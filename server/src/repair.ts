@@ -2,7 +2,7 @@
 // daily job that moves due bookings into "Bereit". Every rule is enforced HERE, not only in the UI.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { NEXT_AFTER_STEP, ROLE_REPAIR_STEPS, parseRefuseMotif, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
+import { NEXT_AFTER_STEP, PHOTO_REQUIRED_STAGES, ROLE_REPAIR_STEPS, parseRefuseMotif, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
 import { audit } from "./audit";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
@@ -19,8 +19,6 @@ import {
 } from "./schema";
 import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "./sync";
 
-/** stages that need at least one photo before the vehicle may reach "Finish" */
-const PHOTO_STAGES = ["demontage", "pdr", "remontage"] as const;
 const BOOKABLE = ["arrive", "besichtigung", "attente"] as const;
 
 // ------------------------------------------------------------------ technician / headliner rules
@@ -52,12 +50,12 @@ async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: strin
   return String(removal ? sh.demTechName ?? "" : sh.techName ?? "").trim().toLowerCase() === me;
 }
 
-/** The technician / headliner moves HIS car, from one of his steps to the next one, after taking a photo of that step himself. */
+/** The technician / headliner moves HIS car, from one of his steps to the next one, after taking a photo of that step himself (Reassembly: no photo needed). */
 async function checkFieldMove(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from: string, to: string) {
   if (!fieldMovesOf(u, row.orgId, fp.kind).some(([a, b]) => a === from && b === to)) throw new Reject("move_not_allowed");
   if (!(await isHisCar(tx, row, u, fp, from))) throw new Reject("not_your_vehicle");
   const mine = await tx.select({ id: photos.id }).from(photos).where(and(eq(photos.vehicleId, row.id), isNull(photos.deletedAt), eq(photos.repairStage, from), eq(photos.takenBy, u.id))).limit(1);
-  if (!mine.length) throw new Reject("photo_required");
+  if (!mine.length && (PHOTO_REQUIRED_STAGES as readonly string[]).includes(from)) throw new Reject("photo_required");
 }
 
 // ------------------------------------------------------------------ dates (station time zone)
@@ -110,7 +108,7 @@ export async function finishBlockers(db: Pick<Db, "select">, vehicleId: string):
   const checks = await db.select().from(repairChecks).where(eq(repairChecks.vehicleId, vehicleId));
   for (const k of ["pdr", "teile", "chef"]) if (!checks.some((c) => c.key === k && c.doneAt)) out.push(`check:${k}`);
   const ph = await db.select({ stage: photos.repairStage }).from(photos).where(and(eq(photos.vehicleId, vehicleId), isNull(photos.deletedAt)));
-  for (const s of PHOTO_STAGES) if (!ph.some((p) => p.stage === s)) out.push(`photos:${s}`);
+  for (const s of PHOTO_REQUIRED_STAGES) if (!ph.some((p) => p.stage === s)) out.push(`photos:${s}`);
   const [tech] = await db.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.vehicleId, vehicleId), eq(vehicleAssignments.type, "pdr"))).limit(1);
   // somebody works on it: an assigned PDR technician, or a technician named in the split (a technician without an account cannot be assigned)
   const [veh] = await db.select({ shares: vehicles.shares }).from(vehicles).where(eq(vehicles.id, vehicleId));

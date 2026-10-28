@@ -22,6 +22,8 @@ export type RepairStage = (typeof REPAIR_STAGES)[number];
 /** the repair steps a role can be given (v5): with a step the role moves the car from that step to the next one */
 export const ROLE_REPAIR_STEPS = ["demontage", "pdr", "remontage"] as const;
 export type RoleRepairStep = (typeof ROLE_REPAIR_STEPS)[number];
+/** the steps that need a photo: before a technician moves the car out of the step, and before "Finish" (Reassembly needs none) */
+export const PHOTO_REQUIRED_STAGES = ["demontage", "pdr"] as const;
 export const NEXT_AFTER_STEP: Record<RoleRepairStep, RepairStage> = { demontage: "pdr", pdr: "remontage", remontage: "bodyshop" };
 
 export const STATION_TYPES = ["carrosserie", "hall", "parc"] as const;

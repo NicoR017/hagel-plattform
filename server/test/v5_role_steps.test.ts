@@ -108,10 +108,8 @@ describe("the moves follow the steps of the role", () => {
     expect((await move(remTok, d, "pdr")).status).toBe("ok");
     expect((await move(remTok, d, "remontage")).code).toBe("move_not_allowed");
     const r = await car("remontage");
-    expect((await move(remTok, r, "bodyshop")).code).toBe("photo_required");
-    await photo(remTok, r, "remontage");
     expect((await move(remTok, r, "finish")).code).toBe("move_not_allowed");
-    expect((await move(remTok, r, "bodyshop")).status).toBe("ok");
+    expect((await move(remTok, r, "bodyshop")).status).toBe("ok"); // Reassembly needs no photo
   });
   it("the car must be his: PDR steps need the PDR assignment, removal-refit steps the removal assignment (or his name in the split)", async () => {
     const id = await car("pdr");

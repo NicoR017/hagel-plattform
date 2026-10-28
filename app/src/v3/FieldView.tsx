@@ -1,5 +1,6 @@
 import { isPlace } from "../field/places";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { PHOTO_REQUIRED_STAGES } from "@hagel/shared";
 import { PANEL_MAP, type Panel } from "@hagel/calc";
 import { eur } from "@hagel/documents";
 import { t, tOr } from "../i18n";
@@ -72,7 +73,9 @@ function useFieldMove(v: LocalVehicle, kind: FieldKind) {
   const me = f.refs?.me.id ?? "";
   const stage = stageOf(v);
   const next = nextStep(kind, asField(v), f.refs?.me.fieldView?.moves);
-  const has = hasStepPhoto(photos, me, v.id, stage);
+  const taken = hasStepPhoto(photos, me, v.id, stage);
+  // Reassembly needs no photo: the move is open at once (a photo can still be added)
+  const has = !(PHOTO_REQUIRED_STAGES as readonly string[]).includes(stage) || taken;
   const [moving, setMoving] = useState(false);
   const role = kind === "headliner" ? "Headliner" : "Techniker";
   const take = async (files: FileList | null) => {
@@ -95,7 +98,7 @@ function useFieldMove(v: LocalVehicle, kind: FieldKind) {
     const timer = window.setTimeout(() => { if (!undone) void setRepairStage(f.mut, v.id, next).catch(() => undefined); setMoving(false); }, UNDO_MS);
     toast(t("fvMovedTo").replace("{plate}", plateOf(v)).replace("{next}", stageLabel(next)), UNDO_MS, { label: t("v3Undo"), run: () => { undone = true; clearTimeout(timer); setMoving(false); } });
   };
-  return { stage, next, has, moving, take, move };
+  return { stage, next, has, taken, moving, take, move };
 }
 
 function MoveBox({ v, kind }: { v: LocalVehicle; kind: FieldKind }) {
@@ -113,7 +116,7 @@ function MoveBox({ v, kind }: { v: LocalVehicle; kind: FieldKind }) {
       )}
       {m.has && <button className="btn" style={{ minHeight: 40 }} onClick={() => cam.current?.click()}>📷 {t("fvTakePhoto").replace("{step}", stageLabel(m.stage))}</button>}
       <button className={"btn" + (m.has ? " primary" : "")} disabled={!m.has || m.moving} onClick={m.move}>
-        {m.moving ? t("fvMoving") : m.has ? t("fvPhotoDone").replace("{next}", stageLabel(m.next)) : t("fvMoveTo").replace("{next}", stageLabel(m.next))}
+        {m.moving ? t("fvMoving") : m.taken ? t("fvPhotoDone").replace("{next}", stageLabel(m.next)) : t("fvMoveTo").replace("{next}", stageLabel(m.next))}
       </button>
     </div>
   );

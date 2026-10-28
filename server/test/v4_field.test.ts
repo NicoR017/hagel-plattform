@@ -118,7 +118,7 @@ describe("moves", () => {
     expect(await stageOf(id)).toBe("demontage");
   });
 
-  it("the headliner: Disassembly → PDR and Reassembly → At body shop, each after his own photo; never Finish, never PDR → Reassembly", async () => {
+  it("the headliner: Disassembly → PDR and Reassembly → At body shop, Disassembly needs his own photo, Reassembly none; never Finish, never PDR → Reassembly", async () => {
     const id = await car("demontage");
     expect((await move(head, id, "pdr")).code).toBe("photo_required");
     await photo(head, id, "demontage");
@@ -126,9 +126,7 @@ describe("moves", () => {
     expect((await move(head, id, "remontage")).code).toBe("move_not_allowed"); // PDR → Reassembly is not his
     expect((await move(c.superToken, id, "remontage")).status).toBe("ok"); // a manager moves it on
     expect((await move(head, id, "finish")).code).toBe("move_not_allowed");
-    expect((await move(head, id, "bodyshop")).code).toBe("photo_required");
-    await photo(head, id, "remontage");
-    expect((await move(head, id, "bodyshop")).status).toBe("ok");
+    expect((await move(head, id, "bodyshop")).status).toBe("ok"); // Reassembly needs no photo
     expect(await stageOf(id)).toBe("bodyshop");
     expect((await move(head, id, "finish")).code).toBe("move_not_allowed");
   });
