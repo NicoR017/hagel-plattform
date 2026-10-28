@@ -78,7 +78,7 @@ const deBase = {
   // permissions
   "p.vehicules.voir": "Fahrzeuge ansehen", "p.vehicules.creer": "Fahrzeuge anlegen", "p.vehicules.modifier": "Fahrzeuge bearbeiten", "p.vehicules.supprimer": "Fahrzeuge löschen",
   "p.vehicules.assigner": "Fahrzeuge zuweisen", "p.vehicules.deplacer": "Fahrzeuge verschieben", "p.vehicules.changer_statut": "Status ändern",
-  "p.prix.voir": "Preise ansehen", "p.repartition_interne.voir": "Interne Aufteilung ansehen", "p.ma_part.voir": "Eigenen Anteil ansehen", "p.ma_part_pct.voir": "Prozentsatz des eigenen Anteils ansehen", "p.ma_commission.voir": "Eigene Provision ansehen",
+  "p.prix.voir": "Preise ansehen", "p.repartition_interne.voir": "Interne Aufteilung ansehen", "p.ma_part.voir": "Eigenen Anteil ansehen", "p.ma_part_pct.voir": "Prozentsatz des eigenen Anteils ansehen", "p.rapports.voir": "Versicherungsberichte ansehen", "p.rapports.envoyer": "Versicherungsberichte senden", "p.rapports.gerer": "Versicherungsberichte verwalten", "p.ma_commission.voir": "Eigene Provision ansehen",
   "p.commission.modifier": "Provision ändern", "p.kva.envoyer": "KVA senden", "p.rapport_reparation.envoyer": "Reparaturbericht senden",
   "p.photos.ajouter": "Fotos hinzufügen", "p.photos.supprimer": "Fotos löschen", "p.colibri.importer": "Colibri importieren", "p.export.excel": "Excel-Export",
   "p.assurances.gerer": "Versicherungen verwalten", "p.campagnes.gerer": "Kampagnen verwalten", "p.stations.gerer": "Stationen verwalten", "p.parametres.gerer": "Einstellungen verwalten",
@@ -145,7 +145,7 @@ const enBase: Record<keyof typeof deBase, string> = {
   "rd.carrosserie": "External account: its vehicles, wherever they are", "rd.assureur": "External account: its insurer's files, without the internal split",
   "p.vehicules.voir": "View vehicles", "p.vehicules.creer": "Create vehicles", "p.vehicules.modifier": "Edit vehicles", "p.vehicules.supprimer": "Delete vehicles",
   "p.vehicules.assigner": "Assign vehicles", "p.vehicules.deplacer": "Move vehicles", "p.vehicules.changer_statut": "Change status",
-  "p.prix.voir": "View prices", "p.repartition_interne.voir": "View internal split", "p.ma_part.voir": "View own share", "p.ma_part_pct.voir": "View the percentage of the own share", "p.ma_commission.voir": "View own commission",
+  "p.prix.voir": "View prices", "p.repartition_interne.voir": "View internal split", "p.ma_part.voir": "View own share", "p.ma_part_pct.voir": "View the percentage of the own share", "p.rapports.voir": "View insurer reports", "p.rapports.envoyer": "Send insurer reports", "p.rapports.gerer": "Manage insurer reports", "p.ma_commission.voir": "View own commission",
   "p.commission.modifier": "Change commission", "p.kva.envoyer": "Send estimate (KVA)", "p.rapport_reparation.envoyer": "Send repair report",
   "p.photos.ajouter": "Add photos", "p.photos.supprimer": "Delete photos", "p.colibri.importer": "Import Colibri", "p.export.excel": "Excel export",
   "p.assurances.gerer": "Manage insurers", "p.campagnes.gerer": "Manage campaigns", "p.stations.gerer": "Manage stations", "p.parametres.gerer": "Manage settings",

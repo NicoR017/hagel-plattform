@@ -242,6 +242,7 @@ const GROUPS_DEF: { title: Key; keys: string[] }[] = [
   { title: "v6PermGroupMoney", keys: ["prix.voir", "repartition_interne.voir", "ma_part.voir", "ma_part_pct.voir", "ma_commission.voir", "commission.modifier", "methoden.gerer", "wochenbericht.voir"] },
   { title: "v6PermGroupDocs", keys: ["kva.envoyer", "rapport_reparation.envoyer", "photos.ajouter", "photos.supprimer", "export.excel"] },
   { title: "v6PermGroupDash", keys: ["colibri.importer", "dashboard.voir"] },
+  { title: "v6PermGroupReports", keys: ["rapports.voir", "rapports.envoyer", "rapports.gerer"] },
   { title: "v6PermGroupAdmin", keys: ["assurances.gerer", "stations.gerer", "parametres.gerer", "utilisateurs.gerer", "roles.gerer", "audit.voir"] },
 ];
 const PERM_GROUPS = (() => {

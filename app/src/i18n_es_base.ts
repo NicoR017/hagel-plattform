@@ -57,7 +57,7 @@ export const esBase: Record<string, string> = {
   // permissions
   "p.vehicules.voir": "Ver vehículos", "p.vehicules.creer": "Crear vehículos", "p.vehicules.modifier": "Editar vehículos", "p.vehicules.supprimer": "Eliminar vehículos",
   "p.vehicules.assigner": "Asignar vehículos", "p.vehicules.deplacer": "Trasladar vehículos", "p.vehicules.changer_statut": "Cambiar estado",
-  "p.prix.voir": "Ver precios", "p.repartition_interne.voir": "Ver reparto interno", "p.ma_part.voir": "Ver la parte propia", "p.ma_part_pct.voir": "Ver el porcentaje de la parte propia", "p.ma_commission.voir": "Ver la comisión propia",
+  "p.prix.voir": "Ver precios", "p.repartition_interne.voir": "Ver reparto interno", "p.ma_part.voir": "Ver la parte propia", "p.ma_part_pct.voir": "Ver el porcentaje de la parte propia", "p.rapports.voir": "Ver los informes de aseguradoras", "p.rapports.envoyer": "Enviar los informes de aseguradoras", "p.rapports.gerer": "Gestionar los informes de aseguradoras", "p.ma_commission.voir": "Ver la comisión propia",
   "p.commission.modifier": "Modificar comisión", "p.kva.envoyer": "Enviar presupuesto (KVA)", "p.rapport_reparation.envoyer": "Enviar informe de reparación",
   "p.photos.ajouter": "Añadir fotos", "p.photos.supprimer": "Eliminar fotos", "p.colibri.importer": "Importar Colibri", "p.export.excel": "Exportar a Excel",
   "p.assurances.gerer": "Gestionar aseguradoras", "p.campagnes.gerer": "Gestionar campañas", "p.stations.gerer": "Gestionar estaciones", "p.parametres.gerer": "Gestionar ajustes",

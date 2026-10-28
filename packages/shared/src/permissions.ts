@@ -10,6 +10,8 @@ export const PERMISSIONS = [
   "utilisateurs.gerer", "roles.gerer", "audit.voir", "dashboard.voir",
   // UI v3
   "reparatur.board", "reparatur.endabnahme", "termine.buchen", "methoden.gerer", "wochenbericht.voir", "kommentare.schreiben",
+  // V6: automatic insurer reports (see / send now / set up)
+  "rapports.voir", "rapports.envoyer", "rapports.gerer",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -67,7 +69,7 @@ export const SYSTEM_ROLES: SystemRole[] = [
   },
   {
     key: "chef_site", name: "Chef de station (Stationsleiter)", description: "Gère les véhicules et l'équipe d'un site", scope: "station",
-    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir", "methoden.gerer", "wochenbericht.voir"),
+    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir", "methoden.gerer", "wochenbericht.voir", "rapports.gerer"),
   },
   {
     key: "aufnehmer", name: "Aufnehmer / Expert", description: "Crée et chiffre les véhicules", scope: "station",

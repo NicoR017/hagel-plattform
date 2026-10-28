@@ -82,7 +82,7 @@ export const esV: Record<string, string> = {
   v6Deleted: "Eliminado", v6LastLogin: "Último inicio de sesión", v6Invited: "Invitado", v6Disabled: "Desactivado",
   v6DeleteRole: "Eliminar rol", v6DeleteRoleQ: "¿Eliminar el rol?", v6DeleteRoleUsed: "Este rol todavía tiene miembros. Elija un rol sustituto que asuma sus asignaciones y las invitaciones pendientes.",
   v6Replacement: "Rol sustituto", v6DeleteRoleGo: "Eliminar y reasignar", v6RoleMembers: "asignaciones",
-  v6PermGroupVehicles: "Vehículos", v6PermGroupMoney: "Finanzas", v6PermGroupDocs: "Documentos y fotos", v6PermGroupDash: "Colibri y panel", v6PermGroupAdmin: "Administración", v6PermGroupRepair: "Reparación",
+  v6PermGroupVehicles: "Vehículos", v6PermGroupMoney: "Finanzas", v6PermGroupDocs: "Documentos y fotos", v6PermGroupDash: "Colibri y panel", v6PermGroupReports: "Informes de aseguradoras", v6PermGroupAdmin: "Administración", v6PermGroupRepair: "Reparación",
   v6RepairsPerDay: "Reparaciones por día", v6StationInsurers: "Aseguradoras con las que trabaja", v6Recipients: "Destinatarios de los informes", v6RecipientsHint: "Varias direcciones, añadidas una a una. La dirección de una aseguradora seleccionada se añade automáticamente y se puede quitar por separado.",
   v6AddRecipient: "Añadir dirección", v6Automatic: "automático", v6RestoreAuto: "volver a añadir", v6NoRecipients: "Sin destinatarios: los informes solo se envían a la aseguradora del vehículo.",
   v6BadEmail: "Dirección de correo no válida", v6SaveFirst: "Guarde primero y luego elija las aseguradoras.", v6Occupancy: "Ocupación", v6Commission: "Comisión",

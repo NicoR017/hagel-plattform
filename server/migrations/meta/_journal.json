@@ -155,6 +155,13 @@
       "when": 1793053616050,
       "tag": "0021_v5_bodyshop_cif",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793140016050,
+      "tag": "0022_v6_insurer_reports",
+      "breakpoints": true
     }
   ]
 }

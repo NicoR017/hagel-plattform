@@ -358,6 +358,71 @@ export const reportSends = pgTable("report_sends", {
   createdAt: createdAt(),
 }, (t) => ({ byVehicle: index("report_sends_vehicle_idx").on(t.vehicleId) }));
 
+// ---------------------------------------------------------------- V6: automatic insurer reports
+/** A report set up for one or several insurers: scope, schedule, recipients, e-mail text, content. Soft-deleted (history stays). */
+export const insurerReports = pgTable("insurer_reports", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  /** language of the PDF and of the e-mail: es | en | de | fr */
+  language: text("language").notNull().default("es"),
+  active: boolean("active").notNull().default(true),
+  /** scope: the insurers (at least one), optionally narrowed to body shops, stations (places) and countries; empty = no narrowing */
+  insurerIds: uuid("insurer_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  bodyshopIds: uuid("bodyshop_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  stationIds: uuid("station_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  countries: text("countries").array().notNull().default(sql`'{}'::text[]`),
+  /** first day counted in the cumulative figures (YYYY-MM-DD, null = since the beginning) */
+  projectStart: text("project_start"),
+  /** week | month | quarter: the report covers the last complete period */
+  frequency: text("frequency").notNull().default("week"),
+  /** week: weekday 1 (Monday) .. 7; month / quarter: day of the month 1 .. 28 */
+  sendDay: integer("send_day").notNull().default(1),
+  /** window of the day in which the automatic send happens (HH:MM, local time of `timezone`) */
+  windowFrom: text("window_from").notNull().default("16:00"),
+  windowTo: text("window_to").notNull().default("17:00"),
+  timezone: text("timezone").notNull().default("Europe/Madrid"),
+  toEmails: text("to_emails").array().notNull().default(sql`'{}'::text[]`),
+  ccEmails: text("cc_emails").array().notNull().default(sql`'{}'::text[]`),
+  /** internal copy, never shown to the insurer */
+  bccEmails: text("bcc_emails").array().notNull().default(sql`'{}'::text[]`),
+  replyTo: text("reply_to"),
+  subject: text("subject").notNull().default(""),
+  body: text("body").notNull().default(""),
+  /** the figures shown, in this order (see INSURER_KPIS) */
+  kpis: text("kpis").array().notNull().default(sql`'{}'::text[]`),
+  annexVehicles: boolean("annex_vehicles").notNull().default(false),
+  showAmounts: boolean("show_amounts").notNull().default(false),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byOrg: index("insurer_reports_org_idx").on(t.orgId) }));
+
+/** One send (or attempt) of a report for a period: the archive of the PDF and who got it. */
+export const insurerReportRuns = pgTable("insurer_report_runs", {
+  id: id(),
+  reportId: uuid("report_id").notNull().references(() => insurerReports.id),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  /** auto | manual | test */
+  trigger: text("trigger").notNull().default("auto"),
+  /** pending | sent | failed | skipped */
+  status: text("status").notNull().default("pending"),
+  recipients: text("recipients").array().notNull().default(sql`'{}'::text[]`),
+  fileKey: text("file_key"),
+  error: text("error"),
+  /** the figures of that day, kept as sent */
+  kpis: jsonb("kpis"),
+  sentBy: uuid("sent_by").references(() => users.id),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => ({
+  byReport: index("insurer_report_runs_report_idx").on(t.reportId, t.createdAt),
+  oneAuto: uniqueIndex("insurer_report_runs_auto_uq").on(t.reportId, t.periodFrom, t.periodTo).where(sql`trigger = 'auto'`),
+}));
+
 // ---------------------------------------------------------------- Azure mirrors (read-only copies of the Colibri tables)
 export const azureTenants = pgTable("azure_tenants", {
   name: text("name").primaryKey(),

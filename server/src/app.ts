@@ -23,6 +23,7 @@ import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./routes_master";
 import { azureRoutes } from "./routes_azure";
 import { citasRoutes } from "./routes_citas";
+import { insurerReportRoutes } from "./routes_insurer_reports";
 import type { CitasSource } from "./citas";
 import type { AzureSource } from "./azure";
 import { seedCompanies } from "./companies_seed";
@@ -238,6 +239,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
+  app.route("/", insurerReportRoutes({ db, needAuth, needOrg, validationHook }));
   app.route("/", citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, validationHook, now: citasNow }));
 
   // ---------- admin ----------
