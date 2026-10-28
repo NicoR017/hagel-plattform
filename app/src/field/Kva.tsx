@@ -6,7 +6,7 @@ import { colibriBadge } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
 import { TechPicker } from "./TechPicker";
 import { assignVehicle, setShares, setStatus } from "../sync/mutations";
-import { buildRepairReport, buildSendPdf, shareOrDownload, toDoc } from "./docs";
+import { buildRepairReport, buildSendPdf, sharesFiles, shareOrDownload, toDoc } from "./docs";
 import { StatusDialog } from "./Dialogs";
 import { SendReportDialog } from "./SendReport";
 import { usePhotos, usePhotoUrl, useField } from "./store";
@@ -120,7 +120,7 @@ export function Kva({ v, beforeActions, technicians = true }: { v: LocalVehicle;
         if (to && navigator.clipboard?.writeText) void navigator.clipboard.writeText(to).catch(() => undefined);
         toast(to ? `📋 ${to} ${t("copiedPasteTo")}` : t("noCustomerMail"), 6000);
         const ok = await shareOrDownload(r.bytes, name, "application/pdf", { title: mt.subject, text: mt.body });
-        if (ok && !navigator.canShare) window.location.href = `mailto:${encodeURIComponent(to).replace(/%40/g, "@")}?subject=${encodeURIComponent(mt.subject)}&body=${encodeURIComponent(mt.body)}`;
+        if (ok && !sharesFiles()) window.location.href = `mailto:${encodeURIComponent(to).replace(/%40/g, "@")}?subject=${encodeURIComponent(mt.subject)}&body=${encodeURIComponent(mt.body)}`;
       } else await shareOrDownload(r.bytes, name, "application/pdf");
     } catch (err) { toast(`${t("pdfFailed")}: ${(err as Error).message}`); }
     setBusy("");
