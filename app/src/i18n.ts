@@ -11,6 +11,7 @@ import { deV5, enV5 } from "./i18n_v5";
 import { deV6, enV6 } from "./i18n_v6";
 import { deV7, enV7, esV7, frV7 } from "./i18n_v7";
 import { deV8, enV8, esV8, frV8 } from "./i18n_v8";
+import { deV9, enV9, esV9, frV9 } from "./i18n_v9";
 import { deCitas, enCitas, esCitas, frCitas } from "./i18n_citas";
 import { frBase } from "./i18n_fr_base";
 import { frField } from "./i18n_fr_field";
@@ -86,7 +87,7 @@ const deBase = {
   "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
-const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6, ...deV7, ...deV8, ...deCitas };
+const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6, ...deV7, ...deV8, ...deV9, ...deCitas };
 export type Key = keyof typeof de;
 
 const enBase: Record<keyof typeof deBase, string> = {
@@ -153,10 +154,10 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
-const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6, ...enV7, ...enV8, ...enCitas };
+const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6, ...enV7, ...enV8, ...enV9, ...enCitas };
 
-const fr = { ...frBase, ...frField, ...frV, ...frV7, ...frV8, ...frCitas } as Record<Key, string>;
-const es = { ...esBase, ...esField, ...esV, ...esV7, ...esV8, ...esCitas } as Record<Key, string>;
+const fr = { ...frBase, ...frField, ...frV, ...frV7, ...frV8, ...frV9, ...frCitas } as Record<Key, string>;
+const es = { ...esBase, ...esField, ...esV, ...esV7, ...esV8, ...esV9, ...esCitas } as Record<Key, string>;
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en, fr, es };
 

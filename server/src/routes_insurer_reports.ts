@@ -123,6 +123,8 @@ export function insurerReportRoutes({ db, storage, mailer, needAuth, needOrg, va
     const mayManage = hasOrgPermission(c.get("principal"), "rapports.gerer", org(c));
     return c.json(rows.map((x) => ({
       id: x.id, ...fromRow(x), insurers: x.insurerIds.map((id) => names.get(id) ?? ""),
+      // the next automatic send (an inactive report has none)
+      nextSend: x.active ? nextSends(x, new Date(), 1)[0] ?? null : null,
       // the Bcc stays internal: only who may set the reports up sees it
       ...(mayManage ? {} : { bcc_emails: [] }),
       lastRun: runs.find((u) => u.reportId === x.id) ? { status: runs.find((u) => u.reportId === x.id)!.status, periodTo: runs.find((u) => u.reportId === x.id)!.periodTo, at: runs.find((u) => u.reportId === x.id)!.createdAt } : null,

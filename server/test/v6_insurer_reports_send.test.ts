@@ -274,6 +274,11 @@ describe("planning", () => {
     expect(n).toHaveLength(4);
     expect(n.every((x) => x.on > "2026-01-01" && x.period.from < x.period.to)).toBe(true);
     expect(n.map((x) => x.on)).toEqual([...n.map((x) => x.on)].sort());
+    // the list shows the first of them; an inactive report has none
+    const list = (await sup("GET", "/admin/insurer-reports")).body as any[];
+    expect(list.find((x) => x.id === id).nextSend).toEqual(n[0]);
+    await sup("PUT", `/admin/insurer-reports/${id}`, { active: false });
+    expect(((await sup("GET", "/admin/insurer-reports")).body as any[]).find((x) => x.id === id).nextSend).toBeNull();
   });
 });
 

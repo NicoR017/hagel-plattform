@@ -41,7 +41,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="admin-modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="admin-modal-box" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="row" style={{ flexWrap: "nowrap" }}><h3 className="grow" style={{ margin: 0 }}>{title}</h3><button className="btn sec" onClick={onClose} aria-label={t("close")}>✕</button></div>
+        <div className="row" style={{ flexWrap: "nowrap" }}><h3 className="grow" style={{ margin: 0 }}>{title}</h3><button className="btn sec" style={{ width: "auto", flex: "none" }} onClick={onClose} aria-label={t("close")}>✕</button></div>
         {children}
       </div>
     </div>

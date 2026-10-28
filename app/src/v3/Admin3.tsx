@@ -16,6 +16,7 @@ import { confirmDialog } from "../field/ui";
 import { fmtDateTime, getLang, locale, t, tOr, type Key } from "../i18n";
 import { Shell3 } from "./Shell3";
 import { BodyShopsPage } from "./BodyShops";
+import { InsurerReportsPage } from "./InsurerReports";
 import { ColibriDevicesPage } from "./ColibriDevices";
 
 interface Me {
@@ -24,7 +25,7 @@ interface Me {
   grants: { orgId: string; stationId: string | null; permissions: string[] }[];
 }
 
-type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "scanners" | "insurers" | "methods" | "technicians" | "weekly" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
+type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "scanners" | "insurers" | "methods" | "technicians" | "weekly" | "reports" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
 
 /** Map of the old tab names (bookmarks) to the new sections */
 const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
@@ -55,6 +56,8 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     { title: "v6MenuWork", items: [
       { k: "technicians", label: t("v6MenuTech"), show: has("parametres.gerer") },
       { k: "weekly", label: t("v6MenuWeekly"), show: has("wochenbericht.voir") },
+      // V6: the reports for insurers; hidden for everybody without the right to see them
+      { k: "reports", label: t("v9Reports"), show: hasAny("rapports.voir") },
     ] },
     { title: "v6MenuSystem", items: [
       { k: "azure", label: t("v6MenuAzure"), show: has("stations.gerer") },
@@ -96,6 +99,7 @@ export function Admin3({ me, org, onOrg, route }: { me: Me; org: string; onOrg: 
     case "prices": body = <PricesPage />; break;
     case "technicians": body = <TechniciansPage canUsers={has("utilisateurs.gerer")} />; break;
     case "weekly": body = <WeeklyPage />; break;
+    case "reports": body = <InsurerReportsPage canSend={hasAny("rapports.envoyer")} canManage={hasAny("rapports.gerer")} />; break;
     case "azure": body = <AzurePage />; break;
     case "audit": body = <AuditPage />; break;
     case "orgs": body = <OrgsPage />; break;
