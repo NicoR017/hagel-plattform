@@ -12,10 +12,12 @@ import type { Db } from "./db";
 import type { Env } from "./env";
 import { DEFAULT_INSURER_KPIS, INSURER_KPIS, REPORT_FREQUENCIES, computeInsurerKpis, isValidTimeZone, lastCompletePeriod, type ReportFrequency } from "./insurer_reports";
 import { hasOrgPermission } from "./permissions";
-import { insurerReportRuns, insurerReports, insurers, stations } from "./schema";
+import { buildInsurerReportPdf } from "./insurer_report_pdf";
+import { companies, insurerReportRuns, insurerReports, insurers, stations } from "./schema";
+import type { Storage } from "./storage";
 
 interface Deps {
-  db: Db;
+  db: Db; storage: Storage;
   needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env>;
   validationHook: (r: { success: boolean }, c: Context) => Response | undefined;
 }
@@ -28,6 +30,7 @@ const unique = <T>(xs: T[]) => [...new Set(xs)];
 export const reportInput = z.object({
   name: z.string().trim().min(1).max(120),
   language: z.enum(LANGS).default("es"),
+  company_id: uuid.nullable().default(null),
   active: z.boolean().default(true),
   insurer_ids: z.array(uuid).min(1).max(50).transform(unique),
   bodyshop_ids: z.array(uuid).max(200).default([]).transform(unique),
@@ -57,19 +60,19 @@ export const reportInput = z.object({
 type ReportInput = z.infer<typeof reportInput>;
 
 const toRow = (b: ReportInput) => ({
-  name: b.name, language: b.language, active: b.active, insurerIds: b.insurer_ids, bodyshopIds: b.bodyshop_ids, stationIds: b.station_ids, countries: b.countries,
+  name: b.name, language: b.language, companyId: b.company_id, active: b.active, insurerIds: b.insurer_ids, bodyshopIds: b.bodyshop_ids, stationIds: b.station_ids, countries: b.countries,
   projectStart: b.project_start, frequency: b.frequency, sendDay: b.send_day, windowFrom: b.window_from, windowTo: b.window_to, timezone: b.timezone,
   toEmails: b.to_emails, ccEmails: b.cc_emails, bccEmails: b.bcc_emails, replyTo: b.reply_to, subject: b.subject, body: b.body,
   kpis: b.kpis, annexVehicles: b.annex_vehicles, showAmounts: b.show_amounts,
 });
 const fromRow = (r: typeof insurerReports.$inferSelect): Record<string, unknown> => ({
-  name: r.name, language: r.language, active: r.active, insurer_ids: r.insurerIds, bodyshop_ids: r.bodyshopIds, station_ids: r.stationIds, countries: r.countries,
+  name: r.name, language: r.language, company_id: r.companyId, active: r.active, insurer_ids: r.insurerIds, bodyshop_ids: r.bodyshopIds, station_ids: r.stationIds, countries: r.countries,
   project_start: r.projectStart, frequency: r.frequency, send_day: r.sendDay, window_from: r.windowFrom, window_to: r.windowTo, timezone: r.timezone,
   to_emails: r.toEmails, cc_emails: r.ccEmails, bcc_emails: r.bccEmails, reply_to: r.replyTo, subject: r.subject, body: r.body,
   kpis: r.kpis, annex_vehicles: r.annexVehicles, show_amounts: r.showAmounts,
 });
 
-export function insurerReportRoutes({ db, needAuth, needOrg, validationHook }: Deps) {
+export function insurerReportRoutes({ db, storage, needAuth, needOrg, validationHook }: Deps) {
   const r = new Hono<Env>();
   const org = (c: Context<Env>) => c.get("orgId");
   const who = (c: Context<Env>) => c.get("principal").id;
@@ -87,6 +90,10 @@ export function insurerReportRoutes({ db, needAuth, needOrg, validationHook }: D
   async function checkScope(orgId: string, b: ReportInput) {
     const ins = await db.select({ id: insurers.id }).from(insurers).where(and(eq(insurers.orgId, orgId), inArray(insurers.id, b.insurer_ids)));
     if (ins.length !== b.insurer_ids.length) throw new HttpError(400, "invalid_input");
+    if (b.company_id) {
+      const [co] = await db.select({ id: companies.id }).from(companies).where(and(eq(companies.id, b.company_id), eq(companies.orgId, orgId)));
+      if (!co) throw new HttpError(400, "invalid_input");
+    }
     const sts = [...b.bodyshop_ids, ...b.station_ids];
     if (!sts.length) return;
     const rows = await db.select({ id: stations.id, type: stations.type }).from(stations).where(and(eq(stations.orgId, orgId), inArray(stations.id, sts)));
@@ -156,6 +163,20 @@ export function insurerReportRoutes({ db, needAuth, needOrg, validationHook }: D
     const k = await computeInsurerKpis(db, { orgId: org(c), insurerIds: x.insurerIds, bodyshopIds: x.bodyshopIds, stationIds: x.stationIds, countries: x.countries, projectStart: x.projectStart, timezone: x.timezone }, period);
     const { ids, ...figures } = k;
     return c.json(q.ids === "1" ? { ...figures, ids } : figures);
+  });
+
+  /**
+   * The PDF of a report for a period (the last complete one by default), for the preview. The amounts of the annex are in it only when the report
+   * shows amounts AND the person may see prices.
+   */
+  r.get("/admin/insurer-reports/:id/pdf", needAuth, needOrg, need("rapports.voir"), async (c) => {
+    const x = await reportOf(c);
+    const q = c.req.query();
+    const today = localDay(new Date(), x.timezone);
+    const period = q.from || q.to ? { from: q.from ?? "", to: q.to ?? "" } : lastCompletePeriod(x.frequency as ReportFrequency, today);
+    if (!isIsoDate(period.from) || !isIsoDate(period.to) || period.from > period.to) throw new HttpError(400, "invalid_input");
+    const out = await buildInsurerReportPdf({ db, storage }, x, period, { amounts: hasOrgPermission(c.get("principal"), "prix.voir", org(c)) });
+    return new Response(Buffer.from(out.bytes), { status: 200, headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${out.filename}"`, "Cache-Control": "no-store" } });
   });
 
   return r;

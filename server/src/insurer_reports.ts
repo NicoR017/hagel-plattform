@@ -36,6 +36,16 @@ export function lastCompletePeriod(frequency: ReportFrequency, today: string): P
   return { from: ymd(py, pq * 3 + 1, 1), to: ymd(py, lastMonth, lastDayOfMonth(py, lastMonth)) };
 }
 
+/** the period before `period` of the same frequency (periods are complete calendar weeks, months or quarters) */
+export const previousPeriod = (frequency: ReportFrequency, period: Period): Period => lastCompletePeriod(frequency, period.from);
+
+/** the `n` periods up to and including `period`, oldest first */
+export function periodsUpTo(frequency: ReportFrequency, period: Period, n: number): Period[] {
+  const out: Period[] = [period];
+  while (out.length < n) out.unshift(previousPeriod(frequency, out[0]));
+  return out;
+}
+
 export const isValidTimeZone = (tz: string): boolean => {
   try { new Intl.DateTimeFormat("en-CA", { timeZone: tz }); return true; } catch { return false; }
 };
@@ -70,6 +80,17 @@ export interface InsurerKpiResult {
   ids: { inspectedPeriod: string[]; inspectedTotal: string[]; repairedPeriod: string[]; repairedTotal: string[]; refusedPeriod: string[]; refusedTotal: string[]; backlog: string[]; upcoming: string[] };
 }
 
+/** one car of a report with the days its figures depend on (local days of the report) */
+export interface ReportCar {
+  id: string; row: typeof vehicles.$inferSelect;
+  inspectedOn: string; repairedOn: string | null; refusedOn: string | null;
+  /** assessed, not in repair, not returned, not refused, no repair appointment */
+  backlog: boolean;
+  /** day of the next repair appointment (today or later), null without one */
+  appointmentOn: string | null;
+}
+export interface ReportFacts { today: string; cars: ReportCar[] }
+
 /**
  * Definitions (validated by Nicolas, 28.10.2026), in the local time of the report:
  *  inspected = day of the assessment: the Colibri scan, else the creation of the vehicle (refused cars included: they were assessed)
@@ -80,7 +101,7 @@ export interface InsurerKpiResult {
  *  progress  = repaired / inspected, both cumulative since the project start up to the end of the period
  * Only cars inspected on or after the project start take part in any figure. Deleted cars never do.
  */
-export async function computeInsurerKpis(db: Db, scope: ReportScope, period: Period, now = new Date()): Promise<InsurerKpiResult> {
+export async function loadReportFacts(db: Db, scope: ReportScope, now = new Date()): Promise<ReportFacts> {
   const tz = scope.timezone;
   const today = localDay(now, tz);
   const day = (d: Date | null | undefined) => (d ? localDay(d, tz) : null);
@@ -118,35 +139,36 @@ export async function computeInsurerKpis(db: Db, scope: ReportScope, period: Per
   const booked = ids.length ? await db.select().from(repairBookings).where(and(inArray(repairBookings.vehicleId, ids), eq(repairBookings.status, "booked"))) : [];
   const hasBooking = new Set(booked.map((b) => b.vehicleId));
 
+  const cars: ReportCar[] = [];
+  for (const v of rows) {
+    const inspectedOn = day(scanAt.get(v.colibriScanKey ?? "") ?? v.createdAt);
+    if (!inspectedOn || (scope.projectStart && inspectedOn < scope.projectStart)) continue; // before the project: not part of any figure
+    const car: ReportCar = { id: v.id, row: v, inspectedOn, repairedOn: null, refusedOn: null, backlog: false, appointmentOn: null };
+    if (v.statut === "refuse") car.refusedOn = day(firstAt(v.id, "refuse") ?? v.statutDepuis ?? v.updatedAt);
+    else if (v.statut === "fertig" || v.statut === "rendu") car.repairedOn = day(firstAt(v.id, "fertig") ?? firstAt(v.id, "rendu") ?? v.statutDepuis ?? v.updatedAt);
+    else if ((v.statut === "besichtigung" || v.statut === "attente") && v.repairStage == null && !hasBooking.has(v.id)) car.backlog = true;
+    car.appointmentOn = booked.filter((b) => b.vehicleId === v.id && b.date >= today).map((b) => b.date).sort()[0] ?? null;
+    cars.push(car);
+  }
+  return { today, cars };
+}
+
+/** The figures of one period from the facts (the trend of a report is several periods from the same facts). */
+export function kpisFromFacts(facts: ReportFacts, scope: Pick<ReportScope, "projectStart">, period: Period): InsurerKpiResult {
   const out: InsurerKpiResult = {
-    period, projectStart: scope.projectStart, asOf: today,
+    period, projectStart: scope.projectStart, asOf: facts.today,
     inspected: { period: 0, total: 0 }, repaired: { period: 0, total: 0 }, refused: { period: 0, total: 0 }, backlog: 0, upcoming: 0, progress: null,
     ids: { inspectedPeriod: [], inspectedTotal: [], repairedPeriod: [], repairedTotal: [], refusedPeriod: [], refusedTotal: [], backlog: [], upcoming: [] },
   };
   const inPeriod = (d: string | null) => !!d && d >= period.from && d <= period.to;
   const upTo = (d: string | null) => !!d && d <= period.to;
-
-  for (const v of rows) {
-    const inspectedOn = day(scanAt.get(v.colibriScanKey ?? "") ?? v.createdAt);
-    if (!inspectedOn || (scope.projectStart && inspectedOn < scope.projectStart)) continue; // before the project: not part of any figure
-    if (upTo(inspectedOn)) { out.ids.inspectedTotal.push(v.id); if (inPeriod(inspectedOn)) out.ids.inspectedPeriod.push(v.id); }
-
-    if (v.statut === "refuse") {
-      const refusedOn = day(firstAt(v.id, "refuse") ?? v.statutDepuis ?? v.updatedAt);
-      if (upTo(refusedOn)) { out.ids.refusedTotal.push(v.id); if (inPeriod(refusedOn)) out.ids.refusedPeriod.push(v.id); }
-    } else if (v.statut === "fertig" || v.statut === "rendu") {
-      const repairedOn = day(firstAt(v.id, "fertig") ?? firstAt(v.id, "rendu") ?? v.statutDepuis ?? v.updatedAt);
-      if (upTo(repairedOn)) { out.ids.repairedTotal.push(v.id); if (inPeriod(repairedOn)) out.ids.repairedPeriod.push(v.id); }
-    } else if ((v.statut === "besichtigung" || v.statut === "attente") && v.repairStage == null && !hasBooking.has(v.id)) {
-      out.ids.backlog.push(v.id);
-    }
+  for (const car of facts.cars) {
+    if (upTo(car.inspectedOn)) { out.ids.inspectedTotal.push(car.id); if (inPeriod(car.inspectedOn)) out.ids.inspectedPeriod.push(car.id); }
+    if (upTo(car.refusedOn)) { out.ids.refusedTotal.push(car.id); if (inPeriod(car.refusedOn)) out.ids.refusedPeriod.push(car.id); }
+    if (upTo(car.repairedOn)) { out.ids.repairedTotal.push(car.id); if (inPeriod(car.repairedOn)) out.ids.repairedPeriod.push(car.id); }
+    if (car.backlog) out.ids.backlog.push(car.id);
+    if (car.appointmentOn) out.ids.upcoming.push(car.id);
   }
-  const cohort = new Set(rows.filter((v) => {
-    const d = day(scanAt.get(v.colibriScanKey ?? "") ?? v.createdAt);
-    return !!d && !(scope.projectStart && d < scope.projectStart);
-  }).map((v) => v.id));
-  out.ids.upcoming = [...new Set(booked.filter((b) => cohort.has(b.vehicleId) && b.date >= today).map((b) => b.vehicleId))];
-
   out.inspected = { period: out.ids.inspectedPeriod.length, total: out.ids.inspectedTotal.length };
   out.repaired = { period: out.ids.repairedPeriod.length, total: out.ids.repairedTotal.length };
   out.refused = { period: out.ids.refusedPeriod.length, total: out.ids.refusedTotal.length };
@@ -154,6 +176,10 @@ export async function computeInsurerKpis(db: Db, scope: ReportScope, period: Per
   out.upcoming = out.ids.upcoming.length;
   out.progress = out.inspected.total > 0 ? Math.round((out.repaired.total / out.inspected.total) * 1000) / 10 : null;
   return out;
+}
+
+export async function computeInsurerKpis(db: Db, scope: ReportScope, period: Period, now = new Date()): Promise<InsurerKpiResult> {
+  return kpisFromFacts(await loadReportFacts(db, scope, now), scope, period);
 }
 
 export { isIsoDate };

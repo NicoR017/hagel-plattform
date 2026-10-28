@@ -25,21 +25,28 @@ let bundledLogo: Promise<Letterhead["logo"] | undefined> | null = null;
 const pdrLogo = () => (bundledLogo ??= readFile(fileURLToPath(new URL("../assets/pdr-team-logo.jpg", import.meta.url)))
   .then((b) => ({ bytes: new Uint8Array(b), kind: "jpg" as const, width: 1000, height: 276 })).catch(() => undefined));
 
-export async function letterheadOf(db: Db, storage: Storage, row: VehicleRow): Promise<Letterhead | null> {
-  const h = row.header as Record<string, unknown>;
-  const id = typeof h.companyId === "string" ? h.companyId : null;
-  if (id) {
-    const [co] = await db.select().from(companies).where(and(eq(companies.id, id), eq(companies.orgId, row.orgId)));
-    if (co) {
-      let logo: Letterhead["logo"] | undefined;
-      const meta = co.logoMeta as { kind: "jpg" | "png"; width: number; height: number } | null;
-      if (co.logoKey && meta) { const f = await storage.get(co.logoKey); if (f) logo = { bytes: f.bytes, kind: meta.kind, width: meta.width, height: meta.height }; }
-      return { name: co.name, logo, address: co.address || undefined, taxId: co.taxId || undefined, email: co.email || undefined, footer: co.footer || undefined };
-    }
-  }
-  if (h.logo === "none") return null;
+/** the letterhead of one of the organisation's companies (null when it does not exist or belongs to another organisation) */
+export async function letterheadOfCompany(db: Db, storage: Storage, orgId: string, companyId: string | null | undefined): Promise<Letterhead | null> {
+  if (!companyId) return null;
+  const [co] = await db.select().from(companies).where(and(eq(companies.id, companyId), eq(companies.orgId, orgId)));
+  if (!co) return null;
+  let logo: Letterhead["logo"] | undefined;
+  const meta = co.logoMeta as { kind: "jpg" | "png"; width: number; height: number } | null;
+  if (co.logoKey && meta) { const f = await storage.get(co.logoKey); if (f) logo = { bytes: f.bytes, kind: meta.kind, width: meta.width, height: meta.height }; }
+  return { name: co.name, logo, address: co.address || undefined, taxId: co.taxId || undefined, email: co.email || undefined, footer: co.footer || undefined };
+}
+/** the default letterhead: the PDR Team logo */
+export async function defaultLetterhead(): Promise<Letterhead | null> {
   const logo = await pdrLogo();
   return logo ? { name: "PDR Team GmbH", logo } : null;
+}
+
+export async function letterheadOf(db: Db, storage: Storage, row: VehicleRow): Promise<Letterhead | null> {
+  const h = row.header as Record<string, unknown>;
+  const co = await letterheadOfCompany(db, storage, row.orgId, typeof h.companyId === "string" ? h.companyId : null);
+  if (co) return co;
+  if (h.logo === "none") return null;
+  return defaultLetterhead();
 }
 
 /** PDF of the repair report: every photo of the vehicle by phase, the parts to replace, the estimate's amounts (net / VAT / gross). */

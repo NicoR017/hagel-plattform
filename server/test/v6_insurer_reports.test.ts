@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { PERMISSIONS, SYSTEM_ROLES } from "@hagel/shared";
 import { computeInsurerKpis, lastCompletePeriod } from "../src/insurer_reports";
-import { auditLog, colibriScans, insurers, repairBookings, roles, vehicleStatusHistory, vehicles } from "../src/schema";
+import { PDFArray, PDFDocument, PDFRawStream, decodePDFRawStream } from "pdf-lib";
+import { auditLog, colibriScans, companies, insurers, repairBookings, roles, vehicleStatusHistory, vehicles } from "../src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";
 
 let c: Ctx;
@@ -284,5 +285,99 @@ describe("the figures", () => {
     expect((await sup("GET", `/admin/insurer-reports/${id}/kpis?from=2026-10-25&to=2026-10-19`)).status).toBe(400);
     expect((await sup("GET", `/admin/insurer-reports/${id}/kpis?from=nonsense&to=2026-10-19`)).status).toBe(400);
     await sup("DELETE", `/admin/insurer-reports/${id}`);
+  });
+});
+
+/** drawn text of every page of a PDF made with the standard fonts */
+async function pdfPages(bytes: Uint8Array): Promise<string[]> {
+  const doc = await PDFDocument.load(bytes);
+  return doc.getPages().map((pg) => {
+    const contents = pg.node.Contents();
+    const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+    let out = "";
+    for (const r of refs) {
+      const st = doc.context.lookup(r as never);
+      if (!(st instanceof PDFRawStream)) continue;
+      const txt = Buffer.from(decodePDFRawStream(st).decode()).toString("latin1");
+      for (const m of txt.matchAll(/<([0-9A-Fa-f]*)>\s*Tj/g)) {
+        let t = "";
+        for (let i = 0; i < m[1].length; i += 2) { const b = parseInt(m[1].slice(i, i + 2), 16); t += b === 0x80 ? "€" : String.fromCharCode(b); }
+        out += t + "\n";
+      }
+    }
+    return out;
+  });
+}
+
+describe("the PDF preview", () => {
+  const Q = "?from=2026-10-19&to=2026-10-25";
+  let id: string;
+  beforeAll(async () => {
+    const made = await sup("POST", "/admin/insurer-reports", valid({ name: "Allianz PDF", project_start: "2026-09-01", annex_vehicles: true, show_amounts: true, kpis: ["inspected", "repaired", "backlog", "upcoming", "progress", "refused"] }));
+    expect(made.status).toBe(201);
+    id = made.body.id as string;
+  });
+
+  it("a PDF with the figures of the period and the annex with the cars behind them", async () => {
+    const r = await sup("GET", `/admin/insurer-reports/${id}/pdf${Q}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toBe("application/pdf");
+    expect(r.headers.get("content-disposition")).toContain("Informe_Allianz-PDF_2026-10-19_2026-10-25.pdf");
+    expect(r.headers.get("cache-control")).toBe("no-store");
+    expect(Buffer.from(r.bytes.subarray(0, 4)).toString()).toBe("%PDF");
+    const pages = await pdfPages(r.bytes);
+    const all = pages.join("\n");
+    for (const x of ["Informe de actividad PDR", "Allianz", "Periodo: 19/10/2026 - 25/10/2026", "(01/09/2026)", "Peritados sin reparación", "Anexo: vehículos",
+      "Reparado el 23/10/2026", "Cita el 03/11/2026", "Rechazado el 24/10/2026"]) expect(all, x).toContain(x);
+    // the plates of this test are long labels: the column clips them, the start is enough to know the car
+    for (const x of ["c1-in-rep", "c2-finish", "c5-backlo", "c6-waitin", "c7-refuse", "c3-older-"]) expect(all, x).toContain(x);
+    for (const x of ["c4-before", "c8-other-", "c9-delete"]) expect(all, x).not.toContain(x);
+    // the numbers on the first page are those of the figures
+    const k = (await sup("GET", `/admin/insurer-reports/${id}/kpis${Q}`)).body;
+    expect(pages[0]).toContain(`Total acumulado: ${k.inspected.total}`);
+    expect(pages[0]).toContain(`${k.repaired.total} de ${k.inspected.total}`);
+    expect(k.inspected).toEqual({ period: 8, total: 10 });
+  });
+
+  it("the amounts are in the annex only for who may see prices", async () => {
+    expect((await pdfPages((await sup("GET", `/admin/insurer-reports/${id}/pdf${Q}`)).bytes)).join("\n")).toContain("Importe neto");
+    const noPrice = (await call(c, "POST", "/admin/roles", { token: c.superToken, org: c.orgES, body: { name: "Reports no price", scope: "station", permissions: ["vehicules.voir", "rapports.voir"] } })).body.id;
+    const tok = await inviteAndAccept(c, c.orgES, "noprice@example.test", { role_id: noPrice });
+    const r = await call(c, "GET", `/admin/insurer-reports/${id}/pdf${Q}`, { token: tok, org: c.orgES });
+    expect(r.status).toBe(200);
+    const text = (await pdfPages(r.bytes)).join("\n");
+    expect(text).toContain("c1-in-rep");
+    expect(text).not.toContain("Importe neto");
+    expect(text).not.toContain("€");
+    // and the report that does not show amounts never has them
+    const plain = await sup("POST", "/admin/insurer-reports", valid({ name: "No amounts", annex_vehicles: true, show_amounts: false }));
+    expect((await pdfPages((await sup("GET", `/admin/insurer-reports/${plain.body.id}/pdf${Q}`)).bytes)).join("\n")).not.toContain("Importe neto");
+  });
+
+  it("the rights, the language, the period and the letterhead", async () => {
+    for (const token of [assessor, tech, bodyshopAcc]) expect((await call(c, "GET", `/admin/insurer-reports/${id}/pdf${Q}`, { token, org: c.orgES })).status).toBe(403);
+    expect((await call(c, "GET", `/admin/insurer-reports/${id}/pdf${Q}`, { token: chef, org: c.orgES })).status).toBe(200);
+    expect((await sup("GET", `/admin/insurer-reports/${id}/pdf?from=2026-10-25&to=2026-10-19`)).status).toBe(400);
+    expect((await sup("GET", `/admin/insurer-reports/${id}/pdf?from=x&to=y`)).status).toBe(400);
+    expect((await sup("GET", `/admin/insurer-reports/${id}/pdf`)).status, "last complete period").toBe(200);
+    // English, with the letterhead of a company
+    const [co] = await c.h.db.insert(companies).values({ orgId: c.orgES, name: "Mi Empresa SL", address: "Calle Mayor 1", taxId: "B12345678", footer: "Footer line of the company" }).returning();
+    const en = await sup("PUT", `/admin/insurer-reports/${id}`, { language: "en", company_id: co.id });
+    expect(en.status).toBe(200);
+    expect(en.body.company_id).toBe(co.id);
+    const t = (await pdfPages((await sup("GET", `/admin/insurer-reports/${id}/pdf${Q}`)).bytes)).join("\n");
+    for (const x of ["PDR activity report", "Mi Empresa SL", "Calle Mayor 1", "B12345678", "Footer line of the company", "Annex: vehicles"]) expect(t, x).toContain(x);
+    // a company of another organisation is refused
+    const [foreign] = await c.h.db.insert(companies).values({ orgId: c.orgDE, name: "Foreign GmbH" }).returning();
+    expect((await sup("PUT", `/admin/insurer-reports/${id}`, { company_id: foreign.id })).status).toBe(400);
+    expect((await sup("PUT", `/admin/insurer-reports/${id}`, { company_id: null })).body.company_id).toBeNull();
+  });
+
+  it("a report without annex is the summary page only; a report of another organisation is not found", async () => {
+    const small = await sup("POST", "/admin/insurer-reports", valid({ name: "Summary", annex_vehicles: false }));
+    const pages = await pdfPages((await sup("GET", `/admin/insurer-reports/${small.body.id}/pdf${Q}`)).bytes);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).not.toContain("Anexo");
+    expect((await call(c, "GET", `/admin/insurer-reports/${small.body.id}/pdf${Q}`, { token: c.superToken, org: c.orgDE })).status).toBe(404);
   });
 });

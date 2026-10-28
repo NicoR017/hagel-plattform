@@ -5,7 +5,11 @@ export {
   kvaFileName, handoverText, dentBreak, esRange, esFormula, esLines, mailTexts, kvaPlainText,
 } from "./text";
 export type { EsLine } from "./text";
-export { generateTechnicianWorksheets, generateKvaPdf, appendScanPdf, generateRepairPhotoReport, generateHandoverReceipt, winAnsi, wrapText } from "./pdf";
+export { generateTechnicianWorksheets, generateKvaPdf, appendScanPdf, generateRepairPhotoReport, generateHandoverReceipt, generateInsurerReport, winAnsi, wrapText } from "./pdf";
 export { buildXlsx, xlsxFileName, xlsxColumnHeaders } from "./xlsx";
 export { buildFinishedWorkbook, finishedFileName, type FinishedExportData, type FinishedRow } from "./finished";
 export { buildTechnicianWorkbook, techWorkbookFileName, techPdfFileName, type TechSheetData, type TechLang } from "./techsheet";
+export {
+  INSURER_REPORT_LABELS, insurerReportFileName, reportDate, reportInt, reportMoney, reportPercent,
+  type InsurerReportData, type InsurerReportFigures, type InsurerReportKpi, type InsurerReportLang, type InsurerReportOptions, type InsurerReportRow, type InsurerReportTrendPoint,
+} from "./insurer_report";

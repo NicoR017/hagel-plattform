@@ -6,6 +6,7 @@ import { dentBreak, docText, handoverText, esFormula, esLines, esRange, imgLabel
 import { SIG_H, SIG_W } from "./types";
 import type { DocPhoto, DocVehicle, HandoverDoc, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
 import { TECH_LABELS, techDate, type TechLang, type TechSheetData } from "./techsheet";
+import { INSURER_REPORT_LABELS, reportDate, reportInt, reportMoney, reportPercent, type InsurerReportData, type InsurerReportKpi, type InsurerReportOptions, type InsurerReportRow } from "./insurer_report";
 
 const W = 595.28, H = 841.89, L = 42, R = 553;
 
@@ -583,5 +584,157 @@ export async function generateTechnicianWorksheets(data: { from: string | null; 
       cv.T(L, cv.y - 15, l.date, 10.5); cv.T(L + 110, cv.y - 15, label, 10.5);
     }
   });
+  return cv.doc.save();
+}
+
+// ------------------------------------------------------------------ V6: the automatic insurer report
+
+const KPI_COLOR: Record<InsurerReportKpi, RGB> = { inspected: [91, 143, 214], repaired: [94, 140, 99], backlog: [224, 160, 44], upcoming: [123, 91, 214], progress: [22, 35, 63], refused: [162, 59, 46] };
+
+/**
+ * The report for an insurer: the figures of the period as tiles, the evolution and the overall progress as charts, and (when asked) an annex
+ * with the cars. For the insurer: never the internal split; amounts only when the data carry them.
+ */
+export async function generateInsurerReport(data: InsurerReportData, opts: InsurerReportOptions): Promise<Uint8Array> {
+  const lang = opts.lang, l = INSURER_REPORT_LABELS[lang];
+  const now = opts.now ?? new Date();
+  const cv = await Canvas.create(now);
+  const D = (iso: string | null | undefined) => reportDate(lang, iso);
+  const clip = (str: string, w: number, size: number, bold = false) => { let t = str; while (t.length > 1 && cv.widthOf(t, size, bold) > w) t = t.slice(0, -1); return t; };
+  const fig = data.figures;
+  const NAVY: RGB = [22, 35, 63], GREY: RGB = [110, 120, 140];
+  const col = (c: RGB) => cv.rgbc(c[0], c[1], c[2]);
+
+  // ---- page 1: header
+  cv.y = (await drawLetterhead(cv, opts.letterhead)) - 6;
+  col(NAVY); cv.T(L, cv.y, l.title, 20, true); cv.y -= 22;
+  cv.black(); col(NAVY);
+  const insurers = data.insurers.join(", ");
+  cv.T(L, cv.y, `${l.insurer}: `, 11, true); cv.T(L + cv.widthOf(`${l.insurer}: `, 11, true), cv.y, clip(insurers || data.name, R - L - 80, 11), 11); cv.y -= 22;
+  cv.rgbc(243, 246, 250); cv.rect(L, cv.y - 34, R - L, 46);
+  col(NAVY); cv.T(L + 10, cv.y, `${l.period}: ${D(data.period.from)} - ${D(data.period.to)}`, 11.5, true);
+  col(GREY);
+  cv.T(L + 10, cv.y - 14, `${l.cumulative}: ${data.projectStart ? `${l.sinceStart} (${D(data.projectStart)})` : l.sinceStart} ${l.until} ${D(data.period.to)}`, 9);
+  cv.T(L + 10, cv.y - 27, `${l.asOf} ${D(data.asOf)}`, 9);
+  cv.y -= 56;
+
+  // ---- the figures as tiles, two per row, in the order of the report
+  const GAP = 12, TW = (R - L - GAP) / 2, TH = 84;
+  const tile = (k: InsurerReportKpi, x: number, top: number) => {
+    const c = KPI_COLOR[k];
+    cv.rgbc(243, 246, 250); cv.rect(x, top - TH, TW, TH);
+    col(c); cv.rect(x, top - TH, 5, TH);
+    col(GREY);
+    const lines = wrapWidth(cv, l.kpi[k], TW - 24, 9.5, true).slice(0, 2);
+    lines.forEach((ln, i) => cv.T(x + 14, top - 16 - i * 11, ln, 9.5, true));
+    col(NAVY);
+    const big = k === "progress" ? reportPercent(lang, fig.progress)
+      : k === "backlog" ? reportInt(lang, fig.backlog) : k === "upcoming" ? reportInt(lang, fig.upcoming)
+      : reportInt(lang, fig[k].period);
+    cv.T(x + 14, top - 54, big, 26, true);
+    col(GREY);
+    const sub = k === "progress" ? `${reportInt(lang, fig.repaired.total)} ${l.of} ${reportInt(lang, fig.inspected.total)}`
+      : k === "backlog" || k === "upcoming" ? `${l.asOf} ${D(data.asOf)}`
+      : `${l.total}: ${reportInt(lang, fig[k].total)}`;
+    cv.T(x + 14, top - 72, sub, 9);
+    if (k === "progress") {
+      const bw = TW - 28, share = Math.max(0, Math.min(100, fig.progress ?? 0)) / 100;
+      cv.rgbc(225, 229, 238); cv.rect(x + 14, top - 80, bw, 5);
+      col(KPI_COLOR.repaired); if (share > 0) cv.rect(x + 14, top - 80, bw * share, 5);
+    }
+    cv.black();
+  };
+  data.kpis.forEach((k, i) => {
+    if (i % 2 === 0 && cv.y - TH < 70) { cv.np(); cv.top(); }
+    tile(k, L + (i % 2) * (TW + GAP), cv.y);
+    if (i % 2 === 1 || i === data.kpis.length - 1) cv.y -= TH + GAP;
+  });
+
+  // ---- chart 1: the evolution, period by period
+  const show = { inspected: data.kpis.includes("inspected"), repaired: data.kpis.includes("repaired") };
+  if (data.trend.length && (show.inspected || show.repaired)) {
+    const CH = 130;
+    if (cv.y - CH - 60 < 60) { cv.np(); cv.top(); }
+    cv.y -= 6; col(NAVY); cv.T(L, cv.y, l.trendTitle, 12, true);
+    // legend, right
+    let lx = R;
+    for (const [k, label] of ([["repaired", l.trendRepaired], ["inspected", l.trendInspected]] as const)) {
+      if (!show[k]) continue;
+      const w = cv.widthOf(label, 8.5); lx -= w; col(GREY); cv.T(lx, cv.y, label, 8.5); lx -= 12; col(KPI_COLOR[k]); cv.rect(lx, cv.y, 8, 8); lx -= 14;
+    }
+    const base = cv.y - CH - 8, plotTop = cv.y - 22;
+    const series = (["inspected", "repaired"] as const).filter((k) => show[k]);
+    const max = Math.max(1, ...data.trend.flatMap((t) => series.map((k) => t[k])));
+    const slot = (R - L) / data.trend.length, bw = Math.min(26, (slot - 10) / series.length);
+    cv.RG(225, 229, 238); cv.line(L, base, R, base, 0.8); cv.line(L, plotTop, R, plotTop, 0.4);
+    col(GREY); cv.T(L, plotTop + 3, reportInt(lang, max), 7.5);
+    data.trend.forEach((t, i) => {
+      const cx = L + slot * i + slot / 2;
+      series.forEach((k, j) => {
+        const v = t[k], h = ((plotTop - base) * v) / max, x = cx - (bw * series.length) / 2 + j * bw;
+        col(KPI_COLOR[k]); if (h > 0) cv.rect(x, base, bw - 1.5, h);
+        col(NAVY); const txt = reportInt(lang, v); cv.T(x + (bw - 1.5) / 2 - cv.widthOf(txt, 7.5) / 2, base + h + 3, txt, 7.5);
+      });
+      col(GREY);
+      const lab = `${t.to.slice(8, 10)}/${t.to.slice(5, 7)}`;
+      cv.T(cx - cv.widthOf(lab, 7.5) / 2, base - 11, lab, 7.5);
+    });
+    cv.black(); cv.y = base - 26;
+  }
+
+  // ---- chart 2: the overall progress
+  if (data.kpis.includes("progress")) {
+    if (cv.y - 70 < 60) { cv.np(); cv.top(); }
+    col(NAVY); cv.T(L, cv.y, l.progressTitle, 12, true); cv.y -= 22;
+    const total = fig.inspected.total, done = fig.repaired.total, refused = data.kpis.includes("refused") ? Math.min(fig.refused.total, Math.max(0, total - done)) : 0;
+    cv.rgbc(225, 229, 238); cv.rect(L, cv.y - 8, R - L, 18);
+    if (total > 0) {
+      col(KPI_COLOR.repaired); cv.rect(L, cv.y - 8, ((R - L) * done) / total, 18);
+      if (refused) { col(KPI_COLOR.refused); cv.rect(L + ((R - L) * done) / total, cv.y - 8, ((R - L) * refused) / total, 18); }
+    }
+    cv.y -= 26; col(GREY);
+    cv.T(L, cv.y, l.progressText.replace("{r}", reportInt(lang, done)).replace("{i}", reportInt(lang, total)) + (fig.progress != null ? ` (${reportPercent(lang, fig.progress)})` : ""), 9.5);
+    cv.black(); cv.y -= 22;
+  }
+
+  // ---- the annex: the cars behind the figures
+  if (data.annex) {
+    cv.np(); cv.top(); col(NAVY); cv.T(L, cv.y, l.annex, 15, true); cv.y -= 24;
+    const amounts = data.showAmounts;
+    const cols = amounts ? [54, 90, 82, 50, 66, 105, 64] : [54, 120, 112, 50, 66, 109];
+    const X: number[] = []; cols.reduce((x, w) => { X.push(x); return x + w; }, L);
+    const heads = [l.plate, l.model, l.bodyshop, l.inspected, l.status, l.detail, ...(amounts ? [l.net] : [])];
+    const head = () => {
+      cv.rgbc(243, 243, 243); cv.rect(L, cv.y - 6, R - L, 20); cv.black();
+      heads.forEach((h, i) => { const last = amounts && i === heads.length - 1, t = clip(h, cols[i] - (last ? 2 : 6), 8.5, true); if (last) cv.T(R - 3 - cv.widthOf(t, 8.5, true), cv.y, t, 8.5, true); else cv.T(X[i] + 3, cv.y, t, 8.5, true); });
+      cv.RG(22, 35, 63); cv.line(L, cv.y - 6, R, cv.y - 6, 1.4); cv.y -= 20;
+    };
+    const detail = (r: InsurerReportRow) => [
+      r.repairedOn ? `${l.repairedOn} ${D(r.repairedOn)}` : "", r.refusedOn ? `${l.refusedOn} ${D(r.refusedOn)}` : "",
+      r.appointmentOn ? `${l.appointmentOn} ${D(r.appointmentOn)}` : "",
+    ].filter(Boolean).join(" · ");
+    if (!data.annex.length) { cv.black(); cv.T(L, cv.y, l.none, 11); } else {
+      head();
+      for (const r of data.annex) {
+        if (cv.y < 70) { cv.np(); cv.top(); head(); }
+        cv.black();
+        const cells = [r.plate, r.model, r.bodyshop, D(r.inspectedOn), (l.statuses as Record<string, string>)[r.status] ?? r.status, detail(r)];
+        cells.forEach((t, i) => cv.T(X[i] + 3, cv.y, clip(t, cols[i] - 6, 8.5), 8.5));
+        if (amounts) { const t = r.net == null ? "—" : reportMoney(lang, r.net); cv.T(R - 4 - cv.widthOf(t, 8.5), cv.y, t, 8.5); }
+        cv.RG(225, 229, 238); cv.line(L, cv.y - 5, R, cv.y - 5, 0.5);
+        cv.y -= 16;
+      }
+    }
+  }
+
+  // ---- every page: the date it was made and the page number; then the letterhead footer
+  const pages = cv.doc.getPages();
+  pages.forEach((pg, i) => {
+    cv.page = pg; col(GREY);
+    cv.T(L, 38, `${l.generated} ${D(now.toISOString().slice(0, 10))}`, 8);
+    const t = `${l.page} ${i + 1} / ${pages.length}`; cv.T(R - cv.widthOf(t, 8), 38, t, 8);
+    cv.black();
+  });
+  drawFooters(cv, opts.letterhead);
   return cv.doc.save();
 }

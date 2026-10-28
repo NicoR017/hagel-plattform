@@ -366,6 +366,8 @@ export const insurerReports = pgTable("insurer_reports", {
   name: text("name").notNull(),
   /** language of the PDF and of the e-mail: es | en | de | fr */
   language: text("language").notNull().default("es"),
+  /** letterhead of the PDF: one of the organisation's companies (null = the PDR Team logo) */
+  companyId: uuid("company_id"),
   active: boolean("active").notNull().default(true),
   /** scope: the insurers (at least one), optionally narrowed to body shops, stations (places) and countries; empty = no narrowing */
   insurerIds: uuid("insurer_ids").array().notNull().default(sql`'{}'::uuid[]`),
