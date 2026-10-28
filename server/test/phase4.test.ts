@@ -4,28 +4,31 @@ import { JPEG, PDF, call, inviteAndAccept, op, pull, push, setup, tick, uuid, ty
 import { recipientsFor } from "../src/reports";
 import { imageInfo } from "../src/routes_master";
 import { reportMail } from "../src/mails";
-import { reportSends, users, vehicleAssignments } from "../src/schema";
+import { reportSends, technicians, users, vehicleAssignments } from "../src/schema";
 
-let c: Ctx, A: string, B: string, assessor: string, chefA: string, tech: string, carro: string, admin: string;
+let c: Ctx, A: string, CARRO: string, B: string, assessor: string, chefA: string, tech: string, carro: string, admin: string;
 let techUserId: string;
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 1, 0x2c, 0, 0, 0, 0x64, 8, 6, 0, 0, 0, 0, 0, 0]);
 
 const header = (o: Record<string, unknown> = {}) => ({ land: "ES", kennzeichen: "1234 ABC", fin: "VF1ABCDEF12345678", modell: "Seat Leon", kunde: "Carrosserie Test Talavera", leistungsdatum: "2026-10-19", stundensatz: 69, ...o });
 const createOp = (id: string, o: Record<string, unknown> = {}) =>
-  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: header(), panels: { haube: { key: "haube", dents: { "20": 30, "40": 10 } } }, shares: { techName: "Luis Secreto", techPct: 55 }, ...o } });
+  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: header(), panels: { haube: { key: "haube", dents: { "20": 30, "40": 10 } } }, shares: { techName: "Luis Secreto", techPct: 55 }, ...o } });
 const byId = (l: any[], id: string) => l.find((x) => x.id === id);
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; B = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20, report_emails: ["Taller@Example.test", "taller2@example.test"] } });
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; B = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  await call(c, "PUT", `/admin/bodyshops/${CARRO}`, { token: c.superToken, org: c.orgES, body: { commission_pct: 20, report_emails: ["Taller@Example.test", "taller2@example.test"] } });
   admin = await inviteAndAccept(c, c.orgES, "admin@example.test", { role_id: c.roleId.org_admin });
   assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
   chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
   tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  // an invited technician now gets a technician record by himself (v4); these tests are about the plain role, so start without it
+  await c.h.db.delete(technicians);
   techUserId = (await c.h.db.select().from(users).where(eq(users.email, "tech@example.test")))[0].id;
-  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: A });
+  carro = await inviteAndAccept(c, c.orgES, "carro@example.test", { role_id: c.roleId.carrosserie, scope_client_station_id: CARRO });
 });
 afterAll(async () => { await c.h.close(); });
 
@@ -222,6 +225,16 @@ describe("report sending by e-mail", () => {
     const hist = await call(c, "GET", `/reports?vehicleId=${vid}`, { token: assessor });
     expect(hist.body[0]).toMatchObject({ id: rid, type: "kva", status: "sent", sentBy: "assessor" });
     expect(hist.body[0].recipients.length).toBe(3);
+    expect(hist.body[0]).toMatchObject({ lang: "es", hasFile: true });
+    // Documents tab: the stored PDF can be downloaded by the people who may send it, nobody else
+    const dl = await call(c, "GET", `/reports/${rid}/file`, { token: assessor });
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get("content-type")).toBe("application/pdf");
+    expect([...dl.bytes]).toEqual([...PDF]);
+    expect((await call(c, "GET", `/reports/${rid}/file`, { token: carro })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${rid}/file`, { token: tech })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${uuid()}/file`, { token: assessor })).status).toBe(404);
+    expect((await call(c, "GET", `/reports/${rid}/file`, {})).status).toBe(401);
     // the same upload again does not send twice
     c.mailer.sent.length = 0;
     expect((await call(c, "PUT", `/files/report/${rid}`, { token: assessor, raw: PDF, contentType: "application/pdf" })).body.status).toBe("sent");
@@ -255,7 +268,8 @@ describe("report sending by e-mail", () => {
     expect((await push(c, carro, [reportOp(uuid(), vid)])).body.results[0]).toMatchObject({ status: "rejected", code: "not_allowed" });
     // a vehicle whose customer has no report e-mail and no insurer
     const bare = uuid();
-    await push(c, assessor, [createOp(bare, { clientStationId: B })]); // B is a hall: no report e-mails
+    const noMail = (await call(c, "POST", "/admin/bodyshops", { token: admin, org: c.orgES, body: { name: "No Mail Taller" } })).body.id; // a body shop without report e-mails
+    await push(c, assessor, [createOp(bare, { clientStationId: noMail })]);
     const r = await push(c, assessor, [reportOp(uuid(), bare)]);
     expect(r.body.results[0]).toMatchObject({ status: "rejected", code: "report_no_recipients" });
     expect(r.body.results[0].message).toContain("No recipients");

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { computeShares, computeVehicle, type CalcResult, type CalcVehicle } from "@hagel/calc";
+import { computeShares, type CalcResult, type CalcVehicle } from "@hagel/calc";
 import { dentBreak, docText, eur, esFormula, esLines, fmtDateL, h1, kvaFileName, kvaPlainText, mailTexts, num, plabel, zustStr } from "@hagel/documents";
 import { t } from "../i18n";
 import { colibriBadge } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
-import { setShares, setStatus } from "../sync/mutations";
-import { buildRepairReport, buildSendPdf, shareOrDownload, toDoc } from "./docs";
+import { TechPicker } from "./TechPicker";
+import { assignVehicle, setShares, setStatus } from "../sync/mutations";
+import { buildRepairReport, buildSendPdf, sharesFiles, shareOrDownload, toDoc } from "./docs";
 import { StatusDialog } from "./Dialogs";
 import { SendReportDialog } from "./SendReport";
 import { usePhotos, usePhotoUrl, useField } from "./store";
@@ -20,12 +21,12 @@ function Thumb({ p, land }: { p: LocalPhoto; land: "DE" | "ES" }) {
 }
 
 /** Internal split (technician / commission). Never part of the customer document. */
-function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
+/** `technicians={false}` (assessment): no technician / headliner here, they are chosen when the car goes into repair; only the body shop commission stays. */
+export function SharesBox({ v, c, technicians = true }: { v: LocalVehicle; c: CalcResult; technicians?: boolean }) {
   const f = useField();
   const a = computeShares(v as never, c);
   const x = v as Record<string, any>;
   const canEdit = f.can("vehicules.modifier");
-  const people = f.refs?.people ?? [];
   const sec = (s: string) => <div style={{ marginTop: 14, fontSize: 13, fontWeight: 700, color: "var(--navy)" }}>{s}</div>;
   const line = (l: string, val: string) => <div className="row" style={{ marginTop: 6 }}><span className="muted" style={{ fontSize: 13 }}>{l}</span><b>{val}</b></div>;
   const pcts = (cur: number, vals: number[], on: (n: number) => void) => (
@@ -34,33 +35,35 @@ function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
       <NumInput value={cur} onChange={on} max={100} style={{ width: 84 }} /> %
     </div>
   );
-  const techs = f.refs?.technicians ?? [];
-  const choices = techs.length ? techs.map((tc) => ({ key: tc.id, name: tc.name, pdr: tc.defaultPctPdr, dem: tc.defaultPctDemontage })) : people.map((p) => ({ key: p.id, name: p.name, pdr: undefined as number | undefined, dem: undefined as number | undefined }));
+  /** also gives the person's account the car (needed to finish it); picking the same person again clears it */
+  const assignTo = (kind: "pdr" | "dem", userId: string | null, on: boolean) => { if (userId && f.can("vehicules.assigner")) void assignVehicle(f.mut, v.id, kind === "pdr" ? "pdr" : "demontage", on ? [userId] : []); };
   /** Picking a technician copies his default percentage onto THIS vehicle (editable; later changes of the default do not touch it). */
   const names = (cur: string, on: (s: string, pct?: number) => void, id: string, kind: "pdr" | "dem") => (
-    <>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-        {choices.map((p) => <button key={p.key} className={"chip" + (cur.toLowerCase() === p.name.toLowerCase() ? " on" : "")} disabled={!canEdit} onClick={() => on(cur.toLowerCase() === p.name.toLowerCase() ? "" : p.name, cur.toLowerCase() === p.name.toLowerCase() ? undefined : kind === "pdr" ? p.pdr : p.dem)}>{p.name}</button>)}
-      </div>
-      <input id={id} className="inp" style={{ marginTop: 6, fontWeight: 700 }} disabled={!canEdit} placeholder={t("techNameHint")} value={cur} onChange={(e) => on(e.target.value)} />
-    </>
+    <div style={{ marginTop: 6 }}>
+      <TechPicker id={id} kind={kind} name={cur} stationId={v.stationId} disabled={!canEdit}
+        onChange={(s, pct, tech, prev) => { on(s, pct); if (tech) assignTo(kind, tech.userId, true); else if (prev) assignTo(kind, prev.userId, false); }} />
+    </div>
   );
   return (
     <div style={{ marginTop: 14, background: "#fff", border: "1px dashed var(--navy)", borderRadius: 14, padding: "12px 14px" }}>
       <div className="row"><b>{t("splitTitle")}</b><span className="muted" style={{ fontSize: 12 }}>{t("netWord")} {eur(a.basis)}</span></div>
+      {!technicians && <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{t("v5TechLater")}</div>}
+      {technicians && <>
       {sec(`🧑‍🔧 ${t("techPdr")} · ${t("basis")} ${eur(a.pdrBasis)}`)}
       {names(a.techName, (s, pct) => void setShares(f.mut, v.id, { techName: s, ...(pct != null ? { techPct: pct } : {}) }), "tnIn", "pdr")}
       {pcts(a.techPct, [40, 45, 50, 55, 60], (n) => void setShares(f.mut, v.id, { techPct: n }))}
       {line(`${a.techName || t("technician")} · ${num(a.techPct, 1)} %`, eur(a.techEur))}
-      {a.demEur > 0 ? (
+      {(
         <>
           {sec(`🔩 ${t("techDem")} · ${eur(a.demEur)}`)}
+          {a.demEur <= 0 && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{t("demHintShares")}</div>}
           {names(x.demTechName ?? "", (s, pct) => void setShares(f.mut, v.id, { demTechName: s, ...(pct != null ? { demTechPct: pct } : {}) }), "dnIn", "dem")}
           <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{x.demTechName ? "" : t("emptyIsSame")}</div>
           {pcts(a.demTechPct, [50, 70, 80, 100], (n) => void setShares(f.mut, v.id, { demTechPct: n }))}
           {line(`${a.demTechName || t("technician")} · ${num(a.demTechPct, 1)} % ${t("ofDem")}`, eur(a.demTechEur))}
         </>
-      ) : <div className="muted" style={{ fontSize: 11, marginTop: 10 }}>{t("demHintShares")}</div>}
+      )}
+      </>}
       {sec(`🏭 ${t("commissionTitle")}`)}
       <div className="muted" style={{ fontSize: 11 }}>{f.can("commission.modifier") ? t("commissionEditHint") : t("commissionHint")}</div>
       {f.can("commission.modifier") && (
@@ -71,17 +74,17 @@ function SharesBox({ v, c }: { v: LocalVehicle; c: CalcResult }) {
         </div>
       )}
       {line(`${f.stationName(v.clientStationId) || t("customer")} · ${num(a.werkPct, 1)} %${a.werkMode === "staffel" ? " (Staffel)" : ""}`, eur(a.werkEur))}
-      <div style={{ height: 1, background: "var(--line)", margin: "10px 0 4px" }} />
-      <div className="row"><b>{t("remainsPdr")}</b><b style={{ fontSize: 17, color: a.rest >= 0 ? "var(--greenDk)" : "var(--brick)" }}>{eur(a.rest)} · {num(a.basis ? (a.rest / a.basis) * 100 : 0, 1)} %</b></div>
+      {technicians && <><div style={{ height: 1, background: "var(--line)", margin: "10px 0 4px" }} />
+      <div className="row"><b>{t("remainsPdr")}</b><b style={{ fontSize: 17, color: a.rest >= 0 ? "var(--greenDk)" : "var(--brick)" }}>{eur(a.rest)} · {num(a.basis ? (a.rest / a.basis) * 100 : 0, 1)} %</b></div></>}
     </div>
   );
 }
 
-export function Kva({ v }: { v: LocalVehicle }) {
+export function Kva({ v, beforeActions, technicians = true }: { v: LocalVehicle; beforeActions?: React.ReactNode; technicians?: boolean }) {
   const f = useField();
   const photos = usePhotos(v.id);
   const cv = v as unknown as CalcVehicle;
-  const c = useMemo(() => computeVehicle(cv, f.calc), [v, f.calc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useMemo(() => f.calcOf(cv), [v, f.calcOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const x = v as Record<string, any>;
   const land: "DE" | "ES" = x.land === "ES" ? "ES" : "DE";
   const X = docText(land);
@@ -117,7 +120,7 @@ export function Kva({ v }: { v: LocalVehicle }) {
         if (to && navigator.clipboard?.writeText) void navigator.clipboard.writeText(to).catch(() => undefined);
         toast(to ? `📋 ${to} ${t("copiedPasteTo")}` : t("noCustomerMail"), 6000);
         const ok = await shareOrDownload(r.bytes, name, "application/pdf", { title: mt.subject, text: mt.body });
-        if (ok && !navigator.canShare) window.location.href = `mailto:${encodeURIComponent(to).replace(/%40/g, "@")}?subject=${encodeURIComponent(mt.subject)}&body=${encodeURIComponent(mt.body)}`;
+        if (ok && !sharesFiles()) window.location.href = `mailto:${encodeURIComponent(to).replace(/%40/g, "@")}?subject=${encodeURIComponent(mt.subject)}&body=${encodeURIComponent(mt.body)}`;
       } else await shareOrDownload(r.bytes, name, "application/pdf");
     } catch (err) { toast(`${t("pdfFailed")}: ${(err as Error).message}`); }
     setBusy("");
@@ -186,7 +189,7 @@ export function Kva({ v }: { v: LocalVehicle }) {
           <div className="row" style={{ fontSize: 20, fontWeight: 800, color: "var(--greenDk)" }}><span>{X.brutto}</span><span>{eur(c.brutto)}</span></div>
         </div>
       )}
-      {split && <SharesBox v={v} c={c} />}
+      {split && <SharesBox v={v} c={c} technicians={technicians} />}
       {String(x.notiz ?? "").trim() && <div style={{ marginTop: 14, background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}><div style={{ fontWeight: 700, marginBottom: 4 }}>{X.notiz}</div><div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{x.notiz}</div></div>}
       {photos.some((p) => p.inPdf) && (
         <div style={{ marginTop: 16 }}><h3 style={{ margin: "0 0 8px" }}>{X.fotos}</h3>
@@ -194,6 +197,7 @@ export function Kva({ v }: { v: LocalVehicle }) {
         </div>
       )}
 
+      {beforeActions}
       {prices && f.can("kva.envoyer") && (
         <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("kva")}>✉️ {t("sendByServer")}
           {v.colibriFile ? <span style={{ display: "block", fontSize: 12, fontWeight: 500, opacity: 0.9, marginTop: 2 }}>📎 {t("kvaPlusScan")}</span> : null}</button>
@@ -211,17 +215,6 @@ export function Kva({ v }: { v: LocalVehicle }) {
         </button>
       )}
       {prices && <button className="pbtn sec" onClick={() => { const txt = kvaPlainText(doc, c); (navigator.clipboard?.writeText(txt) ?? Promise.reject()).then(() => toast(t("copiedText")), () => window.alert(txt)); }}>📋 {t("copyText")}</button>}
-      {prices && photos.length > 0 && (
-        <button className="pbtn sec" disabled={!!busy} onClick={async () => {
-          setBusy(t("preparing"));
-          try { await shareOrDownload(await buildRepairReport(f.db, f.engine, v, f.refs), `${land === "ES" ? "Informe_reparacion" : "Fotobericht_Reparatur"}_${String(x.kennzeichen || "").replace(/[^A-Za-z0-9]+/g, "-")}.pdf`, "application/pdf"); }
-          catch (err) { toast(`${t("pdfFailed")}: ${(err as Error).message}`); }
-          setBusy("");
-        }}>📷 {t("repairReport")}</button>
-      )}
-      {prices && photos.length > 0 && f.can("rapport_reparation.envoyer") && (
-        <button className="pbtn green" disabled={!!busy} onClick={() => setSendDlg("reparation")}>✉️ {t("sendRepairByServer")}</button>
-      )}
       {sendDlg && <SendReportDialog v={v} c={c} type={sendDlg} onClose={() => setSendDlg(null)} />}
       {statusDlg && <StatusDialog ids={[v.id]} current={v.statut} onClose={() => setStatusDlg(false)} />}
     </div>

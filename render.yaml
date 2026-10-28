@@ -1,0 +1,59 @@
+# Render Blueprint: STAGING of PDR Hagel (a copy of production data, never real e-mails).
+# New > Blueprint > pick this repository and the branch feature/ui-v3. Production is created later from the same file
+# (copy the three blocks, rename them, set APP_ENV=production / MAIL_MODE=live and give the secrets).
+#
+# Secrets (sync: false) are typed by you in the Render dashboard, never committed:
+#   APP_URL            https://<the staging web service>.onrender.com (known after the first creation, then edit and redeploy)
+#   EMAIL_API_KEY      NOT set in staging (MAIL_MODE=off sends nothing)
+#   AZURE_STORAGE_SAS  NOT set in staging (no import from Colibri/Azure)
+#   S3_*               NOT set in staging (files stay in memory: photos of the copied data are not shown)
+databases:
+  - name: hagel-staging-db
+    region: frankfurt
+    plan: basic-256mb
+    postgresMajorVersion: "18"
+
+services:
+  - type: web
+    name: hagel-staging-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: MAIL_MODE
+        value: "off"
+      - key: UI_V3_DEFAULT
+        value: "true"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hagel-staging-db
+          property: connectionString
+
+  - type: worker
+    name: hagel-staging-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: npm run worker
+    region: frankfurt
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: MAIL_MODE
+        value: "off"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hagel-staging-db
+          property: connectionString

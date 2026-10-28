@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
 import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
+import { Admin3 } from "./v3/Admin3";
+import { Shell3 } from "./v3/Shell3";
 import { AuditPage, RolesPage, SitesPage, UsersPage, OrgsPage } from "./admin";
-import { AzurePage, CampaignsPage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
+import { AzurePage, CompaniesPage, InsurersPage, TechniciansPage } from "./admin2";
 import { FieldProvider, useField } from "./field/store";
 import { List } from "./field/List";
 import { VehicleScreen } from "./field/VehicleScreen";
 import { Dashboard } from "./field/Dashboard";
 import { Toasts } from "./field/toast";
 import { useRoute } from "./field/route";
+import { useUiMode } from "./field/uiMode";
+import { V3Routes } from "./v3/Routes3";
+import { EnvBanner, useAppConfig } from "./env";
 import "./field/field.css";
 
 interface Me {
@@ -26,7 +31,7 @@ export function App() {
   if (path === "/login" && params.get("token")) page = <VerifyLogin token={params.get("token")!} />;
   else if (path === "/invite" && params.get("token")) page = <AcceptInvite token={params.get("token")!} />;
   else page = getAuth() ? <Shell /> : <LoginPage />;
-  return <div key={lang}>{page}</div>;
+  return <div key={lang}><EnvBanner />{page}</div>;
 }
 
 /** DE | EN switch. When signed in, the choice is also saved on the account (used for e-mails). */
@@ -45,7 +50,7 @@ function LangSwitch({ signedIn }: { signedIn?: boolean }) {
 }
 
 function Center({ children }: { children: ReactNode }) {
-  return <div className="center"><div className="card"><div className="row"><h2 className="grow" style={{ margin: 0 }}>{t("appName")}</h2><LangSwitch /></div>{children}</div></div>;
+  return <div className="center"><div className="card"><div className="row"><div className="grow"><img src="/pdr-logo-white.png" alt={t("appName")} style={{ display: "block", height: 34, width: "auto", background: "#16233f", padding: "8px 14px", borderRadius: 10 }} /></div><LangSwitch /></div>{children}</div></div>;
 }
 
 function LoginPage() {
@@ -154,7 +159,7 @@ function AcceptInvite({ token }: { token: string }) {
 }
 
 
-type AdminTab = "users" | "roles" | "sites" | "azure" | "insurers" | "campaigns" | "letterheads" | "technicians" | "audit" | "orgs";
+type AdminTab = "users" | "roles" | "sites" | "azure" | "insurers" | "letterheads" | "technicians" | "audit" | "orgs";
 
 function Shell() {
   const [me, setMe] = useState<Me | null>(null);
@@ -188,11 +193,23 @@ function Shell() {
 }
 
 function Routes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string) => void }) {
-  const route = useRoute();
+  const rawRoute = useRoute();
   const f = useField();
-  if (route.page === "vehicle") return <VehicleScreen id={route.id} tab={route.tab} />;
-  if (route.page === "dashboard") return <Dashboard />;
-  if (route.page === "admin") return <AdminShell me={me} org={org} onOrg={onOrg} />;
+  const cfg = useAppConfig();
+  const uiMode = useUiMode(cfg?.uiV3Default);
+  // technician / headliner accounts only have the field interface: no administration, no dashboard, no old view
+  const fieldView = !!f.refs?.me.fieldView;
+  const route = fieldView && (rawRoute.page === "admin" || rawRoute.page === "dashboard" || rawRoute.page === "scans" || rawRoute.page === "calendar") ? { page: "list" as const } : rawRoute;
+  const ui = fieldView ? "v3" : uiMode;
+  if (route.page === "vehicle" && ui === "legacy") return <VehicleScreen id={route.id} tab={route.tab} ctx={route.ctx} backTo={{ page: "list" }} />;
+  if (route.page === "dashboard") {
+    return ui === "v3"
+      ? <Shell3 user={me.user} orgs={me.organizations} org={org} onOrg={onOrg} route={route} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("dashboard") }]}><Dashboard embedded /></Shell3>
+      : <Dashboard />;
+  }
+  if (route.page === "admin") return ui === "v3" ? <Admin3 me={me} org={org} onOrg={onOrg} route={route} /> : <AdminShell me={me} org={org} onOrg={onOrg} />;
+  // the old flat list stays reachable: in the old interface, and for the filtered list opened from the dashboard
+  if (ui === "v3" && !(route.page === "list" && route.dash)) return <V3Routes me={me} org={org} onOrg={onOrg} route={route} />;
   const orgSwitch = me.organizations.length > 1 ? (
     <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")} style={{ minHeight: 44, borderRadius: 10, border: "none", padding: "0 8px", fontWeight: 700 }}>
       {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -213,7 +230,6 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
     { k: "sites", label: t("sites"), show: true },
     { k: "azure", label: "Azure", show: has("stations.gerer") },
     { k: "insurers", label: t("insurers"), show: has("assurances.gerer") },
-    { k: "campaigns", label: t("campaigns"), show: has("campagnes.gerer") },
     { k: "letterheads", label: t("letterheads"), show: has("parametres.gerer") },
     { k: "technicians", label: t("technicians"), show: has("parametres.gerer") },
     { k: "audit", label: t("audit"), show: has("audit.voir") },
@@ -224,7 +240,7 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
   return (
     <>
       <header>
-        <a href="#/" style={{ color: "#fff", textDecoration: "none", fontWeight: 700 }}>‹ {t("vehicles")}</a>
+        <a href="#/" style={{ color: "#fff", textDecoration: "none", fontWeight: 700, minHeight: 44, display: "inline-flex", alignItems: "center" }}>‹ {t("back")}</a>
         <b>{t("appName")}</b>
         <select value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")}>
           {me.organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -242,7 +258,6 @@ function AdminShell({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: strin
         {current === "sites" && <SitesPage canManage={has("stations.gerer")} />}
         {current === "azure" && <AzurePage />}
         {current === "insurers" && <InsurersPage />}
-        {current === "campaigns" && <CampaignsPage />}
         {current === "letterheads" && <CompaniesPage />}
         {current === "technicians" && <TechniciansPage canUsers={has("utilisateurs.gerer")} />}
         {current === "audit" && <AuditPage />}

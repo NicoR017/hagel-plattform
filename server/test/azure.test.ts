@@ -13,7 +13,7 @@ const PK = "20261019-1627";
 const RK = "9547 LPV";
 const URL_PDF = "https://storagecolibri.blob.core.windows.net/allscans/20261019-1627_9547 LPV.pdf";
 
-let c: Ctx, A: string, HALL: string, DEEA: string, ins: string;
+let c: Ctx, A: string, HALL: string, OTHER: string, DEEA: string, DEHALL: string, ins: string;
 let importer: string, chefA: string, tech: string, admin: string, deAdmin: string;
 
 const img = async (w: number, h: number, fmt: "jpeg" | "png") => new Uint8Array(await sharp({ create: { width: w, height: h, channels: 3, background: "#4a7" } })[fmt]().toBuffer());
@@ -37,24 +37,32 @@ beforeAll(async () => {
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["TenantA"] } });
   await call(c, "PUT", `/admin/orgs/${c.orgDE}/tenants`, { token: c.superToken, body: { tenants: ["TenantB"] } });
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; HALL = st.find((s) => s.type === "hall").id;
-  await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", commission_pct: 20, country: "ES", report_emails: ["t@x.test"] } });
-  await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_location_aliases: ["nave  MADRID"], country: "ES" } });
-  DEEA = (await call(c, "POST", "/admin/stations", { token: c.superToken, org: c.orgDE, body: { type: "carrosserie", name: "Karosserie DE", azure_tenant: "TenantB", azure_business_customer_id: "bc-1", country: "DE" } })).body.id;
+  A = st.find((s) => s.type === "carrosserie").id; HALL = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id; OTHER = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id;
+  await call(c, "PUT", `/admin/bodyshops/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", azure_business_customer_id: "bc-1", commission_pct: 20, country: "ES", report_emails: ["t@x.test"] } });
+  await call(c, "PUT", `/admin/stations/${HALL}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "TenantA", country: "ES" } });
+  DEEA = (await call(c, "POST", "/admin/bodyshops", { token: c.superToken, org: c.orgDE, body: { name: "Karosserie DE", azure_tenant: "TenantB", azure_business_customer_id: "bc-1", country: "DE" } })).body.id;
+  // V5: the station of a scan = the station of its SCANNER (Colibri number) on the local day of the scan, never the Location text
+  DEHALL = (await c.h.db.insert(stations).values({ orgId: c.orgDE, type: "hall", name: "Halle DE", country: "DE", capacite: 5, azureTenant: "TenantB" }).returning())[0].id;
+  const dev = (org: string, tenant: string, number: string, station_id?: string) => call(c, "POST", "/admin/colibri/devices", { token: c.superToken, org, body: { tenant, number, note: "test", station_id, from: "2026-01-01" } });
+  expect((await dev(c.orgES, "TenantA", "C-100", HALL)).status).toBe(201); // the main scanner stands in the hall
+  expect((await dev(c.orgES, "TenantA", "C-200", OTHER)).status).toBe(201); // a second scanner stands in another hall
+  expect((await dev(c.orgES, "TenantA", "C-300")).status).toBe(201); // registered, no station
+  expect((await dev(c.orgDE, "TenantB", "D-1", DEHALL)).status).toBe(201);
   ins = (await call(c, "POST", "/admin/insurers", { token: c.superToken, org: c.orgES, body: { name: "Allianz (alt)", azure_insurance_id: "ins-1" } })).body.id;
   await call(c, "POST", "/admin/campaigns", { token: c.superToken, org: c.orgES, body: { name: "Camp Oct", country: "ES", start: "2026-01-01", end: "2027-12-31", station_ids: [HALL] } });
 
   admin = await inviteAndAccept(c, c.orgES, "admin@example.test", { role_id: c.roleId.org_admin });
   importer = await inviteAndAccept(c, c.orgES, "importer@example.test", { role_id: c.roleId.aufnehmer });
-  chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: A });
-  tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  chefA = await inviteAndAccept(c, c.orgES, "chefa@example.test", { role_id: c.roleId.chef_site, station_id: OTHER });
+  tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: OTHER });
   const rolesDE = (await call(c, "GET", "/admin/roles", { token: c.superToken, org: c.orgDE })).body as any[];
   deAdmin = await inviteAndAccept(c, c.orgDE, "deadmin@example.test", { role_id: rolesDE.find((r) => r.key === "org_admin").id });
 
   az.add("AllScanResults", scanRow());
   az.add("AllScanResults", scanRow({ RowKey: "FAILED 1", PartitionKey: "20261019-1700", ScanFailed: "True", ErrorMessage: "scanner error" }));
-  az.add("AllScanResults", scanRow({ RowKey: "OTHER TENANT", PartitionKey: "20261019-1800", Tenant: "TenantB", Location: "", LicensePlate: "DE-AB 1", DentsTotalNumber: 5 }));
-  az.add("AllScanResults", scanRow({ RowKey: "UNKNOWN SHOP", PartitionKey: "20261019-1900", BusinessCustomer: "Unknown Shop - Foo", Location: "Somewhere", LicensePlate: "UNK 1" }));
+  az.add("AllScanResults", scanRow({ RowKey: "OTHER TENANT", PartitionKey: "20261019-1800", Tenant: "TenantB", Location: "", ColibriNumber: "D-1", LicensePlate: "DE-AB 1", DentsTotalNumber: 5 }));
+  az.add("AllScanResults", scanRow({ RowKey: "UNKNOWN SHOP", PartitionKey: "20261019-1900", BusinessCustomer: "Unknown Shop - Foo", Location: "Somewhere", ColibriNumber: "C-300", LicensePlate: "UNK 1" }));
+  az.add("AllScanResults", scanRow({ RowKey: "SECOND SCANNER", PartitionKey: "20261019-2000", ColibriNumber: "C-200", LicensePlate: "OTH 1" }));
   az.putBlob("allscans", "20261019-1627_9547 LPV.pdf", PDF);
   const big = await img(3000, 2000, "jpeg"), png = await img(800, 600, "png");
   az.putBlob("scan-color-pictures", `${PK}_Overview_Pictures_FRONT_UPPER_RIGHT-0.jpg`, big);
@@ -184,7 +192,7 @@ describe("pure helpers", () => {
 describe("sync (mirrors, incremental, reconcile)", () => {
   it("copies the small tables and the scans; failed scans are stored but flagged", async () => {
     const scans = await c.h.db.select().from(colibriScans);
-    expect(scans.length).toBe(4);
+    expect(scans.length).toBe(5);
     expect(scans.find((s) => s.rowKey === "FAILED 1")).toMatchObject({ scanFailed: true, errorMessage: "scanner error" });
     expect(scans.find((s) => s.rowKey === RK)).toMatchObject({ tenant: "TenantA", dentsTotal: 618, plate: "9547 LPV", importStatus: "new", claimNumber: "SIN-1" });
   });
@@ -231,71 +239,102 @@ describe("mapping rules (tenant isolation is a hard rule)", () => {
     const { loadMappingContext } = await import("../src/azure_sync");
     ctx = await loadMappingContext(c.h.db);
   });
-  const row = (o: Record<string, unknown> = {}) => ({ tenant: "TenantA", location: "Nave Madrid", businessCustomer: "Carrosserie Talavera - Allianz", scanFailed: false, ...o }) as never;
-  it("customer by link name -> BusinessCustomerId -> carrosserie of the SAME tenant; Location alias moves the current site; insurer by InsuranceId", () => {
+  const row = (o: Record<string, unknown> = {}) => ({ tenant: "TenantA", location: "Nave Madrid", colibriNumber: "C-100", scanDateTime: new Date("2026-10-19T16:27:00Z"), businessCustomer: "Carrosserie Talavera - Allianz", scanFailed: false, ...o }) as never;
+  it("customer by link name -> BusinessCustomerId -> carrosserie of the SAME tenant; station by scanner and day; insurer by InsuranceId", () => {
     const m = mapScan(row(), ctx);
     expect(m).toMatchObject({ orgId: c.orgES, clientStationId: A, stationId: HALL, insurerId: ins, importable: true, warnings: [] });
   });
-  it("without a location the car stays at the customer", () => {
-    expect(mapScan(row({ location: "" }), ctx)).toMatchObject({ stationId: A, clientStationId: A });
+  it("the Location text no longer decides the station: another or empty Location with the same scanner gives the same station", () => {
+    expect(mapScan(row({ location: "" }), ctx)).toMatchObject({ stationId: HALL, clientStationId: A });
+    expect(mapScan(row({ location: "Somewhere else" }), ctx)).toMatchObject({ stationId: HALL, clientStationId: A });
+    // and the Location text alone never gives a station (its old alias "Nave Madrid" is gone anyway)
+    expect(mapScan(row({ colibriNumber: "C-999" }), ctx)).toMatchObject({ stationId: null });
+  });
+  it("scanner_unknown: no device registered for tenant+number (or no number at all); the customer link still maps", () => {
+    const m = mapScan(row({ colibriNumber: "C-999" }), ctx);
+    expect(m).toMatchObject({ orgId: null, stationId: null, clientStationId: A, importable: false });
+    expect(m.warnings).toContain("scanner_unknown");
+    expect(mapScan(row({ colibriNumber: "" }), ctx).warnings).toContain("scanner_unknown");
+  });
+  it("scanner_no_station: device registered but no assignment on the LOCAL day of the scan (Europe/Madrid for ES)", () => {
+    const noStation = mapScan(row({ colibriNumber: "C-300" }), ctx);
+    expect(noStation).toMatchObject({ stationId: null, importable: false });
+    expect(noStation.warnings).toContain("scanner_no_station");
+    expect(noStation.warnings).not.toContain("scanner_unknown");
+    // assignment valid from 2026-01-01: 2025-12-31T23:30Z is already 2026-01-01 in Madrid (inside), 22:30Z is still 31 December (outside)
+    expect(mapScan(row({ scanDateTime: new Date("2025-12-31T23:30:00Z") }), ctx)).toMatchObject({ stationId: HALL, warnings: [] });
+    const before = mapScan(row({ scanDateTime: new Date("2025-12-31T22:30:00Z") }), ctx);
+    expect(before.stationId).toBeNull();
+    expect(before.warnings).toContain("scanner_no_station");
+    expect(mapScan(row({ scanDateTime: null }), ctx).stationId).toBeNull();
+  });
+  it("two scanners, two halls: the scanner decides", () => {
+    expect(mapScan(row({ colibriNumber: "C-200" }), ctx)).toMatchObject({ stationId: OTHER, orgId: c.orgES, clientStationId: A });
   });
   it("name normalisation: case and spaces do not matter", () => {
     expect(mapScan(row({ businessCustomer: "  CARROSSERIE talavera  -  allianz" }), ctx).clientStationId).toBe(A);
   });
   it("the same names in ANOTHER tenant never map to this tenant's sites (and vice versa)", () => {
-    const b = mapScan(row({ tenant: "TenantB", location: "" }), ctx);
+    const b = mapScan(row({ tenant: "TenantB", colibriNumber: "D-1" }), ctx);
     expect(b.orgId).toBe(c.orgDE);
+    expect(b.stationId).toBe(DEHALL);
     expect(b.clientStationId).toBe(DEEA);
-    const none = mapScan(row({ tenant: "TenantZ", location: "" }), ctx);
+    const none = mapScan(row({ tenant: "TenantZ" }), ctx);
     expect(none).toMatchObject({ orgId: null, clientStationId: null, importable: false });
     expect(none.warnings).toContain("tenant_mismatch");
     expect(mapScan(row({ tenant: "" }), ctx).importable).toBe(false);
   });
   it("a site takes every link of its customers (several allowed) plus individually ticked links", () => {
     const mod = (patch: Record<string, unknown>) => ({ ...ctx, stations: ctx.stations.map((s) => (s.id === A ? { ...s, ...patch } : s)) });
-    expect(mapScan(row({ location: "" }), mod({})).clientStationId).toBe(A); // bc-1 set through the legacy field
+    expect(mapScan(row(), mod({})).clientStationId).toBe(A); // bc-1 set through the legacy field
     const two = mod({ azureBcIds: ["bc-1", "bc-2"] }); // two customers on ONE site
-    expect(mapScan(row({ location: "" }), two).clientStationId).toBe(A);
-    expect(mapScan(row({ location: "", businessCustomer: "Taller Madrid - Allianz" }), two).clientStationId).toBe(A);
+    expect(mapScan(row(), two).clientStationId).toBe(A);
+    expect(mapScan(row({ businessCustomer: "Taller Madrid - Allianz" }), two).clientStationId).toBe(A);
     // no customer taken as a whole, only one link: the other link of the same customer is not taken
     const onlyLink = mod({ azureBcIds: [], azureLinkIds: ["l-2"] });
-    expect(mapScan(row({ location: "", businessCustomer: "Taller Madrid - Allianz" }), onlyLink).clientStationId).toBe(A);
-    const m = mapScan(row({ location: "" }), onlyLink);
+    expect(mapScan(row({ businessCustomer: "Taller Madrid - Allianz" }), onlyLink).clientStationId).toBe(A);
+    const m = mapScan(row(), onlyLink);
     expect(m.clientStationId).toBeNull();
     expect(m.warnings).toContain("tenant_mismatch"); // only the other tenant's site takes it
   });
-  it("a Location alias of another tenant is ignored", () => {
-    expect(mapScan(row({ tenant: "TenantB", location: "Nave Madrid" }), ctx).stationId).toBe(DEEA);
+  it("a scanner of another tenant with the same number is never used", () => {
+    const m = mapScan(row({ tenant: "TenantB", colibriNumber: "C-100" }), ctx);
+    expect(m.stationId).toBeNull();
+    expect(m.warnings).toContain("scanner_unknown");
   });
-  it("unknown customer: unmapped with a warning; unknown location without customer: location_unmapped; failed scans are not importable", () => {
-    expect(mapScan(row({ businessCustomer: "Unknown Shop - Foo", location: "" }), ctx)).toMatchObject({ orgId: null, importable: false, warnings: ["no_link"] });
-    expect(mapScan(row({ businessCustomer: "Unknown Shop - Foo", location: "Somewhere" }), ctx).warnings).toEqual(["no_link", "location_unmapped"]);
+  it("unknown customer: no_link warning (the station still comes from the scanner); failed scans are not importable", () => {
+    expect(mapScan(row({ businessCustomer: "Unknown Shop - Foo" }), ctx)).toMatchObject({ orgId: c.orgES, stationId: HALL, importable: true, warnings: ["no_link"] });
+    expect(mapScan(row({ businessCustomer: "Unknown Shop - Foo", colibriNumber: "C-999" }), ctx)).toMatchObject({ orgId: null, importable: false, warnings: ["no_link", "scanner_unknown"] });
     expect(mapScan(row({ scanFailed: true }), ctx)).toMatchObject({ importable: false });
-    expect(mapScan(row({ businessCustomer: "Taller Madrid - Allianz", location: "" }), ctx).warnings).toContain("no_site"); // link known, no site of ours
+    expect(mapScan(row({ businessCustomer: "Taller Madrid - Allianz" }), ctx).warnings).toContain("no_site"); // link known, no site of ours
   });
 });
 
 describe("list of available scans (who sees what)", () => {
-  it("an importer sees the scans that point to a site where he may import; nobody sees other tenants' scans", async () => {
+  it("an importer sees the scans of the scanners standing in a station where he may import; nobody sees other tenants' scans", async () => {
     const l = (await call(c, "GET", "/azure/scans", { token: importer, org: c.orgES })).body as any[];
-    expect(l.map((s) => s.plate)).toEqual(["9547 LPV"]);
-    expect(l[0]).toMatchObject({ importable: true, stationName: "Nave PDR Madrid", clientName: "Carrosserie Talavera", insurerName: "Allianz Seguros", claimNumber: "SIN-1", dentsTotal: 618, warnings: [] });
+    expect(l.map((s) => s.plate).sort()).toEqual(["9547 LPV", "OTH 1"]);
+    expect(l.find((s) => s.plate === "9547 LPV")).toMatchObject({ importable: true, withoutStation: false, stationName: "Nave PDR Madrid", clientName: "Carrosserie Talavera", insurerName: "Allianz Seguros", claimNumber: "SIN-1", dentsTotal: 618, warnings: [] });
+    expect(l.find((s) => s.plate === "OTH 1")).toMatchObject({ importable: true, stationName: "Nave Test A" }); // the second scanner stands in the other hall
     expect(l.some((s) => s.tenant === "TenantB")).toBe(false);
   });
-  it("roles without colibri.importer see nothing; the unmapped ones are for site administrators only", async () => {
+  it("roles without colibri.importer see nothing; a scanner without station is for administrators only", async () => {
     expect((await call(c, "GET", "/azure/scans", { token: tech, org: c.orgES })).body).toEqual([]);
     const adminList = (await call(c, "GET", "/azure/scans", { token: admin, org: c.orgES })).body as any[];
-    expect(adminList.map((s) => s.plate).sort()).toEqual(["9547 LPV", "UNK 1"]);
-    expect(adminList.find((s) => s.plate === "UNK 1")).toMatchObject({ importable: false, warnings: expect.arrayContaining(["no_link"]) });
+    expect(adminList.map((s) => s.plate).sort()).toEqual(["9547 LPV", "OTH 1", "UNK 1"]);
+    expect(adminList.find((s) => s.plate === "UNK 1")).toMatchObject({ withoutStation: true, stationId: null, importable: true, warnings: expect.arrayContaining(["no_link", "scanner_no_station"]) });
     expect((await call(c, "GET", "/azure/scans", { token: importer, org: c.orgES })).body.some((s: any) => s.plate === "UNK 1")).toBe(false);
   });
-  it("a chef of site A (not the hall) cannot import a scan that lands on the hall", async () => {
+  it("a chef of another hall cannot see the scan of the scanner standing in the hall; he sees the one of his own hall's scanner", async () => {
     const l = (await call(c, "GET", "/azure/scans", { token: chefA, org: c.orgES })).body as any[];
     expect(l.find((s) => s.plate === "9547 LPV")).toBeUndefined();
+    expect(l.find((s) => s.plate === "UNK 1")).toBeUndefined();
+    expect(l.map((s) => s.plate)).toEqual(["OTH 1"]);
   });
   it("the other organisation sees ITS tenant's scan only", async () => {
     const l = (await call(c, "GET", "/azure/scans", { token: deAdmin, org: c.orgDE })).body as any[];
     expect(l.map((s) => s.plate)).toEqual(["DE-AB 1"]);
+    expect(l[0]).toMatchObject({ stationName: "Halle DE", importable: true });
     expect((await call(c, "GET", "/azure/scans", { token: deAdmin, org: c.orgES })).status).toBe(403);
   });
 });
@@ -311,7 +350,7 @@ describe("import", () => {
     expect((await c.h.db.select().from(vehicles).where(eq(vehicles.colibriScanKey, `${PK}|${RK}`))).length).toBe(0);
   });
 
-  it("the importer creates the vehicle: PDF read with the v20 algorithm, site/customer/insurer/claim/campaign set, status 'besichtigung'", async () => {
+  it("the importer creates the vehicle: PDF read with the v20 algorithm, site/customer/insurer/claim set, no campaign (v4), status 'besichtigung'", async () => {
     const r = (await doImport(importer)).body.results[0];
     expect(r).toMatchObject({ status: "imported", photos: 5, photoErrors: 1 });
     expect(r.check).toMatchObject({ imported: 618, total: 618, azureTotal: 618, ok: true });
@@ -326,8 +365,11 @@ describe("import", () => {
     expect(v.panels.dachholm_l.kleber).toBe(true);
     expect(v.colibri).toMatchObject({ imported: 618, reportTotal: 618, azureTotal: 618 });
     expect(v.colibriFile).toMatchObject({ name: `${PK}.pdf` });
-    expect(v.campaignId).toBeTruthy();
+    expect(v.campaignId).toBeNull(); // campaigns are no longer written (v4)
     expect(v.companyId).toBeTruthy();
+    // like every vehicle it is frozen on a calculation method (the system method of Spain, version 1)
+    expect(v.methodId).toBeTruthy();
+    expect(v.methodVersion).toBe(1);
     const scan = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
     expect(scan).toMatchObject({ importStatus: "imported", vehicleId });
   });
@@ -371,15 +413,16 @@ describe("import", () => {
 
   it("not importable: unmapped customer, failed scan, other tenant, unknown key", async () => {
     const unk = { partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" };
-    expect((await doImport(admin, [unk])).body.results[0].status).toBe("unmapped");
+    expect((await doImport(admin, [unk])).body.results[0].status).toBe("unmapped"); // scanner without station: an admin must pass station_id
+    expect((await doImport(importer, [unk])).body.results[0].status).toBe("not_found"); // a non-admin: a scan without station does not exist for him
     expect((await doImport(admin, [{ partitionKey: "20261019-1700", rowKey: "FAILED 1" }])).body.results[0].status).toBe("unmapped");
     expect((await doImport(admin, [{ partitionKey: "20261019-1800", rowKey: "OTHER TENANT" }])).body.results[0].status).toBe("not_found"); // another tenant: it does not exist for this organisation
     expect((await doImport(admin, [{ partitionKey: "nope", rowKey: "nope" }])).body.results[0].status).toBe("not_found");
-    // the organisation that owns that tenant imports it (it lands in ITS carrosserie, never in org ES)
+    // the organisation that owns that tenant imports it (it lands in ITS hall with ITS body shop as customer, never in org ES)
     const de = (await doImport(deAdmin, [{ partitionKey: "20261019-1800", rowKey: "OTHER TENANT" }], c.orgDE)).body.results[0];
     expect(de.status).toBe("imported");
     const [dv] = await c.h.db.select().from(vehicles).where(eq(vehicles.id, de.vehicleId));
-    expect(dv).toMatchObject({ orgId: c.orgDE, stationId: DEEA, clientStationId: DEEA });
+    expect(dv).toMatchObject({ orgId: c.orgDE, stationId: DEHALL, clientStationId: DEEA }); // the car stands in the hall of its scanner, the customer is the body shop
   });
 
   it("missing or unreadable PDF: the scan goes back to 'new' (retry later), nothing is created", async () => {
@@ -441,7 +484,8 @@ describe("administration: status, mapping, pickers", () => {
     expect(s.tenants).toEqual(["TenantA"]);
     expect(s.lastRuns.length).toBeGreaterThan(0);
     expect(s.unmappedCustomers).toEqual([{ name: "Unknown Shop - Foo", tenant: "TenantA", scans: 1 }]);
-    expect(s.unmappedLocations).toEqual([{ location: "Somewhere", tenant: "TenantA", scans: 1 }]);
+    expect(s.unmappedLocations).toBeUndefined(); // V5: locations are no longer mapped, scanners are
+    expect(s.scannersWithoutStation).toEqual([{ tenant: "TenantA", number: "C-300", scans: 1 }]);
     expect(JSON.stringify(s)).not.toContain("TenantB");
     expect((await call(c, "GET", "/admin/azure/status", { token: importer, org: c.orgES })).status).toBe(403);
   });
@@ -456,14 +500,14 @@ describe("administration: status, mapping, pickers", () => {
   });
 
   it("a site can be linked to several customers through the API; the single legacy field still works and mirrors the first", async () => {
-    const mk = await call(c, "POST", "/admin/stations", { token: admin, org: c.orgES, body: { type: "carrosserie", name: "Multi", azure_tenant: "TenantA", azure_business_customer_ids: ["bc-1", "bc-2"], azure_link_ids: ["l-9"], country: "ES" } });
+    const mk = await call(c, "POST", "/admin/bodyshops", { token: admin, org: c.orgES, body: { name: "Multi", azure_tenant: "TenantA", azure_business_customer_ids: ["bc-1", "bc-2"], azure_link_ids: ["l-9"], country: "ES" } });
     expect(mk.status).toBe(201);
     expect(mk.body).toMatchObject({ azureBcIds: ["bc-1", "bc-2"], azureBusinessCustomerId: "bc-1", azureLinkIds: ["l-9"] });
-    const legacy = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_id: "bc-2" } });
+    const legacy = await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_id: "bc-2" } });
     expect(legacy.body).toMatchObject({ azureBcIds: ["bc-2"], azureBusinessCustomerId: "bc-2" });
-    const clear = await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_ids: [], azure_business_customer_id: null } });
+    const clear = await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { azure_business_customer_ids: [], azure_business_customer_id: null } });
     expect(clear.body).toMatchObject({ azureBcIds: [], azureBusinessCustomerId: null });
-    await call(c, "PUT", `/admin/stations/${mk.body.id}`, { token: admin, org: c.orgES, body: { active: false } });
+    await call(c, "PUT", `/admin/bodyshops/${mk.body.id}`, { token: admin, org: c.orgES, body: { active: false } });
   });
 
   it("mapping a customer: create a new carrosserie from the Azure name, or link an existing one; tenant must belong to the organisation", async () => {
@@ -503,5 +547,62 @@ describe("administration: status, mapping, pickers", () => {
   it("campaigns / sites tables untouched by imports of other organisations (sanity)", async () => {
     expect((await c.h.db.select().from(campaigns)).length).toBe(1);
     expect((await c.h.db.select().from(campaignStations)).length).toBe(1);
+  });
+});
+
+describe("load a scan into the station the user is in", () => {
+  const key = { partitionKey: PK, rowKey: RK };
+  let other = "";
+  it("a vehicle deleted (wrong station) gives the scan back; it is offered again at the station of its scanner; ?all=1 widens nothing", async () => {
+    const scan0 = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
+    expect(scan0.importStatus).toBe("imported");
+    const vid = scan0.vehicleId!;
+    const { push: pushOps, op } = await import("./helpers");
+    expect(((await pushOps(c, c.superToken, [op("vehicle.delete", { vehicleId: vid })])).body.results as { status: string }[])[0].status).toBe("ok");
+    const after = (await c.h.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK))))[0];
+    expect(after).toMatchObject({ importStatus: "new", vehicleId: null });
+    [other] = (await c.h.db.insert(stations).values({ orgId: c.orgES, type: "hall", name: "Talauto Test", country: "ES", capacite: 10, azureTenant: scan0.tenant }).returning()).map((s) => s.id);
+    const normal = (await call(c, "GET", "/azure/scans", { token: importer, org: c.orgES })).body as { rowKey: string; stationId: string }[];
+    expect(normal.find((s) => s.rowKey === RK)?.stationId).toBe(HALL); // the station of its scanner
+    const all = (await call(c, "GET", "/azure/scans?all=1", { token: importer, org: c.orgES })).body as { rowKey: string; importable: boolean }[];
+    expect(all.find((s) => s.rowKey === RK)?.importable).toBe(true);
+    expect(all.map((s) => s.rowKey).sort()).toEqual(normal.map((s) => s.rowKey).sort()); // ?all=1 no longer widens anything
+  });
+
+  it("imported with station_id: a non-admin cannot move a scan to another station; an administrator can, the car still belongs to the customer of its BusinessCustomer link", async () => {
+    expect((await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0].status).toBe("not_allowed");
+    const r = (await call(c, "POST", "/azure/scans/import", { token: admin, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0];
+    expect(r.status).toBe("imported");
+    const v = (await pull(c, admin, c.orgES)).vehicles.find((x: any) => x.id === r.vehicleId);
+    expect(v).toMatchObject({ stationId: other, clientStationId: A, kennzeichen: "9547 LPV" });
+  });
+
+  it("not into a station of another tenant or organisation, nor a station the user may not import into", async () => {
+    const [{ id: dev }] = await c.h.db.insert(stations).values({ orgId: c.orgDE, type: "hall", name: "Halle DE", country: "DE", capacite: 5 }).returning();
+    await c.h.db.update(colibriScans).set({ importStatus: "new", vehicleId: null }).where(and(eq(colibriScans.partitionKey, PK), eq(colibriScans.rowKey, RK)));
+    const wrongOrg = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: dev } })).body.results[0];
+    expect(wrongOrg.status).toBe("unmapped");
+    const unknown = (await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [key], station_id: uuid() } })).body.results[0];
+    expect(unknown.status).toBe("unmapped");
+    const notAllowed = (await call(c, "POST", "/azure/scans/import", { token: tech, org: c.orgES, body: { keys: [key], station_id: other } })).body.results[0];
+    expect(notAllowed.status).toBe("not_allowed");
+  });
+
+  it("v4: a scan of a scanner without station is listed for the administrator only and can be loaded by him into a chosen station, without a customer; a non-admin gets not_found", async () => {
+    const none = (await call(c, "GET", "/azure/scans?all=1", { token: importer, org: c.orgES })).body as { rowKey: string }[];
+    expect(none.find((x) => x.rowKey === "UNKNOWN SHOP")).toBeUndefined();
+    expect((await call(c, "POST", "/azure/scans/import", { token: importer, org: c.orgES, body: { keys: [{ partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" }], station_id: other } })).body.results[0].status).toBe("not_found");
+    const all = (await call(c, "GET", "/azure/scans", { token: admin, org: c.orgES })).body as { rowKey: string; stationId: string | null; importable: boolean; withoutStation: boolean; warnings: string[] }[];
+    const unk = all.find((x) => x.rowKey === "UNKNOWN SHOP");
+    expect(unk).toMatchObject({ importable: true, withoutStation: true, stationId: null });
+    expect(unk!.warnings).toContain("no_link");
+    const r = (await call(c, "POST", "/azure/scans/import", { token: admin, org: c.orgES, body: { keys: [{ partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" }], station_id: other } })).body.results[0];
+    expect(r.status).toBe("imported");
+    const v = (await pull(c, admin, c.orgES)).vehicles.find((x: any) => x.id === r.vehicleId);
+    expect(v).toMatchObject({ stationId: other, clientStationId: null, statut: "besichtigung" });
+    expect(v.campaignId ?? null).toBeNull();
+    // a technician (no importer right) still cannot take it
+    const nope = (await call(c, "POST", "/azure/scans/import", { token: tech, org: c.orgES, body: { keys: [{ partitionKey: "20261019-1900", rowKey: "UNKNOWN SHOP" }], station_id: other } })).body.results[0];
+    expect(["already", "not_allowed"]).toContain(nope.status);
   });
 });

@@ -9,7 +9,7 @@
  * restricted fields removed, plus ids of vehicles that left the user's scope (`gone`).
  */
 import { z } from "zod";
-import { STATUSES } from "./permissions";
+import { REPAIR_STAGES, STATUSES } from "./permissions";
 
 export const uuidStr = z.string().uuid();
 const iso = z.string().datetime();
@@ -25,6 +25,9 @@ export const headerFields = z.object({
   modell: z.string().max(120),
   kunde: z.string().max(160), // snapshot of the customer carrosserie name
   kundeEmail: z.string().max(254),
+  /** private customer taken over from a PDR Citas appointment */
+  kundeName: z.string().max(160),
+  kundeTel: z.string().max(40),
   leistungsdatum: z.string().max(10),
   teiler: z.number().int().min(10).max(12),
   stundensatz: z.number().min(0).max(1000),
@@ -37,12 +40,17 @@ export const headerFields = z.object({
   demontageEur: z.number().min(0).max(100000),
   glass: z.record(z.string(), z.object({ on: z.boolean().optional(), eur: z.number().min(0).max(100000).optional() })),
   claimNumber: z.string().max(80),
+  /** labels of parts to replace (printed on the KVA, no price) */
+  partsToReplace: z.array(z.string().trim().min(1).max(80)).max(40),
   companyId: z.string().max(80).nullable(),
   logo: z.enum(["pdr", "none"]),
   // links (stored as columns)
   clientStationId: uuidStr.nullable(),
   insurerId: uuidStr.nullable(),
   campaignId: uuidStr.nullable(),
+  /** calculation method frozen on the vehicle (stored as columns; both together) */
+  methodId: uuidStr.nullable(),
+  methodVersion: z.number().int().min(1).nullable(),
 }).partial().strict();
 export type HeaderFields = z.infer<typeof headerFields>;
 /** Header fields only users with `prix.voir` may write. */
@@ -87,6 +95,38 @@ export const photoInput = z.object({
   colibriPosition: z.string().max(40).nullable().default(null), colibriIndex: z.number().int().nullable().default(null),
 }).strict();
 
+export const REPAIR_CHECKS = ["pdr", "teile", "chef"] as const;
+export type RepairCheck = (typeof REPAIR_CHECKS)[number];
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const appointmentInput = z.object({
+  id: uuidStr, technicianId: uuidStr, date: ymd, durationMin: z.number().int().min(5).max(1440), note: z.string().max(300).default(""),
+}).strict();
+const bookingInput = z.object({
+  id: uuidStr, date: ymd, time: hhmm,
+  /** where the repair takes place; absent = the station the car is in */
+  stationId: uuidStr.optional(),
+  phone: z.string().trim().min(6).max(40).regex(/^[+\d][\d\s().\/-]{4,}$/),
+  email: z.string().trim().max(254).regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/),
+}).strict();
+
+/** Box in which the customer draws the signature (the points of a stroke are in this coordinate system, origin top-left). */
+export const SIGNATURE_W = 600, SIGNATURE_H = 200;
+const strokeSchema = z.array(z.tuple([z.number().min(-20).max(SIGNATURE_W + 20), z.number().min(-20).max(SIGNATURE_H + 20)])).min(1).max(2000);
+export const signatureSchema = z.array(strokeSchema).min(1).max(60).refine((s) => s.reduce((n, st) => n + st.length, 0) <= 6000, "too many points");
+/** A signed receipt of the car being left (drop_off) or taken back (pick_up). The id is made on the phone: a replayed operation is applied once. */
+export const handoverInput = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(["drop_off", "pick_up"]),
+  customerName: z.string().trim().min(1).max(120),
+  customerEmail: z.preprocess((v) => (typeof v === "string" && !v.trim() ? null : v), z.string().trim().email().max(254).nullable()).default(null),
+  remarks: z.string().max(2000).default(""),
+  signedAt: z.string().datetime({ offset: true }),
+  signature: signatureSchema,
+  sendReceipt: z.boolean().default(false),
+});
+export type HandoverInput = z.infer<typeof handoverInput>;
+
 export const opSchema = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("vehicle.create"),
@@ -94,7 +134,7 @@ export const opSchema = z.discriminatedUnion("type", [
       id: uuidStr, stationId: uuidStr, clientStationId: uuidStr.nullable().default(null),
       campaignId: uuidStr.nullable().default(null), insurerId: uuidStr.nullable().default(null),
       header: headerFields, panels: z.record(z.string(), panelSchema).default({}), shares: sharesFields.default({}),
-      statut: z.enum(STATUSES).default("arrive"),
+      statut: z.enum(STATUSES).exclude(["refuse"]).default("arrive"), // a car is refused after its assessment, with a reason (vehicle.status)
     }).strict(),
   }),
   z.object({ ...base, type: z.literal("vehicle.header"), vehicleId: uuidStr, fields: headerFields }),
@@ -103,6 +143,7 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("vehicle.status"), vehicleId: uuidStr, statut: z.enum(STATUSES), motif: z.string().max(300).optional() }),
   z.object({ ...base, type: z.literal("vehicle.move"), vehicleId: uuidStr, toStationId: uuidStr, note: z.string().max(300).optional() }),
   z.object({ ...base, type: z.literal("vehicle.delete"), vehicleId: uuidStr }),
+  z.object({ ...base, type: z.literal("vehicle.handover"), vehicleId: uuidStr, handover: handoverInput }),
   z.object({ ...base, type: z.literal("vehicle.assign"), vehicleId: uuidStr, kind: z.enum(["pdr", "demontage"]), userIds: z.array(uuidStr).max(20) }),
   z.object({
     ...base, type: z.literal("vehicle.colibri"), vehicleId: uuidStr, colibri: colibriMeta,
@@ -115,9 +156,37 @@ export const opSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...base, type: z.literal("photo.delete"), photoId: uuidStr }),
   /** Ask the server to e-mail a report (the PDF is uploaded separately to /files/report/:id). */
+  // ---- UI v3 (see V3_OP_TYPES)
+  z.object({ ...base, type: z.literal("vehicle.repairStage"), vehicleId: uuidStr, stage: z.enum(REPAIR_STAGES) }),
+  z.object({ ...base, type: z.literal("vehicle.bodyshop"), vehicleId: uuidStr, bodyshopId: uuidStr.nullable() }),
+  z.object({ ...base, type: z.literal("repair.todo.add"), vehicleId: uuidStr, todo: z.object({ id: uuidStr, text: z.string().trim().min(1).max(200) }).strict() }),
+  z.object({ ...base, type: z.literal("repair.todo.toggle"), todoId: uuidStr, done: z.boolean() }),
+  z.object({ ...base, type: z.literal("repair.todo.delete"), todoId: uuidStr }),
+  z.object({ ...base, type: z.literal("photo.stage"), photoId: uuidStr, repairStage: z.enum(REPAIR_STAGES).nullable(), role: z.string().trim().max(40).nullable() }),
+  z.object({ ...base, type: z.literal("repair.check"), vehicleId: uuidStr, key: z.enum(REPAIR_CHECKS), done: z.boolean() }),
+  z.object({ ...base, type: z.literal("vehicle.comment"), vehicleId: uuidStr, comment: z.object({ id: uuidStr, text: z.string().max(2000) }).strict() }),
+  z.object({ ...base, type: z.literal("appointment.add"), vehicleId: uuidStr, appointment: appointmentInput }),
+  z.object({ ...base, type: z.literal("appointment.update"), appointmentId: uuidStr, fields: appointmentInput.omit({ id: true }).partial().strict() }),
+  z.object({ ...base, type: z.literal("appointment.delete"), appointmentId: uuidStr }),
+  z.object({ ...base, type: z.literal("booking.create"), vehicleId: uuidStr, booking: bookingInput }),
+  z.object({ ...base, type: z.literal("booking.move"), bookingId: uuidStr, date: ymd, time: hhmm }),
+  z.object({ ...base, type: z.literal("booking.cancel"), bookingId: uuidStr }),
   z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]) }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
+
+/** Every op type this version understands. The server answers 409 `unsupported_op` (nothing applied) for any other type. */
+export const KNOWN_OP_TYPES: readonly string[] = opSchema.options.map((o) => o.shape.type.value);
+/**
+ * Op types added after the first release (UI v3). A client sends them in batches of their own, never mixed with the older
+ * types, and keeps them queued (instead of dropping them) when the server does not know them yet (rollback, partial deploy).
+ */
+export const V3_OP_TYPES: readonly string[] = [
+  "vehicle.repairStage", "vehicle.bodyshop", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
+  "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
+  "vehicle.handover", // v5: customer signature (kept queued on a server that does not know it yet)
+];
+export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
 
 export const pushInput = z.object({ ops: z.array(opSchema).min(1).max(200) });
 export type PushInput = z.infer<typeof pushInput>;
@@ -136,6 +205,7 @@ export interface OpResult {
 }
 export interface PushResponse { results: OpResult[] }
 
+
 /** What a client may hold. Restricted fields are absent (not blank) when the user has no right to them. */
 export interface ClientVehicle extends Record<string, unknown> {
   id: string;
@@ -148,10 +218,29 @@ export interface ClientVehicle extends Record<string, unknown> {
   statutMotif: string | null;
   statutDepuis: string | null;
   repAt: string | null;
+  /** V5: when the car entered the repair board / when the customer signed (summary only: names and signatures never travel with the vehicle) */
+  repairEnteredAt?: string | null;
+  dropOffSignedAt?: string | null;
+  pickUpSignedAt?: string | null;
   panels: Record<string, unknown>;
   colibri: unknown | null;
   colibriFile: { name: string; size: number } | null;
   assigneeIds: string[];
+  /** repair board column (null = not in the repair flow) */
+  repairStage?: string | null;
+  /** frozen calculation method (null = historical behaviour) */
+  methodId?: string | null;
+  methodVersion?: number | null;
+  /** where the car came from in Colibri (imported from an Azure scan): the BusinessCustomer–insurance link, the location and the tenant; null = not imported from a scan */
+  colibriSource?: { businessCustomer: string; location: string; tenant: string } | null;
+  /** field profile only (technician / headliner): how the account is on this car (assigned for PDR work and / or for removal-refit) */
+  myAssign?: ("pdr" | "demontage")[];
+  /** field profile only: HIS OWN earnings on this car (PDR part and / or removal-refit part), never the amounts of others */
+  myEarn?: { pdr: { eur: number; pct: number } | null; dem: { eur: number; pct: number } | null; eur: number };
+  /** body shop that repairs the car (a carrosserie site of the tenant), set in the "At Bodyshop" column */
+  bodyshopId?: string | null;
+  /** repair data, only for users who may see it (see ClientRepair) */
+  repair?: ClientRepair;
   updatedAt: string;
   updatedBy: string | null;
   seq: number;
@@ -160,10 +249,33 @@ export interface ClientVehicle extends Record<string, unknown> {
   panelsAt: Record<string, number>;
 }
 
+export interface ClientRepair {
+  todos: { id: string; text: string; source: "manual" | "part"; done: boolean; doneBy: string | null; doneAt: string | null; createdBy: string | null; createdAt: string; sort: number }[];
+  /** manual checks: who confirmed and when (null = open) */
+  checks: Record<string, { by: string | null; at: string } | null>;
+  /** why "Finish" is refused right now (empty = allowed): todos_open, check:pdr, check:teile, check:chef, photos:<stage>, no_technician */
+  finishBlockers: string[];
+  comments: { id: string; userId: string | null; userName: string; at: string; text: string }[];
+  appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[];
+  booking: { id: string; stationId: string; date: string; time: string; status: string; phone: string; email: string; createdBy: string | null; createdAt: string } | null;
+  /** day of the repair booking that moved this car into "Bereit" by itself (card badge "Termin heute") */
+  autoStartedOn?: string | null;
+  /** the last repair report sent for this vehicle (automatic or re-sent) */
+  lastReport?: { status: string; at: string; auto: boolean } | null;
+}
+
+export interface ClientMethod {
+  id: string; name: string; engine: "aw" | "matrix"; country: "DE" | "ES"; isSystem: boolean; currentVersion: number; archived: boolean;
+  /** every version's parameters ("1" -> params): a vehicle keeps computing with the version it was frozen on */
+  versions: Record<string, unknown>;
+}
+
 export interface ClientPhoto {
   id: string; vehicleId: string; label: string; phase: PhotoPhase; source: string; inPdf: boolean;
   takenAt: string; takenBy: string | null; sort: number; hasFile: boolean;
   colibriPosition: string | null; colibriIndex: number | null; deleted: boolean; seq: number;
+  /** repair stage the photo belongs to and the role of the person who took it (UI v3) */
+  repairStage?: string | null; role?: string | null; takenByName?: string | null;
 }
 
 export interface ClientStation {
@@ -171,6 +283,9 @@ export interface ClientStation {
   /** Colibri tenant of the site: moving a car to a site of another tenant shows a warning */
   azureTenant?: string | null;
   commissionMode?: string; commissionPct?: number; active: boolean;
+  /** repair places per day (repair calendar) */
+  repairsPerDay?: number;
+  address?: string;
 }
 export interface OrgSettings {
   rateDE: number; rateES: number; defaultTeiler: number;
@@ -185,7 +300,7 @@ export const DEFAULT_ORG_SETTINGS: OrgSettings = { rateDE: 83, rateES: 69, defau
 export interface ClientInsurer { id: string; name: string }
 export interface ClientCampaign { id: string; name: string; country: string; start: string | null; end: string | null; stationIds: string[] }
 export interface ClientCompany { id: string; name: string; address: string; taxId: string; email: string; footer: string; hasLogo: boolean; logo: { kind: "jpg" | "png"; width: number; height: number } | null }
-export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number }
+export interface ClientTechnician { id: string; name: string; userId: string | null; defaultPctPdr: number; defaultPctDemontage: number; kind?: "pdr" | "headliner"; /** stations where the linked account has a role (the picker puts "works here" first) */ stationIds?: string[] }
 
 export interface PullResponse {
   /** identifies the user's grants; when it changed since the last pull the client must replace its local set */
@@ -199,12 +314,20 @@ export interface PullResponse {
   gone: string[];
   refs: {
     stations: ClientStation[];
-    /** vehicles physically present per site (every status but `rendu`), for the sites the user can see */
+    /** where a repair can be booked (PDR halls and body shops of the organisation, names only): the choices of the repair appointment; only for users who book */
+    repairLocations: { id: string; name: string; type: string; country: string; repairsPerDay: number; azureTenant: string | null }[];
+    /** body shops (carrosserie sites, names only) a car can be sent to: the choices of the "At Bodyshop" column; only for users of the repair board */
+    bodyshops: { id: string; name: string; azureTenant: string | null }[];
+    /** occupancy per site = cars in repair status right now, for the sites the user can see */
     occupancy: Record<string, number>;
     settings: OrgSettings;
-    me: { id: string; name: string; language: string; permissions: string[] };
+    me: {
+      id: string; name: string; language: string; permissions: string[];
+      /** set for a technician / headliner account that does not see the internal split: the app then shows the field interface (v4) */
+      fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[]; /** repair steps given by his role(s); empty = rule of his technician kind */ steps?: string[]; /** the moves he may make: [from, to] */ moves?: [string, string][] } | null;
+    };
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
-    people: { id: string; name: string }[];
+    people: { id: string; name: string; roles?: string[]; stationIds?: string[] }[];
     insurers: ClientInsurer[];
     /** which insurers work with which carrosserie (pickers on a vehicle only offer the linked ones) */
     stationInsurers: { stationId: string; insurerId: string }[];
@@ -212,6 +335,9 @@ export interface PullResponse {
     companies: ClientCompany[];
     /** only for users who may see the internal split */
     technicians: ClientTechnician[];
+    /** calculation methods (all versions) and which insurer uses which; absent for old servers */
+    methods?: ClientMethod[];
+    insurerMethods?: { insurerId: string; country: string; methodId: string }[];
   };
 }
 

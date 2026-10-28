@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { seedRoles } from "./app";
+import { seedMethods } from "./methods";
 import { seedCompanies } from "./companies_seed";
 import type { Storage } from "./storage";
 import type { Db } from "./db";
@@ -16,6 +17,7 @@ export async function seed(db: Db, o: SeedOptions) {
     if (!org) [org] = await db.insert(organizations).values(w).returning();
     orgs.push(org);
     await seedRoles(db, org.id);
+    await seedMethods(db, org.id);
     if (o.storage) await seedCompanies(db, o.storage, org.id);
   }
   const email = o.superadminEmail.trim().toLowerCase();
@@ -29,6 +31,8 @@ export async function seed(db: Db, o: SeedOptions) {
       await db.insert(stations).values([
         { orgId: orgs[1].id, type: "carrosserie", name: "Carrosserie Test Talavera", country: "ES", capacite: 40 },
         { orgId: orgs[1].id, type: "hall", name: "Nave PDR Madrid", country: "ES", capacite: 120 },
+        // V5: a body shop is a customer, never a place: the tests that need a second place (cars stand here) use this hall
+        { orgId: orgs[1].id, type: "hall", name: "Nave Test A", country: "ES", capacite: 40 },
       ]);
     }
   }

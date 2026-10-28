@@ -1,6 +1,7 @@
+import { isPlace } from "./places";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { STATUSES } from "@hagel/shared";
-import { buildTechnicianWorkbook, eur, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
+import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
+import { buildFinishedWorkbook, buildTechnicianWorkbook, eur, finishedFileName, type FinishedExportData, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
 import { api } from "../api";
 import { getLang, t } from "../i18n";
 import { go } from "./route";
@@ -14,14 +15,19 @@ import { Dialog } from "./ui";
 
 interface Ids { n: number; ids: string[] }
 interface Row { id: string; name: string; net: number; n: number; ids: string[] }
+interface LinkRow {
+  key: string; clientId: string | null; clientName: string; insurerId: string | null; insurerName: string;
+  vehicles: Ids; waiting: Ids; repair: Ids; finished: Ids; avgDays: number | null; net?: number;
+}
 interface Dash {
   generatedAt: string; vehicles: number; delayDays: Record<string, number>;
-  kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
-  sites: { id: string; name: string; type: string; capacity: number; present: number; presentIds: string[]; byStatus: Record<string, Ids>; arrivalsToday: Ids; departuresToday: Ids }[];
+  kpis: { present: Ids; arrivalsToday: Ids; departuresToday: Ids; delayed: Ids; finished: Ids; refused?: Ids; fullSites: { id: string; name: string; present: number; capacity: number }[] };
+  sites: { id: string; name: string; type: string; capacity: number; present: number; presentIds: string[]; byStatus: Record<string, Ids>; arrivalsToday: Ids; departuresToday: Ids; byStage?: Record<string, Ids>; repairsToday?: { booked: number; capacity: number } }[];
   durations: { avgArrivalToReturnedDays: number | null; avgRepairDays: number | null; returnedSamples: number; repairSamples: number };
   delayed: { id: string; plate: string; statut: string; motif: string | null; days: number; stationName: string; thresholdDays: number }[];
   hold: { reason: string; n: number; ids: string[] }[];
   technicians: { key: string; name: string; assigned: Ids; inProgress: Ids; finished: Ids; sites: { id: string; name: string }[]; noRoleOnSite: Ids }[];
+  linkTable: { byLink: LinkRow[]; byClient: LinkRow[]; byInsurer: LinkRow[] };
   revenue: null | {
     total: number; n: number; ids: string[];
     bySite: Row[]; byClient: Row[]; byInsurer: Row[]; byMonth: { month: string; net: number; n: number; ids: string[] }[];
@@ -29,7 +35,7 @@ interface Dash {
   };
 }
 
-const STATUS_COLOR: Record<string, string> = { arrive: "#8aa0c0", besichtigung: "#5b8fd6", attente: "#e0a02c", reparatur: "#7b5bd6", fertig: "#5e8c63", rendu: "#cfd6df" };
+const STATUS_COLOR: Record<string, string> = { arrive: "#8aa0c0", besichtigung: "#5b8fd6", attente: "#e0a02c", reparatur: "#7b5bd6", fertig: "#5e8c63", rendu: "#cfd6df", refuse: "#c98a84" };
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const monday = (d: Date) => addDays(d, -((d.getDay() + 6) % 7));
@@ -97,11 +103,50 @@ function Bars({ rows, title, money }: { rows: Row[]; title: string; money: (n: n
   );
 }
 
-export function Dashboard() {
+/** v5 2.3: one row per (body shop, insurer), per body shop or per insurer; the net column exists only for users who may see prices. */
+function LinkTable({ table, money }: { table: Dash["linkTable"]; money: (n: number) => string }) {
+  const [view, setView] = useState<"byLink" | "byClient" | "byInsurer">("byLink");
+  const rows = table[view];
+  const hasNet = rows.some((r) => r.net !== undefined);
+  const nm = (r: LinkRow) => [view !== "byInsurer" ? (r.clientName || t("lkNoClient")) : "", view !== "byClient" ? (r.insurerName || t("lkNoInsurer")) : ""].filter(Boolean);
+  return (
+    <Section title={t("lkTitle")} right={
+      <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {(["byLink", "byClient", "byInsurer"] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={view === k} className={"chip" + (view === k ? " on" : "")} style={{ minHeight: 40 }} onClick={() => setView(k)}>{t(k === "byLink" ? "lkByLink" : k === "byClient" ? "lkByClient" : "lkByInsurer")}</button>
+        ))}
+      </div>}>
+      {rows.length === 0 ? <div className="muted">{t("lkEmpty")}</div> : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr style={{ textAlign: "left" }}>
+              {view !== "byInsurer" && <th>{t("lkClient")}</th>}{view !== "byClient" && <th>{t("lkInsurer")}</th>}
+              <th>{t("lkVehicles")}</th><th>{t("lkWaiting")}</th><th>{t("lkRepair")}</th><th>{t("lkFinished")}</th><th>{t("lkAvgDays")}</th>{hasNet && <th>{t("lkNet")}</th>}
+            </tr></thead>
+            <tbody>{rows.map((r) => {
+              const label = nm(r).join(" · ");
+              const cell = (x: Ids, what: string) => <td><N v={x.n} ids={x.ids} label={`${label} · ${what}`} /></td>;
+              return (
+                <tr key={r.key} style={{ borderTop: "1px solid var(--line)" }}>
+                  {nm(r).map((x, i) => <td key={i}><b>{x}</b></td>)}
+                  {cell(r.vehicles, t("lkVehicles"))}{cell(r.waiting, t("lkWaiting"))}{cell(r.repair, t("lkRepair"))}{cell(r.finished, t("lkFinished"))}
+                  <td>{r.avgDays ?? "—"}</td>{hasNet && <td><b>{r.net !== undefined ? money(r.net) : "—"}</b></td>}
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/** `embedded`: inside the new interface (its own header above); without it the old full-page header */
+export function Dashboard({ embedded = false }: { embedded?: boolean }) {
   const f = useField();
   const [data, setData] = useState<Dash | null>(null);
   const [err, setErr] = useState("");
-  const [site, setSite] = useState(""), [campaign, setCampaign] = useState(""), [client, setClient] = useState(""), [insurer, setInsurer] = useState("");
+  const [site, setSite] = useState(""), [client, setClient] = useState(""), [insurer, setInsurer] = useState("");
   const [period, setPeriod] = useState<Period>("week");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [thr, setThr] = useState<Record<string, number> | null>(null);
@@ -112,13 +157,12 @@ export function Dashboard() {
   const query = useCallback(() => {
     const q = new URLSearchParams();
     if (site) q.set("sites", site);
-    if (campaign) q.set("campaign", campaign);
     if (client) q.set("client", client);
     if (insurer) q.set("insurer", insurer);
     if (range.from) q.set("from", range.from);
     if (range.to) q.set("to", range.to);
     return q.size ? "?" + q : "";
-  }, [site, campaign, client, insurer, range]);
+  }, [site, client, insurer, range]);
 
   const load = useCallback(async () => {
     try { setData(await api<Dash>("GET", `/dashboard${query()}`)); setErr(""); }
@@ -133,9 +177,18 @@ export function Dashboard() {
     try {
       const d = await api<{ from: string | null; to: string | null; sheets: TechSheetData[] }>("GET", `/dashboard/technician-sheets${query()}`);
       if (!d.sheets.length) { toast(t("exportEmpty")); return; }
-      const lang = getLang() === "en" ? "en" : "de";
+      const lang = getLang();
       if (kind === "pdf") await shareOrDownload(await generateTechnicianWorksheets(d, lang), techPdfFileName(d.from, d.to, lang), "application/pdf");
       else await shareOrDownload(buildTechnicianWorkbook(d, lang), techWorkbookFileName(d.from, d.to, lang), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
+  };
+
+  const exportFinished = async () => {
+    setBusy(true);
+    try {
+      const d = await api<FinishedExportData>("GET", `/dashboard/finished-export${query()}`);
+      if (!d.rows.length) { toast(t("exportEmpty")); return; }
+      await shareOrDownload(buildFinishedWorkbook(d, getLang()), finishedFileName(d.from, d.to, getLang()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -153,12 +206,19 @@ export function Dashboard() {
   );
 
   return (
-    <div className="fld wide">
-      <div className="hdr">
-        <div className="top"><a className="iconbtn" href="#/" style={{ textDecoration: "none" }} aria-label={t("vehicles")}>‹</a></div>
-        <h1>{t("dashboard")}</h1>
-        <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
-      </div>
+    <div className={"fld wide" + (embedded ? " dashv3" : "")}>
+      {embedded ? (
+        <div className="dashtitle">
+          <h1>{t("dashboard")}</h1>
+          <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
+        </div>
+      ) : (
+        <div className="hdr">
+          <div className="top"><a className="iconbtn" href="#/" style={{ textDecoration: "none" }} aria-label={t("vehicles")}>‹</a></div>
+          <h1>{t("dashboard")}</h1>
+          <div className="sub">{t("periodShown")}: {range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")}</div>
+        </div>
+      )}
       <div className="sheet">
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
           {chip("today", t("periodToday"))}{chip("week", t("periodWeek"))}{chip("lastWeek", t("periodLastWeek"))}{chip("month", t("periodMonth"))}{chip("all", t("periodAll"))}{chip("custom", t("periodCustom"))}
@@ -170,12 +230,11 @@ export function Dashboard() {
           </div>
         )}
         <details style={{ marginBottom: 12 }}>
-          <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("filtersLabel")}{site || client || insurer || campaign ? " •" : ""}</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("filtersLabel")}{site || client || insurer ? " •" : ""}</summary>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-            {sel(site, setSite, t("allSites"), stations.filter((s) => s.active))}
+            {sel(site, setSite, t("allSites"), stations.filter((s) => s.active && isPlace(s)))}
             {sel(client, setClient, t("allClients"), stations.filter((s) => s.type === "carrosserie"))}
             {sel(insurer, setInsurer, t("allInsurers"), refs?.insurers ?? [])}
-            {sel(campaign, setCampaign, t("allCampaigns"), refs?.campaigns ?? [])}
           </div>
         </details>
         {err && <div className="err">{err}</div>}
@@ -188,6 +247,7 @@ export function Dashboard() {
               <Tile label={t("departuresToday")} value={data.kpis.departuresToday.n} ids={data.kpis.departuresToday.ids} />
               <Tile label={t("kpiDelayed")} value={data.kpis.delayed.n} ids={data.kpis.delayed.ids} tone={data.kpis.delayed.n ? "bad" : "good"} />
               <Tile label={t("finishedN")} value={data.kpis.finished.n} ids={data.kpis.finished.ids} tone="good" />
+              {data.kpis.refused && <Tile label={t("kpiRefused")} value={data.kpis.refused.n} ids={data.kpis.refused.ids} />}
               {data.revenue && <Tile label={t("kpiNet")} value={money(data.revenue.total)} ids={data.revenue.ids} sub={`${data.revenue.n} ${t("vehiclesCount")}`} />}
             </div>
 
@@ -209,6 +269,12 @@ export function Dashboard() {
                         </span>
                       ))}
                     </div>
+                    {s.byStage && REPAIR_STAGES.some((st) => s.byStage![st]?.n) && (
+                      <div className="stagechips" aria-label={t("v6DashBoard")}>
+                        {REPAIR_STAGES.map((st) => <span key={st} className={s.byStage![st].n ? "on" : ""} title={`${t(("v5Stage_" + st) as never)}: ${s.byStage![st].n}`}>{t(("v5Stage_" + st) as never)} <N v={s.byStage![st].n} ids={s.byStage![st].ids} label={`${s.name} · ${t(("v5Stage_" + st) as never)}`} /></span>)}
+                      </div>
+                    )}
+                    {s.repairsToday && s.repairsToday.capacity > 0 && <div style={{ fontSize: 13, marginTop: 6 }}>{t("v6DashToday")}: <b>{s.repairsToday.booked} / {s.repairsToday.capacity}</b></div>}
                     <div style={{ fontSize: 13, marginTop: 6, color: "var(--sub)" }}>
                       {t("arrivalsToday")}: <N v={s.arrivalsToday.n} ids={s.arrivalsToday.ids} label={`${s.name} · ${t("arrivalsToday")}`} />
                       {" · "}{t("departuresToday")}: <N v={s.departuresToday.n} ids={s.departuresToday.ids} label={`${s.name} · ${t("departuresToday")}`} />
@@ -218,10 +284,13 @@ export function Dashboard() {
               </div>
             </Section>
 
-            <Section title={t("dashTech")} right={f.can("repartition_interne.voir") ? (
+            <Section title={t("dashTech")} right={embedded ? (f.can("wochenbericht.voir") ? (
+              // in the new interface the weekly report (Verwaltung) replaces the old technician sheet and its Excel
+              <a className="chip on" href="#/admin/weekly" style={{ minHeight: 40, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>{t("v6MenuWeekly")}</a>
+            ) : undefined) : f.can("repartition_interne.voir") ? (
               <button className="chip on" disabled={busy} onClick={() => setChoose(true)} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📥 ${t("exportTech")}`}</button>
             ) : undefined}>
-              {f.can("repartition_interne.voir") && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t("exportTechHint")}</div>}
+              {!embedded && f.can("repartition_interne.voir") && <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{t("exportTechHint")}</div>}
               {data.technicians.length === 0 ? <div className="muted">{t("noneDash")}</div> : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -267,7 +336,7 @@ export function Dashboard() {
                 <details style={{ marginTop: 10 }}>
                   <summary style={{ cursor: "pointer" }}>{t("delayThresholds")}</summary>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-                    {STATUSES.filter((s) => s !== "rendu").map((s) => (
+                    {STATUSES.filter((s) => s !== "rendu" && s !== "refuse").map((s) => (
                       <label key={s} style={{ display: "flex", gap: 4, alignItems: "center" }}>{statusLabel(s)}
                         <input className="inp" type="number" min={0} max={365} style={{ width: 70, minHeight: 36 }} value={thr[s] ?? ""} placeholder="—"
                           onChange={(e) => { const next = { ...thr }; if (e.target.value === "") delete next[s]; else next[s] = Number(e.target.value); setThr(next); }}
@@ -278,6 +347,8 @@ export function Dashboard() {
                 </details>
               )}
             </Section>
+
+            <LinkTable table={data.linkTable} money={money} />
 
             {data.revenue && (
               <Section title={t("dashRevenue")}>
@@ -295,7 +366,12 @@ export function Dashboard() {
                 </div>
               </Section>
             )}
-            <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("vehicles")}</button>
+            {f.can("export.excel") && f.can("prix.voir") && f.can("repartition_interne.voir") && (
+              <Section title={t("finExportTitle")} right={<button className="chip on" disabled={busy} onClick={() => void exportFinished()} style={{ minHeight: 40 }}>{busy ? t("exportBusy") : `📊 ${t("finExportBtn")}`}</button>}>
+                <div className="muted" style={{ fontSize: 13 }}>{t("finExportHint")} ({range.from || range.to ? `${fmtDay(range.from)} – ${fmtDay(range.to)}` : t("periodAll")})</div>
+              </Section>
+            )}
+            <button className="chip" onClick={() => go({ page: "list" })}>‹ {t("back")}</button>
             {choose && (
               <Dialog title={t("exportTech")} onClose={() => setChoose(false)}>
                 <div className="muted" style={{ marginBottom: 8 }}>{t("exportChoose")} · {fmtDay(range.from)} – {fmtDay(range.to)}</div>

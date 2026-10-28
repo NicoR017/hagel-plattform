@@ -1,6 +1,6 @@
-import type { CalcVehicle, Land } from "@hagel/calc";
+import type { CalcMethodDef, CalcVehicle, Land } from "@hagel/calc";
 
-export type VehicleStatus = "arrive" | "besichtigung" | "attente" | "reparatur" | "fertig" | "rendu";
+export type VehicleStatus = "arrive" | "besichtigung" | "attente" | "reparatur" | "fertig" | "rendu" | "refuse";
 export type PhotoPhase = "besichtigung" | "reparatur" | "fertig";
 
 export interface ColibriInfo {
@@ -38,6 +38,12 @@ export interface DocVehicle extends CalcVehicle {
   stationName?: string;
   insurerName?: string;
   claimNumber?: string;
+  /** labels of the parts to replace (no prices): printed in a box on the KVA, in the text KVA and in the photo report header */
+  partsToReplace?: string[];
+  /** name of the calculation method, printed small on the KVA (the caller leaves out brand names the letterhead must not show) */
+  methodName?: string;
+  /** the calculation method frozen on the vehicle (spreadsheet totals use it, like the screen does) */
+  method?: CalcMethodDef | null;
 }
 
 export interface DocPhoto {
@@ -68,12 +74,31 @@ export interface KvaOptions {
   now?: Date;
 }
 
+/** Box in which a customer signature is drawn; points are numbers in this coordinate system (origin top-left, y downwards). */
+export const SIG_W = 600, SIG_H = 200;
+export type Stroke = [number, number][];
+export interface HandoverDoc {
+  kind: "drop_off" | "pick_up";
+  customerName: string; customerEmail?: string | null; remarks: string;
+  /** ISO instant (time on the device) */
+  signedAt: string;
+  /** name of the staff member who received the car / handed it back */
+  receivedBy: string;
+  stationName: string; stationAddress: string;
+  /** the signature */
+  strokes: Stroke[];
+}
+
 export interface RepairReportOptions {
   letterhead?: Letterhead | null;
   photos: DocPhoto[];
+  /** the estimate's amounts (net, VAT, gross), printed under the header: for insurers and body shops. Never the internal split. */
+  amounts?: { netto: number; mwst: number; brutto: number };
   now?: Date;
   /** IANA zone used to render `takenAt`; default Europe/Madrid (ES) / Europe/Berlin (DE) */
   timeZone?: string;
+  /** when given (even with both null), a last page with the customer's signatures is appended */
+  handovers?: { dropOff: HandoverDoc | null; pickUp: HandoverDoc | null };
 }
 
 export interface XlsxColumns { prices: boolean; internalSplit: boolean }

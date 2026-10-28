@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LANGS } from "./errors";
-import { PERMISSIONS, SCOPES, STATION_TYPES } from "./permissions";
+import { PERMISSIONS, PLACE_TYPES, ROLE_REPAIR_STEPS, SCOPES, STATION_TYPES } from "./permissions";
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 export const uuid = z.string().uuid();
@@ -10,6 +10,10 @@ export const roleInput = z.object({
   description: z.string().max(300).default(""),
   scope: z.enum(SCOPES),
   permissions: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length),
+  /** repair steps the role works on (technician / headliner accounts); empty = the rule of the technician record */
+  repair_steps: z.array(z.enum(ROLE_REPAIR_STEPS)).max(ROLE_REPAIR_STEPS.length).default([]),
+  /** replies to what this role's accounts send (reports, receipts) go to the contact address of the organisation; absent = unchanged */
+  reply_from_contact: z.boolean().optional(),
 });
 
 export const stationInput = z.object({
@@ -26,6 +30,22 @@ export const stationInput = z.object({
   report_emails: z.array(emailSchema).default([]),
   commission_mode: z.enum(["pct", "staffel"]).default("pct"),
   commission_pct: z.number().min(0).max(100).default(0),
+  /** repair places per working day (repair calendar) */
+  repairs_per_day: z.number().int().min(0).max(100).default(3),
+  /** automatic insurer addresses removed for this station */
+  excluded_insurer_emails: z.array(emailSchema).max(100).default([]),
+  /** PDR Citas location of this station (null = none) */
+  citas_location_id: z.string().trim().min(1).max(80).nullable().default(null),
+});
+
+/** Places (hall / yard): no commission, no Colibri customer, no report addresses. */
+export const placeInput = stationInput.extend({ type: z.enum(PLACE_TYPES) });
+/** Body shops (customers): no capacity, no repair places, no Citas location. */
+export const bodyshopInput = stationInput.omit({ type: true, capacite: true, repairs_per_day: true, citas_location_id: true, azure_location_aliases: true }).extend({
+  contact_name: z.string().trim().max(120).nullable().default(null),
+  contact_phone: z.string().trim().max(60).nullable().default(null),
+  /** tax number of the body shop (CIF / NIF); kept upper-case, no spaces */
+  cif: z.string().trim().max(20).transform((s) => s.replace(/\s+/g, "").toUpperCase()).nullable().default(null),
 });
 
 export const inviteInput = z.object({
@@ -37,6 +57,8 @@ export const inviteInput = z.object({
   scope_campaign_id: uuid.nullable().default(null),
   expires_at: z.string().datetime().nullable().default(null),
   language: z.enum(LANGS).default("de"),
+  /** only used with the Technician role: the invited person appears in the technicians list at once, as a PDR technician or a headliner */
+  technician_kind: z.enum(["pdr", "headliner"]).default("pdr"),
 });
 
 export const passwordSchema = z.string().min(10).max(200);
@@ -94,5 +116,9 @@ export const technicianInput = z.object({
   user_id: uuid.nullable().default(null),
   default_pct_pdr: z.number().min(0).max(100).default(50),
   default_pct_demontage: z.number().min(0).max(100).default(100),
+  /** pdr | headliner */
+  kind: z.enum(["pdr", "headliner"]).default("pdr"),
+  /** address of the weekly report; empty = the account's address */
+  email: z.string().trim().toLowerCase().email().max(200).nullable().default(null),
   active: z.boolean().default(true),
 });

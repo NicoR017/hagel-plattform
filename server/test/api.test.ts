@@ -98,11 +98,12 @@ describe("magic link login", () => {
 
 describe("invitation flow", () => {
   let chefEmail = "chef@example.test", chefToken = "", chefRefresh = "";
-  let talavera: string, madrid: string;
+  let talavera: string, madrid: string, carroId: string;
   beforeAll(async () => {
     const st = await call("GET", "/admin/stations", { token: superToken, org: orgES });
-    talavera = st.body.find((s: any) => s.type === "carrosserie").id;
-    madrid = st.body.find((s: any) => s.type === "hall").id;
+    talavera = st.body.find((s: any) => s.type === "hall" && s.name === "Nave Test A").id; // a PLACE
+    carroId = st.body.find((s: any) => s.type === "carrosserie").id; // the CUSTOMER
+    madrid = st.body.find((s: any) => s.type === "hall" && s.name === "Nave PDR Madrid").id;
   });
 
   it("invite -> link -> account -> lands with the right grant", async () => {
@@ -155,7 +156,7 @@ describe("invitation flow", () => {
   it("client / assurance roles require their scope target", async () => {
     const r = await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "carro@example.test", role_id: roleId.carrosserie } });
     expect(r.status).toBe(400);
-    const ok = await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "carro@example.test", role_id: roleId.carrosserie, scope_client_station_id: talavera } });
+    const ok = await call("POST", "/admin/invitations", { token: superToken, org: orgES, body: { email: "carro@example.test", role_id: roleId.carrosserie, scope_client_station_id: carroId } });
     expect(ok.status).toBe(201);
   });
 
@@ -262,10 +263,13 @@ describe("invitation flow", () => {
 });
 
 describe("roles", () => {
-  it("system roles are seeded per organisation and cannot be deleted", async () => {
+  it("system roles are seeded per organisation; they can be deleted like the others, except the last role that manages roles", async () => {
     const r = await call("GET", "/admin/roles", { token: superToken, org: orgES });
     expect(r.body.filter((x: any) => x.isSystem).length).toBe(7);
-    expect((await call("DELETE", `/admin/roles/${roleId.technicien}`, { token: superToken, org: orgES })).status).toBe(409);
+    expect((await call("DELETE", `/admin/roles/${roleId.org_admin}`, { token: superToken, org: orgES })).status).toBe(409); // the only role with roles.gerer
+    expect((await call("DELETE", `/admin/roles/${roleId.freelance}`, { token: superToken, org: orgES })).status).toBe(200); // nobody holds it
+    const after = await call("GET", "/admin/roles", { token: superToken, org: orgES });
+    expect(after.body.some((x: any) => x.id === roleId.freelance)).toBe(false);
   });
   it("roles of one org are not visible/usable in another", async () => {
     const de = await roleIdsOf(orgDE);
@@ -284,10 +288,15 @@ describe("roles", () => {
 
 describe("stations and tenants", () => {
   it("creates a carrosserie, a hall and deactivates instead of deleting", async () => {
-    const c = await call("POST", "/admin/stations", { token: superToken, org: orgDE, body: { type: "carrosserie", name: "Karosserie Müller", capacite: 25, commission_pct: 15, report_emails: ["a@b.de"] } });
+    const c = await call("POST", "/admin/bodyshops", { token: superToken, org: orgDE, body: { name: "Karosserie Müller", commission_pct: 15, report_emails: ["a@b.de"] } });
     expect(c.status).toBe(201);
-    expect(c.body.capacite).toBe(25);
-    const d = await call("POST", `/admin/stations/${c.body.id}/active`, { token: superToken, org: orgDE, body: { active: false } });
+    const bad = await call("POST", "/admin/stations", { token: superToken, org: orgDE, body: { type: "carrosserie", name: "Karosserie Müller 2" } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.code).toBe("use_bodyshops");
+    const h2 = await call("POST", "/admin/stations", { token: superToken, org: orgDE, body: { type: "hall", name: "Halle Müller", capacite: 25 } });
+    expect(h2.status).toBe(201);
+    expect(h2.body.capacite).toBe(25);
+    const d = await call("POST", `/admin/bodyshops/${c.body.id}/active`, { token: superToken, org: orgDE, body: { active: false } });
     expect(d.body.active).toBe(false);
   });
   it("tenant is required and restricted once the org has tenants assigned by the super-admin", async () => {
@@ -329,7 +338,8 @@ describe("audit log", () => {
 describe("vehicle visibility from real DB grants (move changes visibility)", () => {
   it("technician / chef / carrosserie see the right vehicles, and a move changes it", async () => {
     const st = (await call("GET", "/admin/stations", { token: superToken, org: orgES })).body as any[];
-    const tal = st.find((s) => s.type === "carrosserie").id, mad = st.find((s) => s.type === "hall").id;
+    const tal = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id, mad = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id;
+    const cus = st.find((s) => s.type === "carrosserie").id;
     const mk = async (email: string, body: Record<string, unknown>) => {
       await inviteAndAccept(superToken, orgES, email, body);
       const [u] = await h.db.select().from(users).where(eq(users.email, email));
@@ -337,10 +347,10 @@ describe("vehicle visibility from real DB grants (move changes visibility)", () 
     };
     const tech = await mk("tech@example.test", { role_id: roleId.technicien, station_id: tal });
     const chef = await mk("chef2@example.test", { role_id: roleId.chef_site, station_id: tal });
-    const carro = await mk("carro2@example.test", { role_id: roleId.carrosserie, scope_client_station_id: tal });
-    const [v] = await h.db.insert(vehicles).values({ id: crypto.randomUUID(), orgId: orgES, stationId: tal, clientStationId: tal }).returning();
+    const carro = await mk("carro2@example.test", { role_id: roleId.carrosserie, scope_client_station_id: cus });
+    const [v] = await h.db.insert(vehicles).values({ id: crypto.randomUUID(), orgId: orgES, stationId: tal, clientStationId: cus }).returning();
     await h.db.insert(vehicleAssignments).values({ vehicleId: v.id, userId: tech.id, type: "pdr" });
-    const ref = (stationId: string) => ({ id: v.id, orgId: orgES, stationId, clientStationId: tal, assigneeIds: [tech.id] });
+    const ref = (stationId: string) => ({ id: v.id, orgId: orgES, stationId, clientStationId: cus, assigneeIds: [tech.id] });
     const data = { kennzeichen: "1234ABC", netto: 1500, stundensatz: 69, techPct: 50, shares: { techEur: 600, demTechEur: 0, werkEur: 300, rest: 600 } };
 
     expect(can(tech, "vehicules.voir", ref(tal))).toBe(true);
@@ -438,7 +448,15 @@ describe("languages (DE / EN)", () => {
     await login("english@example.test");
     expect(mailer.last().subject).toBe("Anmeldung PDR Hagel");
     expect(mailer.last().text).toContain("nur einmal verwendbar");
-    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "fr" } })).status).toBe(400);
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "fr" } })).status).toBe(200);
+    await login("english@example.test");
+    expect(mailer.last().subject).toBe("Connexion à PDR Hagel");
+    expect(mailer.last().text).toContain("usage unique");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "es" } })).status).toBe(200);
+    await login("english@example.test");
+    expect(mailer.last().subject).toBe("Acceso a PDR Hagel");
+    expect(mailer.last().text).toContain("un solo uso");
+    expect((await call("PUT", "/me/language", { token: t.access_token, body: { language: "it" } })).status).toBe(400);
     expect((await call("PUT", "/me/language", { body: { language: "en" } })).status).toBe(401);
   });
   it("existing user granted access gets the notification in their language", async () => {

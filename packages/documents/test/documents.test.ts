@@ -6,9 +6,9 @@ import { unzipSync, strFromU8 } from "fflate";
 import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../../fixtures/golden_cases_v20.json";
 import {
-  appendScanPdf, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport,
+  appendScanPdf, buildFinishedWorkbook, finishedFileName, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport, generateHandoverReceipt,
   h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
-  type DocPhoto, type DocVehicle, type Letterhead,
+  type DocPhoto, type DocVehicle, type HandoverDoc, type Letterhead,
 } from "../src";
 
 type Case = { case: string; input: CalcVehicle & { id: string; land: "DE" | "ES" }; expected: Record<string, any> };
@@ -399,6 +399,31 @@ describe("technician worksheet workbook", () => {
   });
 });
 
+describe("finished vehicles workbook", () => {
+  const row = (plate: string, station: string, total: number) => ({ plate, model: "Seat Leon & Co", insurer: "Allianz", bodyshop: "Chapauto", station, end: "2026-10-10", total, technician: total * 0.3, headliner: 20, referrer: total * 0.1, pdr: total * 0.5 - 20 });
+  const data = { from: "2026-10-05", to: "2026-10-11", rows: [row("A-1", "Nave Madrid", 1000), row("B-2", "Nave Madrid", 500), row("C-3", "Nave Talavera", 200)] };
+  const open = (b: Uint8Array) => unzipSync(b);
+  it("the nine columns, one row per car, totals; one sheet per station when there are several", () => {
+    const f = open(buildFinishedWorkbook(data, "en"));
+    const names = [...strFromU8(f["xl/workbook.xml"]).matchAll(/<sheet name="([^"]*)"/g)].map((m) => m[1]);
+    expect(names).toEqual(["All", "Nave Madrid", "Nave Talavera"]);
+    const s = strFromU8(f["xl/worksheets/sheet1.xml"]);
+    for (const w of ["Vehicle registration number", "Vehicle make and model", "Insurance company", "Bodyshop", "Total price agreed after assessment", "Technician&apos;s share".replace("&apos;", "'"), "Headliner&apos;s share".replace("&apos;", "'"), "Referring bodyshop&apos;s share".replace("&apos;", "'"), "Remaining amount for PDR Team", "A-1", "B-2", "C-3", "Seat Leon &amp; Co", "Allianz", "Chapauto", "10.10.2026", "05.10.2026 – 11.10.2026"]) expect(s).toContain(w);
+    expect(s).toContain("<v>1700</v>"); // sum of the agreed prices
+    expect(strFromU8(f["xl/worksheets/sheet2.xml"])).not.toContain("C-3");
+    expect(strFromU8(f["xl/worksheets/sheet3.xml"])).toContain("C-3");
+  });
+  it("one station: one sheet; file name; the other languages", () => {
+    const one = open(buildFinishedWorkbook({ ...data, rows: data.rows.slice(0, 2) }, "de"));
+    expect(Object.keys(one).filter((k) => k.startsWith("xl/worksheets/")).length).toBe(1);
+    expect(strFromU8(one["xl/worksheets/sheet1.xml"])).toContain("Kennzeichen");
+    expect(strFromU8(open(buildFinishedWorkbook(data, "fr"))["xl/worksheets/sheet1.xml"])).toContain("Immatriculation");
+    expect(strFromU8(open(buildFinishedWorkbook(data, "es"))["xl/worksheets/sheet1.xml"])).toContain("Matrícula");
+    expect(finishedFileName("2026-10-05", "2026-10-11", "en")).toBe("Finished_vehicles_2026-10-05_2026-10-11.xlsx");
+    expect(finishedFileName(null, null)).toBe("Fertige_Fahrzeuge_alle_alle.xlsx");
+  });
+});
+
 describe("technician worksheet PDF", () => {
   const car = (i: number) => ({ plate: `MN-IS ${i}`, model: "Seat Leon", start: "2026-10-06", end: "2026-10-10", aw: 20.5, pdrEur: 800 + i, demEur: 0, eur: 800 + i });
   const sheet = (technician: string, n: number) => {
@@ -422,5 +447,169 @@ describe("technician worksheet PDF", () => {
     const none = await pdfTexts(await generateTechnicianWorksheets({ from: null, to: null, sheets: [] }, "de"));
     expect(none).toHaveLength(1); expect(none[0]).toContain("Keine Fahrzeuge in diesem Zeitraum.");
     expect(techPdfFileName("2026-10-05", "2026-10-11")).toBe("Technikerabrechnung_2026-10-05_2026-10-11.pdf");
+  });
+});
+
+describe("parts to replace and the method name", () => {
+  const parts = ["Zierleiste Dach li", "Antenne", "Clips Verkleidung"];
+  for (const name of ["case2_DE", "case2_ES"]) {
+    it(`${name}: a highlighted box names the parts (no price attached), the plain text lists them, the method name is small`, async () => {
+      const v = mkVehicle(name, { partsToReplace: parts, methodName: "Allianz Spezial" });
+      const c = computeVehicle(v), X = docText(v.land);
+      const txt = await allText(await generateKvaPdf(v, c, { now: NOW, letterhead: { name: "" } }));
+      expect(txt).toContain(X.teile);
+      for (const p of parts) expect(txt).toContain("- " + p);
+      expect(txt).toContain(`${X.methode}: Allianz Spezial`);
+      expect(txt).not.toContain("PDR Team");
+      // nothing but the label follows a part: no euro sign on those lines
+      for (const p of parts) expect(txt.split("\n").find((l) => l.includes("- " + p))).not.toMatch(/€|EUR/);
+      const plain = kvaPlainText(v, c);
+      expect(plain).toContain(X.teile);
+      for (const p of parts) expect(plain).toContain("- " + p);
+    });
+  }
+  it("without parts or method name nothing new appears (the old documents are unchanged)", async () => {
+    const v = mkVehicle("case2_DE"), c = computeVehicle(v), X = docText("DE");
+    const txt = await allText(await generateKvaPdf(v, c, { now: NOW }));
+    expect(txt).not.toContain(X.teile);
+    expect(txt).not.toContain(X.methode);
+    expect(kvaPlainText(v, c)).not.toContain(X.teile);
+    expect(kvaPlainText(mkVehicle("case2_DE", { partsToReplace: ["  ", ""] }), c)).not.toContain(X.teile); // blanks are ignored
+  });
+  it("a long list and a long label wrap and paginate without losing a line", async () => {
+    const many = Array.from({ length: 40 }, (_, i) => `Teil Nummer ${i + 1} ${"lang ".repeat(i % 4 === 0 ? 30 : 1)}`.trim());
+    for (const n of ["case1_DE", "case1_ES"]) {
+      const v = mkVehicle(n, { partsToReplace: many }), c = computeVehicle(v);
+      const bytes = await generateKvaPdf(v, c, { now: NOW });
+      const txt = await allText(bytes);
+      for (const i of [1, 17, 40]) expect(txt).toContain(`Teil Nummer ${i}`);
+      expect(txt).toContain(eur(c.brutto)); // totals still there
+    }
+  });
+  it("the repair photo report names the parts in its header", async () => {
+    const v = mkVehicle("case2_ES", { partsToReplace: parts }), X = docText("ES");
+    const txt = await allText(await generateRepairPhotoReport(v, { photos: photos(2), now: NOW }));
+    expect(txt).toContain(X.teile);
+    expect(txt).toContain("Antenne");
+  });
+  it("the mail text never mentions parts, amounts or the method", () => {
+    const m = mailTexts(mkVehicle("case2_DE", { partsToReplace: parts, methodName: "Allianz Spezial" }));
+    expect(m.subject + m.body).not.toMatch(/Antenne|Allianz Spezial/);
+  });
+});
+
+describe("repair photo report with the estimate's amounts", () => {
+  it("prints net / VAT / gross under the header when asked; never the internal split; absent otherwise", async () => {
+    for (const n of ["case1_DE", "case1_ES"]) {
+      const v = mkVehicle(n, { techName: "Hans Geheim", techPct: 37, werkPct: 13, werkMode: "pct", demTechName: "Dem Techniker", demTechPct: 90, demontage: true, demontageEur: 150 });
+      const c = computeVehicle(v), a = computeShares(v, c), X = docText(v.land);
+      const amounts = { netto: c.netto, mwst: c.brutto - c.netto, brutto: c.brutto };
+      const txt = await allText(await generateRepairPhotoReport(v, { photos: photos(1), now: NOW, amounts }));
+      expect(txt).toContain(`${X.netto}: ${eur(c.netto)}`);
+      expect(txt).toContain(`${X.brutto}: ${eur(c.brutto)}`);
+      expect(txt).not.toContain("Hans Geheim");
+      for (const s of [eur(a.techEur), eur(a.werkEur), eur(a.rest), eur(a.demTechEur)]) expect(txt).not.toContain(s);
+      expect(txt).not.toMatch(/Provision|comisi|Techniker|Bleibt/i);
+      const without = await allText(await generateRepairPhotoReport(v, { photos: photos(1), now: NOW }));
+      expect(without).not.toContain(X.netto + ":");
+    }
+  });
+});
+
+describe("handover receipt", () => {
+  const norm = (s: string) => s.replace(/\s+/g, " ");
+  const stroke = (n: number): [number, number][] => Array.from({ length: n }, (_, i) => [(i * 7) % 600, 100 + Math.round(80 * Math.sin(i / 5))]);
+  const mkH = (kind: "drop_off" | "pick_up", extra: Partial<HandoverDoc> = {}): HandoverDoc => ({
+    kind, customerName: "Ana López", customerEmail: "ana@example.com", remarks: "Kratzer links hinten", signedAt: "2026-10-19T08:15:00Z",
+    receivedBy: "Marta Ruiz", stationName: "Taller Sur", stationAddress: "Calle Mayor 1, Madrid", strokes: [stroke(40), [[300, 100]]], ...extra,
+  });
+  it("DE drop-off: one page, texts, sentence", async () => {
+    const v = mkVehicle("case1_DE", { insurerName: "Allianz", claimNumber: "SN-9" });
+    const bytes = await generateHandoverReceipt(v, mkH("drop_off"), { now: NOW });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+    const t = norm(await allText(bytes));
+    for (const s of ["Übergabebestätigung - Fahrzeugannahme", "1234-ABC", "Renault Clio", "VF1ABCDEF12345678", "SN-9", "Allianz", "Carrosserie Garcia", "Ana López", "ana@example.com",
+      "Taller Sur", "Calle Mayor 1, Madrid", "Kratzer links hinten", "Marta Ruiz", "19.10.2026, 10:15", "Kennzeichen", "FIN", "Schadennummer", "Versicherung", "Datum / Uhrzeit", "Kunde", "E-Mail",
+      "Ort", "Bemerkungen / Vorschäden", "Entgegengenommen von", "Unterschrift",
+      "Mit meiner Unterschrift bestätige ich, Ana López, dass ich das Fahrzeug am 19.10.2026 um 10:15 Uhr in Taller Sur abgegeben habe. Entgegengenommen von Marta Ruiz."])
+      expect(t).toContain(s);
+  });
+  it("DE pick-up variant", async () => {
+    const t = norm(await allText(await generateHandoverReceipt(mkVehicle("case1_DE"), mkH("pick_up"), { now: NOW })));
+    expect(t).toContain("Fahrzeugrückgabe");
+    expect(t).toContain("Übergeben von");
+    expect(t).toContain("zurückerhalten habe. Übergeben von Marta Ruiz.");
+  });
+  it("ES drop-off and pick-up with letterhead", async () => {
+    const v = mkVehicle("case1_ES");
+    const lh: Letterhead = { name: "Garage Z", footer: "Garage Z pie" };
+    const d = await generateHandoverReceipt(v, mkH("drop_off", { remarks: "" }), { now: NOW, letterhead: lh });
+    expect((await PDFDocument.load(d)).getPageCount()).toBe(1);
+    const t = norm(await allText(d));
+    for (const s of ["Comprobante de entrega - Recepción del vehículo", "Matrícula", "VIN", "Fecha / hora", "19/10/2026, 10:15", "Cliente", "Correo", "Lugar", "Observaciones / daños previos", "Recibido por", "Firma", "Garage Z",
+      "Con mi firma, Ana López, confirmo que he entregado el vehículo el 19/10/2026 a las 10:15 en Taller Sur. Recibido por Marta Ruiz."])
+      expect(t).toContain(s);
+    const p = norm(await allText(await generateHandoverReceipt(v, mkH("pick_up"), { now: NOW })));
+    expect(p).toContain("Devolución del vehículo");
+    expect(p).toContain("he recogido el vehículo");
+    expect(p).toContain("Entregado por Marta Ruiz.");
+  });
+  it("time zone option", async () => {
+    const t = await allText(await generateHandoverReceipt(mkVehicle("case1_DE"), mkH("drop_off"), { now: NOW, timeZone: "UTC" }));
+    expect(t).toContain("08:15");
+  });
+  it("long remarks wrap and stay on one page; unbroken words are cut", async () => {
+    const remarks = ("Beule an der Tür und viele weitere Vorschäden. ".repeat(12)) + "X".repeat(300);
+    const bytes = await generateHandoverReceipt(mkVehicle("case1_DE"), mkH("drop_off", { remarks }), { now: NOW });
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBe(1);
+    expect(await allText(bytes)).toContain("Beule an der Tür");
+    const c = doc.getPage(0).node.Contents() as any;
+    const refs = c instanceof PDFArray ? c.asArray() : [c];
+    let seen = 0;
+    for (const r of refs) {
+      const st = doc.context.lookup(r as any);
+      if (!(st instanceof PDFRawStream)) continue;
+      const s = Buffer.from(decodePDFRawStream(st).decode()).toString("latin1");
+      for (const m of s.matchAll(/1 0 0 1 ([\d.]+) ([\d.]+) Tm/g)) { seen++; expect(+m[1]).toBeLessThan(560); expect(+m[2]).toBeGreaterThan(0); }
+    }
+    expect(seen).toBeGreaterThan(10);
+  });
+  it("weird characters never throw", async () => {
+    const weird = "Ñandú Ü€ \"quote\" 'q' 😀   \t\n x";
+    const bytes = await generateHandoverReceipt(mkVehicle("case1_ES", { kunde: weird }), mkH("pick_up", { customerName: weird, remarks: weird, receivedBy: weird, stationName: weird, customerEmail: weird }), { now: NOW });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  });
+  it("empty strokes, many points, junk points", async () => {
+    const sets = [[], [[]], [stroke(5000)], [[[-5, 3], [9999, 1], [NaN, 2], [10, 10], [20, 20]], [[0, 0]]]] as [number, number][][][];
+    for (const strokes of sets)
+      expect((await PDFDocument.load(await generateHandoverReceipt(mkVehicle("case1_DE"), mkH("drop_off", { strokes }), { now: NOW }))).getPageCount()).toBe(1);
+  });
+  describe("photo report last page", () => {
+    const photo: DocPhoto = { label: "Foto", bytes: jpg, inPdf: false, phase: "besichtigung", takenAt: "2026-10-19T08:15:00Z" };
+    it("unchanged without handovers; one more page with them", async () => {
+      const v = mkVehicle("case1_DE");
+      const a = await generateRepairPhotoReport(v, { photos: [photo], now: NOW });
+      const b = await generateRepairPhotoReport(v, { photos: [photo], now: NOW, handovers: { dropOff: mkH("drop_off"), pickUp: null } });
+      const na = (await PDFDocument.load(a)).getPageCount();
+      expect((await PDFDocument.load(b)).getPageCount()).toBe(na + 1);
+      const pages = await pdfTexts(b);
+      const last = norm(pages[pages.length - 1]);
+      for (const s of ["Unterschriften des Kunden", "Fahrzeugannahme", "Fahrzeugrückgabe", "noch nicht unterschrieben", "Ana López", "Marta Ruiz", "19.10.2026, 10:15", "Kratzer links hinten"]) expect(last).toContain(s);
+      expect(norm(pages.slice(0, -1).join(" "))).not.toContain("Unterschriften des Kunden");
+      const c = await generateRepairPhotoReport(v, { photos: [photo], now: NOW, handovers: { dropOff: null, pickUp: null } });
+      expect((await PDFDocument.load(c)).getPageCount()).toBe(na + 1);
+      expect(norm((await pdfTexts(c)).pop()!).match(/noch nicht unterschrieben/g)).toHaveLength(2);
+    });
+    it("both signed (ES)", async () => {
+      const v = mkVehicle("case1_ES");
+      const b = await generateRepairPhotoReport(v, { photos: [photo], now: NOW, handovers: { dropOff: mkH("drop_off"), pickUp: mkH("pick_up", { customerName: "Beatriz Gil" }) } });
+      const pages = await pdfTexts(b);
+      const last = norm(pages[pages.length - 1]);
+      for (const s of ["Firmas del cliente", "Recepción del vehículo", "Devolución del vehículo", "Ana López", "Beatriz Gil"]) expect(last).toContain(s);
+      expect(last).not.toContain("aún sin firmar");
+      const n = await generateRepairPhotoReport(v, { photos: [photo], now: NOW, handovers: { dropOff: null, pickUp: null } });
+      expect(norm((await pdfTexts(n)).pop()!)).toContain("aún sin firmar");
+    });
   });
 });

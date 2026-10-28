@@ -17,6 +17,7 @@ const DE = {
   fotobericht: "Fotobericht Reparatur", fotoberichtDatei: "Fotobericht",
   phBesichtigung: "Besichtigung", phReparatur: "Während der Reparatur", phFertig: "Nach der Reparatur",
   separat: "separat",
+  teile: "Folgende Teile sind zu ersetzen:", methode: "Berechnungsmethode",
 };
 type TxtTable = typeof DE;
 const ES: TxtTable = {
@@ -32,9 +33,33 @@ const ES: TxtTable = {
   fotobericht: "Informe fotográfico de reparación", fotoberichtDatei: "Informe-fotografico",
   phBesichtigung: "Inspección", phReparatur: "Durante la reparación", phFertig: "Después de la reparación",
   separat: "aparte",
+  teile: "Piezas a sustituir:", methode: "Método de cálculo",
 };
 
+/** Strings of the handover receipt (customer signature at drop-off / pick-up) and of the last page of the photo report. */
+const HANDOVER_DE = {
+  titleDrop: "Übergabebestätigung – Fahrzeugannahme", titlePick: "Übergabebestätigung – Fahrzeugrückgabe",
+  vehicle: "Fahrzeug", plate: "Kennzeichen", vin: "FIN", claim: "Schadennummer", insurer: "Versicherung", bodyShop: "Carrosserie",
+  dateTime: "Datum / Uhrzeit", customer: "Kunde", email: "E-Mail", place: "Ort", remarks: "Bemerkungen / Vorschäden",
+  receivedByDrop: "Entgegengenommen von", receivedByPick: "Übergeben von", signature: "Unterschrift",
+  sentenceDrop: "Mit meiner Unterschrift bestätige ich, {name}, dass ich das Fahrzeug am {date} um {time} Uhr in {station} abgegeben habe. Entgegengenommen von {user}.",
+  sentencePick: "Mit meiner Unterschrift bestätige ich, {name}, dass ich das Fahrzeug am {date} um {time} Uhr in {station} zurückerhalten habe. Übergeben von {user}.",
+  signaturesTitle: "Unterschriften des Kunden", blockDrop: "Fahrzeugannahme", blockPick: "Fahrzeugrückgabe", unsigned: "noch nicht unterschrieben",
+};
+const HANDOVER_ES: typeof HANDOVER_DE = {
+  titleDrop: "Comprobante de entrega – Recepción del vehículo", titlePick: "Comprobante de entrega – Devolución del vehículo",
+  vehicle: "Vehículo", plate: "Matrícula", vin: "VIN", claim: "N.º de siniestro", insurer: "Aseguradora", bodyShop: "Taller",
+  dateTime: "Fecha / hora", customer: "Cliente", email: "Correo", place: "Lugar", remarks: "Observaciones / daños previos",
+  receivedByDrop: "Recibido por", receivedByPick: "Entregado por", signature: "Firma",
+  sentenceDrop: "Con mi firma, {name}, confirmo que he entregado el vehículo el {date} a las {time} en {station}. Recibido por {user}.",
+  sentencePick: "Con mi firma, {name}, confirmo que he recogido el vehículo el {date} a las {time} en {station}. Entregado por {user}.",
+  signaturesTitle: "Firmas del cliente", blockDrop: "Recepción del vehículo", blockPick: "Devolución del vehículo", unsigned: "aún sin firmar",
+};
+export const handoverText = (land: Land | undefined) => (land === "ES" ? HANDOVER_ES : HANDOVER_DE);
+
 export const TXT: Record<Land, TxtTable> = { DE, ES };
+/** cleaned list of the parts to replace */
+export const partsOf = (v: Pick<DocVehicle, "partsToReplace">): string[] => (v.partsToReplace ?? []).map((p) => String(p).trim()).filter(Boolean);
 export const docText = (land: Land | undefined): TxtTable => TXT[land === "ES" ? "ES" : "DE"];
 const TX = (v: DocVehicle) => docText(v.land);
 
@@ -60,10 +85,10 @@ export function plabel(land: Land | undefined, key: string): string {
 }
 
 export const STATUS_LABEL_DE: Record<VehicleStatus, string> = {
-  arrive: "Angekommen", besichtigung: "Besichtigung", attente: "Wartet", reparatur: "Reparatur", fertig: "Fertig", rendu: "Zurückgegeben",
+  arrive: "Angekommen", besichtigung: "Besichtigung", attente: "Wartet", reparatur: "Reparatur", fertig: "Fertig", rendu: "Zurückgegeben", refuse: "Abgelehnt",
 };
 export const STATUS_LABEL_ES: Record<VehicleStatus, string> = {
-  arrive: "Llegado", besichtigung: "Inspección", attente: "En espera", reparatur: "Reparación", fertig: "Terminado", rendu: "Entregado",
+  arrive: "Llegado", besichtigung: "Inspección", attente: "En espera", reparatur: "Reparación", fertig: "Terminado", rendu: "Entregado", refuse: "Rechazado",
 };
 export const statusLabel = (s: string | undefined, land: Land = "DE"): string => {
   const t: Record<string, string> = land === "ES" ? STATUS_LABEL_ES : STATUS_LABEL_DE;
@@ -150,5 +175,7 @@ export function kvaPlainText(v: DocVehicle, c: CalcResult, _shares?: SharesResul
       .concat([X.netto + " " + eur(c.netto) + "   " + X.mwst + "   " + X.brutto + " " + eur(c.brutto)]);
   }
   if ((v.notiz || "").trim()) L.push("", X.notiz + ": " + v.notiz);
+  const parts = partsOf(v);
+  if (parts.length) L.push("", X.teile, ...parts.map((p) => "- " + p));
   return L.join("\n");
 }

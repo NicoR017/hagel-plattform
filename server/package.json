@@ -9,6 +9,10 @@
     "start": "tsx src/index.ts",
     "worker": "tsx src/worker.ts",
     "migrate": "tsx src/migrate.ts",
+    "integrity": "tsx src/scripts/integrity.ts",
+    "freelancers": "tsx src/scripts/freelancers.ts",
+    "seed:staging": "tsx src/scripts/seed_staging.ts",
+    "v5:move-bodyshop-vehicles": "tsx src/scripts/v5_move_bodyshop_vehicles.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -16,6 +20,7 @@
     "@electric-sql/pglite": "^0.2.12",
     "@hagel/calc": "*",
     "@hagel/colibri": "*",
+    "@hagel/documents": "*",
     "@hagel/shared": "*",
     "@hono/node-server": "^1.13.0",
     "@hono/zod-validator": "^0.4.1",

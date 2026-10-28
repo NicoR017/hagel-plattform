@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { computeShares, computeVehicle, type CalcVehicle } from "@hagel/calc";
-import { STATUSES } from "@hagel/shared";
+import { REPAIR_STAGES, STATUSES, isOffRepairHold } from "@hagel/shared";
 import type { Db } from "./db";
 import { effectivePermissions, type Principal } from "./permissions";
-import { insurers, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
+import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
+import { loadMethodMap, methodOf } from "./methods";
 import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "./sync";
 
 export interface DashboardFilters { sites?: string[]; campaign?: string; client?: string; insurer?: string; from?: string; to?: string }
@@ -41,7 +42,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   for (const a of assign) assignees.set(a.vehicleId, [...(assignees.get(a.vehicleId) ?? []), a.userId]);
 
   const siteSet = f.sites?.length ? new Set(f.sites) : null;
-  const rows = allRows.filter((r) => {
+  const filteredRows = allRows.filter((r) => {
     const ref = refOf(r, assignees.get(r.id) ?? []);
     if (!effectivePermissions(u, ref).has("vehicules.voir")) return false;
     if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
@@ -50,6 +51,9 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     if (f.insurer && r.insurerId !== f.insurer) return false;
     return true;
   });
+  // refused cars (assessed, never repaired) are out of every figure: only their own counter below knows them
+  const rows = filteredRows.filter((r) => r.statut !== "refuse");
+  const refusedRows = filteredRows.filter((r) => r.statut === "refuse");
   const ids = rows.map((r) => r.id);
   const inPeriod = (d: Date | string) => {
     const day = typeof d === "string" ? d.slice(0, 10) : berlinDate(d);
@@ -64,6 +68,9 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   const allStations = await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(asc(stations.name));
   const stName = new Map(allStations.map((s) => [s.id, s.name]));
   const today = berlinDayStart(now);
+  const todayYmd = berlinDate(now);
+  const bookedToday = await db.select({ stationId: repairBookings.stationId }).from(repairBookings)
+    .where(and(eq(repairBookings.date, todayYmd), inArray(repairBookings.status, ["booked", "started"]), inArray(repairBookings.stationId, allStations.map((s) => s.id))));
 
   // ---- 1. sites
   const present = await occupancyOf(db, orgId, allStations.map((s) => s.id));
@@ -72,7 +79,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     .filter((s) => !siteSet || siteSet.has(s.id))
     .map((s) => {
       const here = rows.filter((r) => r.stationId === s.id);
-      const presentHere = here.filter((r) => r.statut !== "rendu");
+      const presentHere = here.filter((r) => r.statut === "reparatur"); // occupancy = cars in repair
       const byStatus: Record<string, { n: number; ids: string[] }> = Object.fromEntries(STATUSES.map((st) => [st, { n: 0, ids: [] as string[] }]));
       for (const r of here) { byStatus[r.statut].n++; byStatus[r.statut].ids.push(r.id); }
       const arrIds = new Set<string>(), depIds = new Set<string>();
@@ -87,8 +94,16 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
         if (r.createdAt >= today && (firstMove ? firstMove.fromStationId : r.stationId) === s.id) arrIds.add(r.id);
         if (r.stationId === s.id && (histBy.get(r.id) ?? []).some((h) => h.statut === "rendu" && h.at >= today)) depIds.add(r.id);
       }
+      // the repair board of the site: who stands in which column (cars in repair or finished, or in the repair flow; returned cars and cars on hold for an appointment / an approval leave)
+      const byStage: Record<string, { n: number; ids: string[] }> = Object.fromEntries(REPAIR_STAGES.map((x) => [x, { n: 0, ids: [] as string[] }]));
+      for (const r of here) {
+        if (r.statut === "rendu" || isOffRepairHold(r.statut, r.statutMotif) || !(r.repairStage != null || r.statut === "reparatur" || r.statut === "fertig")) continue;
+        const stage = (REPAIR_STAGES as readonly string[]).includes(r.repairStage ?? "") ? r.repairStage! : r.statut === "fertig" ? "finish" : "bereit";
+        byStage[stage].n++; byStage[stage].ids.push(r.id);
+      }
+      const booked = bookedToday.filter((b) => b.stationId === s.id).length;
       return {
-        id: s.id, name: s.name, type: s.type, capacity: s.capacite,
+        id: s.id, name: s.name, type: s.type, capacity: s.capacite, byStage, repairsToday: { booked, capacity: s.repairsPerDay },
         // the occupancy of the whole site (also vehicles this user may not see) is what matters for the capacity; the lists only hold visible ones
         present: present[s.id] ?? 0, visiblePresent: presentHere.length, presentIds: presentHere.map((r) => r.id),
         byStatus, arrivalsToday: { n: arrIds.size, ids: [...arrIds] }, departuresToday: { n: depIds.size, ids: [...depIds] },
@@ -149,6 +164,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
 
   // ---- 4. revenue (only vehicles whose prices this user may see)
   const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
   type Agg = { net: number; ids: string[] };
   const bump = (m: Map<string, Agg>, key: string, net: number, id: string) => { const a = m.get(key) ?? { net: 0, ids: [] }; a.net = round2(a.net + net); a.ids.push(id); m.set(key, a); };
   const bySite = new Map<string, Agg>(), byClient = new Map<string, Agg>(), byInsurer = new Map<string, Agg>(), byMonth = new Map<string, Agg>();
@@ -162,7 +178,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     const d = dateOf(r);
     if (!inPeriod(d)) continue;
     const flat = flatten(r, assignees.get(r.id) ?? [], null);
-    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     if (!calc.netto) continue;
     seen++; total = round2(total + calc.netto); revIds.push(r.id);
     bump(bySite, r.stationId ?? "", calc.netto, r.id); bump(byClient, r.clientStationId ?? "", calc.netto, r.id);
@@ -184,6 +200,51 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     split: split.seen ? { technicians: split.technicians, commissions: split.commissions, rest: split.rest, n: split.seen } : null,
   };
 
+  // ---- 5. body shops x insurers (v5 2.3): the vehicles of the period, grouped by (body shop, insurer) = the Colibri "business customer - insurance" link
+  type LinkRow = {
+    key: string; clientId: string | null; clientName: string; insurerId: string | null; insurerName: string;
+    vehicles: Ids; waiting: Ids; repair: Ids; finished: Ids; avgDays: number | null; net?: number;
+  };
+  type Ids = { n: number; ids: string[] };
+  const linkVehicles = rows.filter((r) => inPeriod(dateOf(r)));
+  const mayNet = (r: (typeof rows)[number]) => effectivePermissions(u, refOf(r, assignees.get(r.id) ?? [])).has("prix.voir");
+  const anyNet = linkVehicles.some(mayNet); // without the price permission the key `net` does not exist at all
+  const netOf = new Map<string, number>();
+  if (anyNet) {
+    for (const r of linkVehicles) {
+      if (!mayNet(r)) continue;
+      const calc = computeVehicle(flatten(r, assignees.get(r.id) ?? [], null) as unknown as CalcVehicle, calcs, methodOf(methods, r));
+      netOf.set(r.id, calc.netto || 0);
+    }
+  }
+  const groupLinks = (keyOf: (r: (typeof rows)[number]) => { clientId: string | null; insurerId: string | null }): LinkRow[] => {
+    const g = new Map<string, { clientId: string | null; insurerId: string | null; rs: typeof rows }>();
+    for (const r of linkVehicles) {
+      const k = keyOf(r), key = `${k.clientId ?? ""}|${k.insurerId ?? ""}`;
+      if (!g.has(key)) g.set(key, { ...k, rs: [] });
+      g.get(key)!.rs.push(r);
+    }
+    const ids = (xs: typeof rows): Ids => ({ n: xs.length, ids: xs.map((x) => x.id) });
+    return [...g].map(([key, { clientId, insurerId, rs }]) => {
+      const days = rs.flatMap((r) => {
+        const back = [...(histBy.get(r.id) ?? [])].reverse().find((h) => h.statut === "rendu");
+        return back ? [(back.at.getTime() - r.createdAt.getTime()) / DAY] : [];
+      });
+      const row: LinkRow = {
+        key, clientId, clientName: clientId ? stName.get(clientId) ?? "" : "", insurerId, insurerName: insurerId ? insName.get(insurerId) ?? "" : "",
+        vehicles: ids(rs), waiting: ids(rs.filter((r) => r.statut === "arrive" || r.statut === "besichtigung" || r.statut === "attente")),
+        repair: ids(rs.filter((r) => r.statut === "reparatur")), finished: ids(rs.filter((r) => r.statut === "fertig" || r.statut === "rendu")), avgDays: avg(days),
+      };
+      if (anyNet) row.net = round2(rs.reduce((a, r) => a + (netOf.get(r.id) ?? 0), 0));
+      return row;
+    }).sort((a, b) => b.vehicles.n - a.vehicles.n || (a.clientName + a.insurerName).localeCompare(b.clientName + b.insurerName));
+  };
+  const linkTable = {
+    byLink: groupLinks((r) => ({ clientId: r.clientStationId, insurerId: r.insurerId })),
+    byClient: groupLinks((r) => ({ clientId: r.clientStationId, insurerId: null })),
+    byInsurer: groupLinks((r) => ({ clientId: null, insurerId: r.insurerId })),
+  };
+
   // cars that became "fertig" (or were handed back directly) in the period
   const finishedIds = rows.filter((r) => {
     const e = (histBy.get(r.id) ?? []).find((h) => h.statut === "fertig" || h.statut === "rendu");
@@ -197,6 +258,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     departuresToday: { n: depIds.length, ids: depIds },
     delayed: { n: delayed.length, ids: delayed.map((d) => d.id) },
     finished: { n: finishedIds.length, ids: finishedIds },
+    refused: (() => { const ids = refusedRows.filter((r) => inPeriod(r.statutDepuis ?? r.updatedAt)).map((r) => r.id); return { n: ids.length, ids }; })(),
     fullSites: sitesOut.filter((x) => x.capacity > 0 && x.present >= x.capacity).map((x) => ({ id: x.id, name: x.name, present: x.present, capacity: x.capacity })),
   };
 
@@ -204,7 +266,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     generatedAt: now.toISOString(), vehicles: rows.length, delayDays, kpis,
     sites: sitesOut,
     durations: { avgArrivalToReturnedDays: avg(toReturned), avgRepairDays: avg(repairTimes), returnedSamples: toReturned.length, repairSamples: repairTimes.length },
-    delayed, hold, technicians: techOut, revenue,
+    delayed, hold, technicians: techOut, revenue, linkTable,
   };
 }
 
@@ -221,6 +283,7 @@ export interface TechSheet { technician: string; sites: string[]; vehicles: Tech
 export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; sheets: TechSheet[] }> {
   const settings = await loadOrgSettings(db, orgId);
   const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
   const allRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt)));
   const assign = await db.select().from(vehicleAssignments).where(inArray(vehicleAssignments.vehicleId, db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.orgId, orgId))));
   const assignees = new Map<string, string[]>();
@@ -228,7 +291,7 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
   const siteSet = f.sites?.length ? new Set(f.sites) : null;
   const rows = allRows.filter((r) => {
     const eff = effectivePermissions(u, refOf(r, assignees.get(r.id) ?? []));
-    if (!eff.has("vehicules.voir") || !eff.has("repartition_interne.voir")) return false;
+    if (r.statut === "refuse" || !eff.has("vehicules.voir") || !eff.has("repartition_interne.voir")) return false;
     if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
     return (!f.campaign || r.campaignId === f.campaign) && (!f.client || r.clientStationId === f.client) && (!f.insurer || r.insurerId === f.insurer);
   });
@@ -252,7 +315,7 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
     if ((f.from && endDay < f.from) || (f.to && endDay > f.to)) continue;
     const start = h.find((x) => x.statut === "reparatur");
     const flat = flatten(r, assignees.get(r.id) ?? [], null);
-    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     const sh = computeShares(flat as never, calc);
     const firstAssignee = (assignees.get(r.id) ?? []).map(personName).find(Boolean) ?? "";
     const pdrName = (sh.techName || firstAssignee || "—").trim();
@@ -276,4 +339,57 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
     return t;
   }).sort((a, b) => a.technician.localeCompare(b.technician, "de"));
   return { from: f.from ?? null, to: f.to ?? null, sheets };
+}
+
+// ------------------------------------------------------------------ export of the finished / returned cars
+
+export interface FinishedExportRow { id: string; plate: string; model: string; insurer: string; bodyshop: string; station: string; end: string; total: number; technician: number; headliner: number; referrer: number; pdr: number }
+
+/**
+ * The cars that are "fertig" or "rendu" right now and became finished in [from, to] (date of the first "fertig", else "rendu" entry in the status
+ * history), with the agreed net price and its split: technician, headliner (de-/re-mounting), referring body shop (commission) and the rest for
+ * PDR Team. Only cars where `u` may see prices, the internal split and export to Excel; nothing else is ever returned.
+ */
+export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; rows: FinishedExportRow[] }> {
+  const settings = await loadOrgSettings(db, orgId);
+  const calcs = calcSettings(settings);
+  const methods = await loadMethodMap(db, orgId);
+  const allRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), inArray(vehicles.statut, ["fertig", "rendu"])));
+  const assign = allRows.length ? await db.select().from(vehicleAssignments).where(inArray(vehicleAssignments.vehicleId, allRows.map((r) => r.id))) : [];
+  const assignees = new Map<string, string[]>();
+  for (const a of assign) assignees.set(a.vehicleId, [...(assignees.get(a.vehicleId) ?? []), a.userId]);
+  const siteSet = f.sites?.length ? new Set(f.sites) : null;
+  const rows = allRows.filter((r) => {
+    const eff = effectivePermissions(u, refOf(r, assignees.get(r.id) ?? []));
+    if (!eff.has("vehicules.voir") || !eff.has("prix.voir") || !eff.has("repartition_interne.voir") || !eff.has("export.excel")) return false;
+    if (siteSet && !(r.stationId && siteSet.has(r.stationId))) return false;
+    return (!f.campaign || r.campaignId === f.campaign) && (!f.client || r.clientStationId === f.client) && (!f.insurer || r.insurerId === f.insurer);
+  });
+  const ids = rows.map((r) => r.id);
+  const history = ids.length ? await db.select().from(vehicleStatusHistory).where(inArray(vehicleStatusHistory.vehicleId, ids)).orderBy(asc(vehicleStatusHistory.at)) : [];
+  const histBy = new Map<string, typeof history>();
+  for (const h of history) histBy.set(h.vehicleId, [...(histBy.get(h.vehicleId) ?? []), h]);
+  const stName = new Map((await db.select().from(stations).where(eq(stations.orgId, orgId))).map((s) => [s.id, s.name]));
+  const insName = new Map((await db.select().from(insurers).where(eq(insurers.orgId, orgId))).map((i) => [i.id, i.name]));
+
+  const out: FinishedExportRow[] = [];
+  for (const r of rows) {
+    const h = histBy.get(r.id) ?? [];
+    const at = h.find((x) => x.statut === "fertig")?.at ?? h.find((x) => x.statut === "rendu")?.at ?? r.updatedAt;
+    const end = berlinDate(at);
+    if ((f.from && end < f.from) || (f.to && end > f.to)) continue;
+    const flat = flatten(r, assignees.get(r.id) ?? [], null);
+    const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
+    const sh = computeShares(flat as never, calc);
+    const header = r.header as Record<string, unknown>;
+    out.push({
+      id: r.id, plate: String(header.kennzeichen ?? ""), model: String(header.modell ?? ""),
+      insurer: r.insurerId ? insName.get(r.insurerId) ?? "" : "",
+      bodyshop: (r.clientStationId ? stName.get(r.clientStationId) : "") || String(header.kunde ?? ""),
+      station: r.stationId ? stName.get(r.stationId) ?? "" : "", end,
+      total: round2(calc.netto), technician: round2(sh.techEur), headliner: round2(sh.demTechEur), referrer: round2(sh.werkEur), pdr: round2(sh.rest),
+    });
+  }
+  out.sort((a, b) => a.station.localeCompare(b.station, "de") || a.end.localeCompare(b.end) || a.plate.localeCompare(b.plate));
+  return { from: f.from ?? null, to: f.to ?? null, rows: out };
 }

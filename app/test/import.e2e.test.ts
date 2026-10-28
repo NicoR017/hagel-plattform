@@ -13,7 +13,7 @@ import { findPlate, findVIN } from "../src/field/ocrText";
 import { uuid5 } from "../src/sync/uuid";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
-let c: Ctx, A: string, B: string, n = 0;
+let c: Ctx, A: string, B: string, P: string, n = 0;
 interface Phone { db: LocalDb; engine: SyncEngine; ctx: MutCtx; token: string }
 function phone(token: string): Phone {
   const db = new LocalDb(`imp-${++n}`);
@@ -31,10 +31,11 @@ const tokens: Record<string, string> = {};
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; B = st.find((s) => s.type === "hall").id;
+  A = st.find((s) => s.type === "carrosserie").id; // the customer
+  P = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; B = st.find((s) => s.type === "hall" && s.name === "Nave PDR Madrid").id; // places
   tokens.admin = await inviteAndAccept(c, c.orgES, "admin@example.test", { role_id: c.roleId.org_admin });
   tokens.assessor = await inviteAndAccept(c, c.orgES, "assessor@example.test", { role_id: c.roleId.aufnehmer });
-  tokens.tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: A });
+  tokens.tech = await inviteAndAccept(c, c.orgES, "tech@example.test", { role_id: c.roleId.technicien, station_id: P });
 });
 afterAll(async () => { await c.h.close(); });
 
@@ -46,7 +47,7 @@ describe("Colibri import (real PDF, 618 dents)", () => {
     const bytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     const pa = phone(tokens.assessor), pb = phone(tokens.admin);
     await sync(pa); await sync(pb);
-    const id = await createVehicle(pa.ctx, { stationId: A });
+    const id = await createVehicle(pa.ctx, { stationId: P, clientStationId: A });
     const res = await readColibriFile(bytes);
     expect(res).toBeTruthy();
     const v = (await pa.db.vehicles.get(id))!;
@@ -157,7 +158,7 @@ describe("old backup import", () => {
     await sync(p);
     const small: OldBackup = { ...backup, vehicles: [{ ...backup.vehicles[1], id: "zz-tech" }], images: {}, scans: {} };
     const plan = await planImport(small, await p.db.getMeta(`refs:${c.orgES}`), new Set(), { rateDE: 83, rateES: 69, defaultTeiler: 10, vatDE: 0.19, esMatrix: (await import("@hagel/calc")).ES_MATRIX_DEFAULT });
-    await runImport(p.ctx, small, plan, { stationId: A, fallbackClientId: A, replaceNewer: false }, false);
+    await runImport(p.ctx, small, plan, { stationId: P, fallbackClientId: A, replaceNewer: false }, false);
     await sync(p);
     expect((await p.db.vehicles.toArray()).some((v) => v.kennzeichen === "PLATE 1")).toBe(false);
     expect((await p.db.issues.toArray()).some((i) => i.opType === "vehicle.create")).toBe(true);
@@ -185,7 +186,7 @@ describe("export in the old format", () => {
     const pa = phone(tokens.assessor), pt = phone(tokens.tech);
     await sync(pa);
     const refsA: any = await pa.db.getMeta(`refs:${c.orgES}`);
-    const id = (await pa.db.vehicles.toArray()).find((v) => v.stationId === A)!.id;
+    const id = (await pa.db.vehicles.toArray()).find((v) => v.stationId === P)!.id;
     const techId = (await call(c, "GET", "/admin/users", { token: c.superToken, org: c.orgES })).body.find((u: any) => u.email === "tech@example.test").id;
     const { assignVehicle } = await import("../src/sync/mutations");
     await assignVehicle(pa.ctx, id, "pdr", [techId]);

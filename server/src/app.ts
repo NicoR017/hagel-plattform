@@ -1,9 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, isNotNull, ne } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import {
-  acceptInviteInput, assignmentInput, inviteInput, passwordLoginInput, setPasswordInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
+  acceptInviteInput, assignmentInput, bodyshopInput, inviteInput, placeInput, passwordLoginInput, setPasswordInput, loginRequestInput, loginVerifyInput, refreshInput, roleInput, stationInput,
   PERMISSIONS, SYSTEM_ROLES, type Permission, errorMessage, pickLang, languageInput, settingsInput,
 } from "@hagel/shared";
 import { audit } from "./audit";
@@ -15,26 +15,33 @@ import type { Db } from "./db";
 import type { Mailer } from "./email";
 import type { Env } from "./env";
 import { Hub } from "./hub";
-import { canOrg, isMemberOfOrg, type Principal } from "./permissions";
+import { canOrg, hasOrgPermission, isMemberOfOrg, type Principal } from "./permissions";
 import { syncRoutes } from "./routes_sync";
+import { repairRoutes } from "./routes_repair";
+import { weeklyRoutes } from "./weekly";
+import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./routes_master";
 import { azureRoutes } from "./routes_azure";
+import { citasRoutes } from "./routes_citas";
+import { insurerReportRoutes } from "./routes_insurer_reports";
+import type { CitasSource } from "./citas";
 import type { AzureSource } from "./azure";
 import { seedCompanies } from "./companies_seed";
 import { MemoryStorage, type Storage } from "./storage";
 import type { FetchLike } from "./ocr";
 import { loadPrincipal } from "./principal";
-import { buildDashboard, buildTechSheets } from "./dashboard";
+import { buildDashboard, buildFinishedExport, buildTechSheets } from "./dashboard";
+import { handoverRoutes } from "./handover";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "./sync";
 import {
-  auditLog, insurers, invitations, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, users,
+  auditLog, campaignStations, citasLinks, insurers, invitations, repairBookings, stationInsurers, vehicles, memberships, orgSettings, orgTenants, organizations, roleAssignments, roles, sessions, stations, technicians, users,
 } from "./schema";
 
 export interface Limits { requestLink: number; verify: number; accept: number; refresh: number; login: number }
 export const DEFAULT_LIMITS: Limits = { requestLink: 5, verify: 20, accept: 20, refresh: 60, login: 60 };
 export interface AppDeps {
   db: Db; cfg: Config; mailer: Mailer; limits?: Partial<Limits>;
-  storage?: Storage; hub?: Hub; az?: AzureSource | null; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
+  storage?: Storage; hub?: Hub; az?: AzureSource | null; citas?: CitasSource | null; citasNow?: () => number; ocr?: { apiKey: string | null; model: string; fetch: FetchLike };
 }
 
 /** Tiny in-memory fixed-window limiter (single instance). Replace with Redis if the API is scaled out. */
@@ -56,7 +63,7 @@ function rateLimit(max: number, windowMs: number, keyOf: (c: Context) => string)
  */
 const ip = (c: Context) => c.req.header("x-real-ip")?.trim() || c.req.header("x-forwarded-for")?.split(",").pop()?.trim() || "local";
 
-export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, ocr }: AppDeps) {
+export function createApp({ db, cfg, mailer, limits: lim, storage = new MemoryStorage(), hub = new Hub(), az = null, citas = null, citasNow, ocr }: AppDeps) {
   const L = { ...DEFAULT_LIMITS, ...lim };
   const app = new Hono<Env>();
 
@@ -75,6 +82,9 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     await db.execute(sql`select 1`);
     return c.json({ ok: true });
   });
+
+  /** Public: which environment this is (banner) and whether the new UI is the default. No secrets. */
+  app.get("/config", (c) => c.json({ appEnv: cfg.appEnv, uiV3Default: cfg.uiV3Default }));
 
   // ---------- auth (public) ----------
   const auth = new Hono<Env>();
@@ -211,10 +221,26 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     }));
   });
 
+  app.get("/dashboard/finished-export", needAuth, needOrg, mayDashboard, async (c) => {
+    const q = c.req.query();
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const uuidOrUndef = (x?: string) => (x && z.string().uuid().safeParse(x).success ? x : undefined);
+    return c.json(await buildFinishedExport(db, c.get("principal"), c.get("orgId"), {
+      sites: (q.sites ?? "").split(",").filter((x) => z.string().uuid().safeParse(x).success),
+      campaign: uuidOrUndef(q.campaign), client: uuidOrUndef(q.client), insurer: uuidOrUndef(q.insurer),
+      from: q.from && day.test(q.from) ? q.from : undefined, to: q.to && day.test(q.to) ? q.to : undefined,
+    }));
+  });
+
   // ---------- sync, files, OCR ----------
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
+  app.route("/", handoverRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
+  app.route("/", repairRoutes({ db, storage, mailer, needAuth, needOrg }));
+  app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
+  app.route("/", insurerReportRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
+  app.route("/", citasRoutes({ db, hub, storage, az, citas, needAuth, needOrg, validationHook, now: citasNow }));
 
   // ---------- admin ----------
   const admin = new Hono<Env>();
@@ -226,9 +252,18 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const b = c.req.valid("json");
     const [o] = await db.insert(organizations).values(b).returning();
     await seedRoles(db, o.id);
+    await seedMethods(db, o.id);
     await seedCompanies(db, storage, o.id);
     await audit(db, { orgId: o.id, userId: c.get("principal").id, action: "create", entity: "organization", entityId: o.id, after: o });
     return c.json(o, 201);
+  });
+  admin.put("/orgs/:id/contact", requireSuper, zValidator("json", z.object({ contact_email: z.string().trim().toLowerCase().email().max(200).nullable() }), validationHook), async (c) => {
+    const orgId = c.req.param("id") ?? "";
+    const [o0] = await db.select().from(organizations).where(eq(organizations.id, orgId));
+    if (!o0) throw new HttpError(400, "invalid_input");
+    const [o] = await db.update(organizations).set({ contactEmail: c.req.valid("json").contact_email, updatedAt: new Date() }).where(eq(organizations.id, orgId)).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "organization", entityId: orgId, before: { contactEmail: o0.contactEmail }, after: { contactEmail: o.contactEmail } });
+    return c.json({ contactEmail: o.contactEmail });
   });
   admin.get("/orgs/:id/tenants", requireSuper, async (c) => c.json((await db.select().from(orgTenants).where(eq(orgTenants.orgId, c.req.param("id")))).map((t) => t.azureTenant)));
   admin.put("/orgs/:id/tenants", requireSuper, zValidator("json", z.object({ tenants: z.array(z.string().trim().min(1).max(120)).max(200) }), validationHook), async (c) => {
@@ -250,15 +285,15 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   org.get("/users", require("utilisateurs.gerer"), async (c) => {
     const orgId = c.get("orgId");
     const rows = await db
-      .select({ u: users, a: roleAssignments, r: roles })
+      .select({ u: users, a: roleAssignments, r: roles, m: memberships.replyMode })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .leftJoin(roleAssignments, and(eq(roleAssignments.userId, users.id), eq(roleAssignments.orgId, orgId)))
       .leftJoin(roles, eq(roles.id, roleAssignments.roleId))
       .where(eq(memberships.orgId, orgId));
-    const byUser = new Map<string, { id: string; email: string; name: string; status: string; isSuperadmin: boolean; assignments: unknown[] }>();
-    for (const { u, a, r } of rows) {
-      const e = byUser.get(u.id) ?? { id: u.id, email: u.email, name: u.name, status: u.status, isSuperadmin: u.isSuperadmin, assignments: [] };
+    const byUser = new Map<string, { id: string; email: string; name: string; status: string; isSuperadmin: boolean; replyMode: string | null; assignments: unknown[] }>();
+    for (const { u, a, r, m } of rows) {
+      const e = byUser.get(u.id) ?? { id: u.id, email: u.email, name: u.name, status: u.status, isSuperadmin: u.isSuperadmin, replyMode: m, assignments: [] };
       if (a && r) e.assignments.push({ id: a.id, stationId: a.stationId, roleId: r.id, roleName: r.name, roleKey: r.key, scope: r.scope, expiresAt: a.expiresAt, scopeClientStationId: a.scopeClientStationId, scopeInsurerId: a.scopeInsurerId, scopeCampaignId: a.scopeCampaignId });
       byUser.set(u.id, e);
     }
@@ -279,7 +314,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const r = await inviteUser(db, cfg, mailer, {
       orgId, email: b.email, roleId: b.role_id, stationId: b.station_id, scopeClientStationId: b.scope_client_station_id,
       scopeInsurerId: b.scope_insurer_id, scopeCampaignId: b.scope_campaign_id,
-      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id, language: b.language,
+      assignmentExpiresAt: b.expires_at ? new Date(b.expires_at) : null, invitedBy: p.id, language: b.language, technicianKind: b.technician_kind,
     });
     return c.json(r, 201);
   });
@@ -312,6 +347,49 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   };
   org.post("/users/:id/deactivate", require("utilisateurs.gerer"), setStatus("disabled"));
   org.post("/users/:id/reactivate", require("utilisateurs.gerer"), setStatus("active"));
+  org.put("/users/:id", require("utilisateurs.gerer"), zValidator("json", z.object({ name: z.string().trim().min(1).max(120).optional(), language: languageInput.shape.language.optional(), reply_mode: z.enum(["contact", "own"]).nullable().optional() }), validationHook), async (c) => {
+    const orgId = c.get("orgId"), b = c.req.valid("json");
+    const u = await memberOrFail(c.req.param("id") ?? "", orgId);
+    if (u.status === "deleted") throw new HttpError(404, "user_not_found");
+    const set: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+    if (b.name !== undefined) set.name = b.name;
+    if (b.language !== undefined) set.language = b.language;
+    const [n] = await db.update(users).set(set).where(eq(users.id, u.id)).returning();
+    let replyChange: { before: string | null; after: string | null } | null = null;
+    if (b.reply_mode !== undefined) {
+      const [m0] = await db.select({ mode: memberships.replyMode }).from(memberships).where(and(eq(memberships.userId, u.id), eq(memberships.orgId, orgId)));
+      if ((m0?.mode ?? null) !== b.reply_mode) {
+        await db.update(memberships).set({ replyMode: b.reply_mode }).where(and(eq(memberships.userId, u.id), eq(memberships.orgId, orgId)));
+        replyChange = { before: m0?.mode ?? null, after: b.reply_mode };
+      }
+    }
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "user", entityId: u.id, before: { name: u.name, language: u.language, ...(replyChange ? { replyMode: replyChange.before } : {}) }, after: { name: n.name, language: n.language, ...(replyChange ? { replyMode: replyChange.after } : {}) } });
+    return c.json({ ok: true });
+  });
+  /**
+   * Delete a user: gone from the organisation (no more roles, no login, sessions revoked, pending invitations withdrawn). The row stays
+   * (anonymised when it was the user's only organisation) because vehicles, history and the audit log point at it: they then read "Gelöschter Benutzer".
+   */
+  org.delete("/users/:id", require("utilisateurs.gerer"), async (c) => {
+    const orgId = c.get("orgId"), p = c.get("principal");
+    const u = await memberOrFail(c.req.param("id") ?? "", orgId);
+    if (u.isSuperadmin) throw new HttpError(403, "superadmin_undeletable");
+    if (u.id === p.id) throw new HttpError(403, "self_delete");
+    const held = await db.select({ r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId)).where(and(eq(roleAssignments.userId, u.id), eq(roleAssignments.orgId, orgId)));
+    for (const { r } of held) assertCanGrant(p, orgId, r.permissions); // you cannot remove someone who holds more than you could give
+    const email = u.email;
+    await db.transaction(async (tx) => {
+      await tx.delete(roleAssignments).where(and(eq(roleAssignments.userId, u.id), eq(roleAssignments.orgId, orgId)));
+      await tx.delete(memberships).where(and(eq(memberships.userId, u.id), eq(memberships.orgId, orgId)));
+      await tx.delete(invitations).where(and(eq(invitations.orgId, orgId), eq(invitations.email, email), sql`${invitations.usedAt} is null`));
+      await tx.update(technicians).set({ userId: null, updatedAt: new Date() }).where(and(eq(technicians.orgId, orgId), eq(technicians.userId, u.id)));
+      const [other] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberships).where(eq(memberships.userId, u.id));
+      if (!other.n) await tx.update(users).set({ status: "deleted", email: `deleted-${u.id}@deleted.invalid`, name: "Gelöschter Benutzer", passwordHash: null, updatedAt: new Date() }).where(eq(users.id, u.id));
+    });
+    await revokeAllSessions(db, u.id);
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: "user", entityId: u.id, before: { email, name: u.name, roles: held.map((x) => x.r.name) } });
+    return c.json({ ok: true });
+  });
   org.post("/users/:id/revoke-sessions", require("utilisateurs.gerer"), async (c) => {
     const u = await memberOrFail(c.req.param("id"), c.get("orgId"));
     await revokeAllSessions(db, u.id);
@@ -335,6 +413,33 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     await audit(db, { orgId, userId: p.id, action: "assign_role", entity: "role_assignment", entityId: a.id, after: a });
     return c.json(a, 201);
   });
+  // change the role and/or the station of an assignment. The station is a place (hall), never a body shop: with a place the account sees every
+  // car that is at this place whatever its body shop; no place = all places.
+  org.put("/assignments/:id", require("utilisateurs.gerer"), zValidator("json", z.object({
+    role_id: z.string().uuid(), station_id: z.string().uuid().nullable().default(null),
+    scope_client_station_id: z.string().uuid().nullable().optional(), scope_insurer_id: z.string().uuid().nullable().optional(), scope_campaign_id: z.string().uuid().nullable().optional(),
+  }), validationHook), async (c) => {
+    const b = c.req.valid("json"), orgId = c.get("orgId"), p = c.get("principal");
+    const [cur] = await db.select({ a: roleAssignments, r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+      .where(and(eq(roleAssignments.id, c.req.param("id") ?? ""), eq(roleAssignments.orgId, orgId)));
+    if (!cur) throw new HttpError(404, "assignment_not_found");
+    const [role] = await db.select().from(roles).where(and(eq(roles.id, b.role_id), eq(roles.orgId, orgId)));
+    if (!role) throw new HttpError(404, "role_not_found");
+    assertCanGrant(p, orgId, cur.r.permissions); // you cannot change what you could not remove...
+    assertCanGrant(p, orgId, role.permissions); // ...nor give a role you could not give
+    if (b.station_id) await assertStationInOrg(b.station_id, orgId);
+    const scopes = {
+      scope_client_station_id: b.scope_client_station_id === undefined ? cur.a.scopeClientStationId : b.scope_client_station_id,
+      scope_insurer_id: b.scope_insurer_id === undefined ? cur.a.scopeInsurerId : b.scope_insurer_id,
+      scope_campaign_id: b.scope_campaign_id === undefined ? cur.a.scopeCampaignId : b.scope_campaign_id,
+    };
+    await assertScopeFields(role.scope, scopes, orgId);
+    const [a] = await db.update(roleAssignments).set({
+      roleId: role.id, stationId: b.station_id, scopeClientStationId: scopes.scope_client_station_id, scopeInsurerId: scopes.scope_insurer_id, scopeCampaignId: scopes.scope_campaign_id,
+    }).where(eq(roleAssignments.id, cur.a.id)).returning();
+    await audit(db, { orgId, userId: p.id, action: "update_assignment", entity: "role_assignment", entityId: a.id, before: cur.a, after: a });
+    return c.json(a);
+  });
   org.delete("/assignments/:id", require("utilisateurs.gerer"), async (c) => {
     const orgId = c.get("orgId");
     const [a] = await db.select({ a: roleAssignments, r: roles }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId))
@@ -356,7 +461,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   org.post("/roles", require("roles.gerer"), zValidator("json", roleInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     assertCanGrant(c.get("principal"), orgId, b.permissions);
-    const [r] = await db.insert(roles).values({ orgId, name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)] }).returning();
+    const [r] = await db.insert(roles).values({ orgId, name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], repairSteps: [...new Set(b.repair_steps)], replyFromContact: b.reply_from_contact ?? false }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "role", entityId: r.id, after: r });
     return c.json(r, 201);
   });
@@ -366,21 +471,47 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (!before) throw new HttpError(404, "role_not_found");
     // changing a role changes everyone who has it: may add only what you hold; may remove only what you could grant
     assertCanGrant(c.get("principal"), orgId, [...new Set([...b.permissions, ...before.permissions])]);
-    const [r] = await db.update(roles).set({ name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], updatedAt: new Date() }).where(eq(roles.id, before.id)).returning();
+    const [r] = await db.update(roles).set({ name: b.name, description: b.description, scope: b.scope, permissions: [...new Set(b.permissions)], repairSteps: [...new Set(b.repair_steps)], ...(b.reply_from_contact !== undefined ? { replyFromContact: b.reply_from_contact } : {}), updatedAt: new Date() }).where(eq(roles.id, before.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "role", entityId: r.id, before, after: r });
     return c.json(r);
   });
+  /**
+   * Delete a role. A role that people hold can only go together with a replacement role that takes over their assignments (and the
+   * pending invitations); default roles stay.
+   */
   org.delete("/roles/:id", require("roles.gerer"), async (c) => {
-    const orgId = c.get("orgId");
-    const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id")), eq(roles.orgId, orgId)));
+    const orgId = c.get("orgId"), p = c.get("principal");
+    // the body is optional (a role nobody holds needs none)
+    const parsed = z.object({ replacement_role_id: z.string().uuid().nullable().default(null) }).safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) throw new HttpError(400, "invalid_input");
+    const b = parsed.data;
+    const [r] = await db.select().from(roles).where(and(eq(roles.id, c.req.param("id") ?? ""), eq(roles.orgId, orgId)));
     if (!r) throw new HttpError(404, "role_not_found");
-    if (r.isSystem) throw new HttpError(409, "system_role_undeletable");
+    // default roles can go too (they are only created with a new organisation, never re-created); the organisation must keep one role that manages roles
+    if (r.permissions.includes("roles.gerer")) {
+      const others = (await db.select({ p: roles.permissions }).from(roles).where(and(eq(roles.orgId, orgId), ne(roles.id, r.id)))).filter((x) => x.p.includes("roles.gerer"));
+      if (!others.length) throw new HttpError(409, "role_last_admin");
+    }
     const used = await db.select({ n: sql<number>`count(*)::int` }).from(roleAssignments).where(eq(roleAssignments.roleId, r.id));
     const inv = await db.select({ n: sql<number>`count(*)::int` }).from(invitations).where(and(eq(invitations.roleId, r.id), sql`${invitations.usedAt} is null`));
-    if (used[0].n || inv[0].n) throw new HttpError(409, "role_in_use");
-    await db.delete(roles).where(eq(roles.id, r.id));
-    await audit(db, { orgId, userId: c.get("principal").id, action: "delete", entity: "role", entityId: r.id, before: r });
-    return c.json({ ok: true });
+    let moved = 0;
+    if (used[0].n || inv[0].n) {
+      if (!b.replacement_role_id) throw new HttpError(409, "role_in_use");
+      const [rep] = await db.select().from(roles).where(and(eq(roles.id, b.replacement_role_id), eq(roles.orgId, orgId)));
+      if (!rep || rep.id === r.id || rep.scope !== r.scope) throw new HttpError(400, "replacement_invalid");
+      assertCanGrant(p, orgId, rep.permissions);
+      await db.transaction(async (tx) => {
+        await tx.update(roleAssignments).set({ roleId: rep.id }).where(eq(roleAssignments.roleId, r.id));
+        await tx.update(invitations).set({ roleId: rep.id }).where(eq(invitations.roleId, r.id)); // also the accepted ones: they still point at the role
+        await tx.delete(roles).where(eq(roles.id, r.id));
+      });
+      moved = used[0].n + inv[0].n;
+    } else {
+      // nobody holds it and nothing waits for it: only accepted invitations may still point at it, they go with it
+      await db.transaction(async (tx) => { await tx.delete(invitations).where(eq(invitations.roleId, r.id)); await tx.delete(roles).where(eq(roles.id, r.id)); });
+    }
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: "role", entityId: r.id, before: r, after: { replacementRoleId: b.replacement_role_id, moved } });
+    return c.json({ ok: true, moved });
   });
 
   // stations (sites)
@@ -406,22 +537,27 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   /** Customers of a site: the list wins; the single legacy field still works (and null clears it). */
   const bcIdsOf = (b: { azure_business_customer_ids?: string[]; azure_business_customer_id?: string | null }): string[] =>
     b.azure_business_customer_ids?.length ? [...new Set(b.azure_business_customer_ids)] : b.azure_business_customer_id ? [b.azure_business_customer_id] : [];
-  org.post("/stations", require("stations.gerer"), zValidator("json", stationInput, validationHook), async (c) => {
+  // Stations = places (workshop / yard). Body shops are customers and have their own routes below (/bodyshops).
+  org.post("/stations", require("stations.gerer"), async (c, next) => {
+    // a clear answer for old clients that still try to create a body shop here
+    const raw = await c.req.raw.clone().json().catch(() => ({} as { type?: string }));
+    if ((raw as { type?: string }).type === "carrosserie") throw new HttpError(400, "use_bodyshops");
+    await next();
+  }, zValidator("json", placeInput, validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     await checkTenant(orgId, b.azure_tenant, true);
     const [s] = await db.insert(stations).values({
       orgId, type: b.type, name: b.name, address: b.address, country: b.country, capacite: b.capacite, azureTenant: b.azure_tenant,
-      azureLocationAliases: b.azure_location_aliases, azureBusinessCustomerId: b.type === "carrosserie" ? bcIdsOf(b)[0] ?? null : null, azureBcIds: b.type === "carrosserie" ? bcIdsOf(b) : [],
-      azureLinkIds: b.type === "carrosserie" ? b.azure_link_ids : [],
-      reportEmails: b.type === "carrosserie" ? b.report_emails : [], commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
+      azureLocationAliases: b.azure_location_aliases, repairsPerDay: b.repairs_per_day, citasLocationId: b.citas_location_id,
     }).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "station", entityId: s.id, after: s });
     return c.json(s, 201);
   });
-  org.put("/stations/:id", require("stations.gerer"), zValidator("json", stationInput.partial(), validationHook), async (c) => {
+  org.put("/stations/:id", require("stations.gerer"), zValidator("json", placeInput.partial(), validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     const [before] = await db.select().from(stations).where(and(eq(stations.id, (c.req.param("id") ?? "")), eq(stations.orgId, orgId)));
     if (!before) throw new HttpError(404, "station_not_found");
+    if (before.type === "carrosserie") throw new HttpError(409, "use_bodyshops");
     if (b.azure_tenant !== undefined && b.azure_tenant !== before.azureTenant) await checkTenant(orgId, b.azure_tenant, true);
     const set: Partial<typeof stations.$inferInsert> = { updatedAt: new Date() };
     if (b.type !== undefined) set.type = b.type;
@@ -431,6 +567,61 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.capacite !== undefined) set.capacite = b.capacite;
     if (b.azure_tenant !== undefined) set.azureTenant = b.azure_tenant;
     if (b.azure_location_aliases !== undefined) set.azureLocationAliases = b.azure_location_aliases;
+    if (b.citas_location_id !== undefined) set.citasLocationId = b.citas_location_id;
+    if (b.repairs_per_day !== undefined) set.repairsPerDay = b.repairs_per_day;
+    const [s] = await db.update(stations).set(set).where(eq(stations.id, before.id)).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "station", entityId: s.id, before, after: s });
+    return c.json(s);
+  });
+
+  // ---------------------------------------------------------------- body shops (customers, V5)
+  const mayBodyshops: MiddlewareHandler<Env> = async (c, next) => {
+    // org-wide data: a station manager (grant bound to his station) has the right too
+    if (!hasOrgPermission(c.get("principal"), "bodyshops.gerer", c.get("orgId"))) throw new HttpError(403, "forbidden");
+    await next();
+  };
+  const bodyshopOf = async (id: string, orgId: string) => {
+    const [s] = await db.select().from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId)));
+    if (!s) throw new HttpError(404, "station_not_found");
+    if (s.type !== "carrosserie") throw new HttpError(409, "use_stations");
+    return s;
+  };
+  org.get("/bodyshops", mayBodyshops, async (c) => {
+    const orgId = c.get("orgId");
+    const rows = await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"))).orderBy(stations.name);
+    const counts = await db.select({ id: vehicles.clientStationId, open: sql<number>`count(*) filter (where ${vehicles.statut} <> 'rendu')::int`, total: sql<number>`count(*)::int` })
+      .from(vehicles).where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt))).groupBy(vehicles.clientStationId);
+    const links = await db.select().from(stationInsurers).where(inArray(stationInsurers.stationId, rows.map((r) => r.id).concat(["00000000-0000-0000-0000-000000000000"])));
+    const accounts = await db.select({ email: users.email, name: users.name, client: roleAssignments.scopeClientStationId }).from(roleAssignments)
+      .innerJoin(users, eq(users.id, roleAssignments.userId)).where(and(eq(roleAssignments.orgId, orgId), isNotNull(roleAssignments.scopeClientStationId)));
+    return c.json(rows.map((s) => ({
+      ...s, openVehicles: counts.find((x) => x.id === s.id)?.open ?? 0, totalVehicles: counts.find((x) => x.id === s.id)?.total ?? 0,
+      insurerIds: links.filter((l) => l.stationId === s.id).map((l) => l.insurerId),
+      accounts: accounts.filter((a) => a.client === s.id).map((a) => ({ email: a.email, name: a.name })),
+    })));
+  });
+  org.post("/bodyshops", mayBodyshops, zValidator("json", bodyshopInput, validationHook), async (c) => {
+    const b = c.req.valid("json"), orgId = c.get("orgId");
+    await checkTenant(orgId, b.azure_tenant, true);
+    const [s] = await db.insert(stations).values({
+      orgId, type: "carrosserie", name: b.name, address: b.address, country: b.country, azureTenant: b.azure_tenant,
+      azureBusinessCustomerId: bcIdsOf(b)[0] ?? null, azureBcIds: bcIdsOf(b), azureLinkIds: b.azure_link_ids,
+      reportEmails: b.report_emails, commissionMode: b.commission_mode, commissionPct: String(b.commission_pct),
+      excludedInsurerEmails: b.excluded_insurer_emails, contactName: b.contact_name, contactPhone: b.contact_phone, cif: b.cif || null,
+    }).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: "create", entity: "bodyshop", entityId: s.id, after: s });
+    hub.publish(orgId, 0);
+    return c.json(s, 201);
+  });
+  org.put("/bodyshops/:id", mayBodyshops, zValidator("json", bodyshopInput.partial(), validationHook), async (c) => {
+    const b = c.req.valid("json"), orgId = c.get("orgId");
+    const before = await bodyshopOf(c.req.param("id") ?? "", orgId);
+    if (b.azure_tenant !== undefined && b.azure_tenant !== before.azureTenant) await checkTenant(orgId, b.azure_tenant, true);
+    const set: Partial<typeof stations.$inferInsert> = { updatedAt: new Date() };
+    if (b.name !== undefined) set.name = b.name;
+    if (b.address !== undefined) set.address = b.address;
+    if (b.country !== undefined) set.country = b.country;
+    if (b.azure_tenant !== undefined) set.azureTenant = b.azure_tenant;
     if (b.azure_business_customer_ids !== undefined || b.azure_business_customer_id !== undefined) {
       const ids = bcIdsOf(b);
       set.azureBcIds = ids; set.azureBusinessCustomerId = ids[0] ?? null;
@@ -439,14 +630,71 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     if (b.report_emails !== undefined) set.reportEmails = b.report_emails;
     if (b.commission_mode !== undefined) set.commissionMode = b.commission_mode;
     if (b.commission_pct !== undefined) set.commissionPct = String(b.commission_pct);
+    if (b.excluded_insurer_emails !== undefined) set.excludedInsurerEmails = b.excluded_insurer_emails;
+    if (b.contact_name !== undefined) set.contactName = b.contact_name;
+    if (b.contact_phone !== undefined) set.contactPhone = b.contact_phone;
+    if (b.cif !== undefined) set.cif = b.cif || null;
     const [s] = await db.update(stations).set(set).where(eq(stations.id, before.id)).returning();
-    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "station", entityId: s.id, before, after: s });
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "bodyshop", entityId: s.id, before, after: s });
+    hub.publish(orgId, 0);
     return c.json(s);
   });
+  org.post("/bodyshops/:id/active", mayBodyshops, zValidator("json", z.object({ active: z.boolean() }), validationHook), async (c) => {
+    const orgId = c.get("orgId");
+    const b = await bodyshopOf(c.req.param("id") ?? "", orgId);
+    const [s] = await db.update(stations).set({ active: c.req.valid("json").active, updatedAt: new Date() }).where(eq(stations.id, b.id)).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: s.active ? "reactivate" : "deactivate", entity: "bodyshop", entityId: s.id });
+    hub.publish(orgId, 0);
+    return c.json(s);
+  });
+  org.delete("/bodyshops/:id", mayBodyshops, async (c) => {
+    const b = await bodyshopOf(c.req.param("id") ?? "", c.get("orgId"));
+    return deleteStation(c, b);
+  });
+  /**
+   * Delete a station for good. Refused while any vehicle that still exists stands there, belongs to it as customer, or is assigned to it as
+   * body shop, and while repair appointments are open there: move or return the cars first (or just deactivate the station).
+   * Links that only make sense with the station go with it (insurers, campaigns, roles tied to it, open invitations); deleted vehicles lose the reference.
+   */
+  org.delete("/stations/:id", require("stations.gerer"), async (c) => {
+    const [s] = await db.select().from(stations).where(and(eq(stations.id, c.req.param("id") ?? ""), eq(stations.orgId, c.get("orgId"))));
+    if (!s) throw new HttpError(404, "station_not_found");
+    if (s.type === "carrosserie") throw new HttpError(409, "use_bodyshops");
+    return deleteStation(c, s);
+  });
+  async function deleteStation(c: Context<Env>, s: typeof stations.$inferSelect) {
+    const orgId = c.get("orgId"), p = c.get("principal");
+    // a car BELONGS to a body shop (customer) and STANDS in a hall, a car park or a body shop: both ties count
+    const count = async (cond: ReturnType<typeof eq>) => (await db.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(cond, isNull(vehicles.deletedAt))))[0].n;
+    const standing = await count(eq(vehicles.stationId, s.id));
+    const owned = await count(eq(vehicles.clientStationId, s.id));
+    const repairing = await count(eq(vehicles.bodyshopId, s.id));
+    if (standing || owned || repairing) throw new HttpError(409, "station_in_use", { n: String(standing), m: String(owned), k: String(repairing) });
+    const [open] = await db.select({ n: sql<number>`count(*)::int` }).from(repairBookings).where(and(eq(repairBookings.stationId, s.id), inArray(repairBookings.status, ["booked", "started"])));
+    if (open.n) throw new HttpError(409, "station_has_bookings", { n: String(open.n) });
+    await db.transaction(async (tx) => {
+      await tx.update(vehicles).set({ stationId: null }).where(eq(vehicles.stationId, s.id));
+      await tx.update(vehicles).set({ clientStationId: null }).where(eq(vehicles.clientStationId, s.id));
+      await tx.update(vehicles).set({ bodyshopId: null }).where(eq(vehicles.bodyshopId, s.id));
+      await tx.update(repairBookings).set({ originStationId: null }).where(eq(repairBookings.originStationId, s.id));
+      await tx.delete(citasLinks).where(eq(citasLinks.stationId, s.id));
+      await tx.delete(repairBookings).where(eq(repairBookings.stationId, s.id));
+      await tx.delete(stationInsurers).where(eq(stationInsurers.stationId, s.id));
+      await tx.delete(campaignStations).where(eq(campaignStations.stationId, s.id));
+      await tx.delete(roleAssignments).where(and(eq(roleAssignments.orgId, orgId), or(eq(roleAssignments.stationId, s.id), eq(roleAssignments.scopeClientStationId, s.id))));
+      await tx.delete(invitations).where(and(eq(invitations.orgId, orgId), eq(invitations.stationId, s.id)));
+      await tx.delete(stations).where(eq(stations.id, s.id));
+    });
+    await audit(db, { orgId, userId: p.id, action: "delete", entity: s.type === "carrosserie" ? "bodyshop" : "station", entityId: s.id, before: s });
+    hub.publish(orgId, 0);
+    return c.json({ ok: true });
+  }
   org.post("/stations/:id/active", require("stations.gerer"), zValidator("json", z.object({ active: z.boolean() }), validationHook), async (c) => {
     const orgId = c.get("orgId");
-    const [s] = await db.update(stations).set({ active: c.req.valid("json").active, updatedAt: new Date() }).where(and(eq(stations.id, (c.req.param("id") ?? "")), eq(stations.orgId, orgId))).returning();
-    if (!s) throw new HttpError(404, "station_not_found");
+    const [cur] = await db.select().from(stations).where(and(eq(stations.id, (c.req.param("id") ?? "")), eq(stations.orgId, orgId)));
+    if (!cur) throw new HttpError(404, "station_not_found");
+    if (cur.type === "carrosserie") throw new HttpError(409, "use_bodyshops");
+    const [s] = await db.update(stations).set({ active: c.req.valid("json").active, updatedAt: new Date() }).where(eq(stations.id, cur.id)).returning();
     await audit(db, { orgId, userId: c.get("principal").id, action: s.active ? "reactivate" : "deactivate", entity: "station", entityId: s.id });
     return c.json(s);
   });
@@ -468,6 +716,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     const next: Record<string, unknown> = { ...before, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) };
     if (b.esMatrix === null) delete next.esMatrix;
     await db.insert(orgSettings).values({ orgId, settings: next as never }).onConflictDoUpdate({ target: orgSettings.orgId, set: { settings: next as never, updatedAt: new Date() } });
+    // an edited Spain matrix becomes a NEW version of the system method: vehicles already frozen on an older version keep their amounts
+    if (b.esMatrix !== undefined) await bumpSystemMatrix(db, orgId, (b.esMatrix as never) ?? null, c.get("principal").id);
     await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "settings", before, after: next });
     hub.publish(orgId, 0);
     return c.json(next);
@@ -479,15 +729,17 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   admin.route("/", org);
   app.route("/admin", admin);
 
-  async function assertStationInOrg(stationId: string, orgId: string) {
-    const [s] = await db.select({ id: stations.id }).from(stations).where(and(eq(stations.id, stationId), eq(stations.orgId, orgId)));
+  async function assertStationInOrg(stationId: string, orgId: string, kind: "place" | "bodyshop" = "place") {
+    const [s] = await db.select({ id: stations.id, type: stations.type }).from(stations).where(and(eq(stations.id, stationId), eq(stations.orgId, orgId)));
     if (!s) throw new HttpError(400, "station_wrong_org");
+    if (kind === "place" && s.type === "carrosserie") throw new HttpError(400, "station_not_a_place");
+    if (kind === "bodyshop" && s.type !== "carrosserie") throw new HttpError(400, "client_not_bodyshop");
   }
   /** Scope ids must exist in this org and be present when the role's scope needs them. */
   async function assertScopeFields(scope: string, b: { scope_client_station_id: string | null; scope_insurer_id: string | null; scope_campaign_id: string | null }, orgId: string) {
     if (scope === "client") {
       if (!b.scope_client_station_id) throw new HttpError(400, "client_required");
-      await assertStationInOrg(b.scope_client_station_id, orgId);
+      await assertStationInOrg(b.scope_client_station_id, orgId, "bodyshop");
     }
     if (scope === "assurance") {
       if (!b.scope_insurer_id) throw new HttpError(400, "insurer_required");

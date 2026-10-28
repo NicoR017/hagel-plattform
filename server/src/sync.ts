@@ -2,32 +2,38 @@ import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { ES_MATRIX_DEFAULT, computeShares, computeVehicle, type CalcVehicle, type Settings } from "@hagel/calc";
 import {
-  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
+  DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, REFUSABLE_FROM, isPlaceType, parseRefuseMotif, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "./audit";
+import { finishHandover } from "./handover";
+import type { Mailer } from "./email";
+import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
+import { applyRepairOp, cancelWhenRefused, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor, sendBookingMail, sendRefusalMail } from "./repair";
 import { recipientsOfVehicle } from "./reports";
+import { replyToFor } from "./reply_to";
 import type { Db } from "./db";
 import type { Hub } from "./hub";
-import { can, canOrg, effectivePermissions, filterFields, type Principal, type VehicleRef } from "./permissions";
+import { can, canOrg, effectivePermissions, fieldProfile, filterFields, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
 import {
-  campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, reportSends, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles,
+  colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, repairEvents, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleHandovers, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "./schema";
 import type { Storage } from "./storage";
 
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-type VehicleRow = typeof vehicles.$inferSelect;
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type VehicleRow = typeof vehicles.$inferSelect;
 type PhotoRow = typeof photos.$inferSelect;
 
-export interface SyncDeps { db: Db; hub: Hub; storage: Storage }
+export interface SyncDeps { db: Db; hub: Hub; storage: Storage; mailer?: Mailer }
 
 const HEADER_PREFIX = "h.";
 const SHARES_PREFIX = "s.";
 const LINK_FIELDS = ["clientStationId", "insurerId", "campaignId"] as const;
 const TECH_FIELDS = ["techName", "techPct", "demTechName", "demTechPct"] as const;
 const COMMISSION_FIELDS = ["werkPct", "werkMode"] as const;
+const METHOD_FIELDS = ["methodId", "methodVersion"] as const;
 
-class Reject extends Error {
+export class Reject extends Error {
   constructor(public code: ErrorCode, public params: Record<string, string> = {}) { super(code); }
 }
 
@@ -64,7 +70,9 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
     ...(r.header as Record<string, unknown>),
     ...shares,
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
-    statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
+    repairStage: r.repairStage, bodyshopId: r.bodyshopId, methodId: r.methodId, methodVersion: r.methodVersion,
+    statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif,
+    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
     assigneeIds, updatedAt: r.updatedAt.toISOString(), updatedBy: updatedByName, seq: r.seq,
@@ -74,17 +82,21 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
 }
 
 /** What `u` may see of `r`: null when the vehicle is not visible; restricted fields are removed server-side. */
-export function toClient(u: Principal, r: VehicleRow, assigneeIds: string[], names: Map<string, string>, s: OrgSettings): ClientVehicle | null {
+export function toClient(u: Principal, r: VehicleRow, assigneeIds: string[], names: Map<string, string>, s: OrgSettings, methods?: MethodMap): ClientVehicle | null {
   const ref = refOf(r, assigneeIds);
   if (!can(u, "vehicules.voir", ref)) return null;
   const flat = flatten(r, assigneeIds, r.updatedBy ? names.get(r.updatedBy) ?? null : null);
   // amounts of the internal split are computed here so that restricted roles can receive ONLY their own share
-  const calc = computeVehicle(flat as unknown as CalcVehicle, calcSettings(s));
+  const calc = computeVehicle(flat as unknown as CalcVehicle, calcSettings(s), methodOf(methods, r));
   const withShares = { ...flat, shares: computeShares(flat as never, calc) };
   const out = filterFields(u, ref, withShares as Record<string, unknown>) as Record<string, unknown> | null;
   if (!out) return null;
   // users with the full split recompute it locally: do not send the duplicate
   if (effectivePermissions(u, ref).has("repartition_interne.voir")) delete out.shares;
+  // everyone else must not even learn which share fields exist: the per-field timestamps of the split ("s.techPct" ...) stay on the server
+  else if (out.groupAt) out.groupAt = Object.fromEntries(Object.entries(out.groupAt as Record<string, number>).filter(([k]) => !k.startsWith(SHARES_PREFIX)));
+  // same for header fields the role does not receive (e.g. the hourly rate of a technician)
+  if (out.groupAt) out.groupAt = Object.fromEntries(Object.entries(out.groupAt as Record<string, number>).filter(([k]) => !k.startsWith("h.") || k.slice(2) in out));
   return out as ClientVehicle;
 }
 
@@ -107,7 +119,7 @@ const omit = (o: Record<string, unknown>, keys: readonly string[]) => Object.fro
 export const photoKey = (orgId: string, vehicleId: string, photoId: string) => `photos/${orgId}/${vehicleId}/${photoId}.jpg`;
 export const colibriKey = (orgId: string, vehicleId: string) => `colibri/${orgId}/${vehicleId}.pdf`;
 
-interface OpOutcome { status: "ok" | "conflict"; orgId: string; seq: number; warnings?: string[]; vehicleId?: string }
+export interface OpOutcome { status: "ok" | "conflict"; orgId: string; seq: number; warnings?: string[]; vehicleId?: string; /** runs after the transaction committed (e-mails); a failure never undoes the change */ after?: () => Promise<void> }
 
 export async function processPush(deps: SyncDeps, u: Principal, ops: Op[]): Promise<{ results: OpResult[]; touched: Map<string, number> }> {
   const results: OpResult[] = [];
@@ -128,6 +140,7 @@ export async function processPush(deps: SyncDeps, u: Principal, ops: Op[]): Prom
         return applyOp(deps, tx, u, op);
       });
       res = { opId: op.opId, status: out.status, ...(out.warnings?.length ? { warnings: out.warnings } : {}) };
+      if (out.after) await out.after().catch((e) => console.error("[after-commit]", (e as Error).message));
       if (out.status === "conflict") conflictVehicleId = out.vehicleId;
       touched.set(out.orgId, Math.max(touched.get(out.orgId) ?? 0, out.seq));
     } catch (e) {
@@ -144,12 +157,34 @@ export async function processPush(deps: SyncDeps, u: Principal, ops: Op[]): Prom
   return { results, touched };
 }
 
+/** Where an imported car came from in Colibri (BusinessCustomer–insurance link, location, tenant), looked up through the scan it was created from. */
+export async function attachColibriSource(db: Pick<Db, "select" | "execute">, list: ClientVehicle[]): Promise<void> {
+  const ids = list.map((v) => v.id);
+  if (!ids.length) return;
+  const res = (await db.execute(sql`
+    select v.id as id, s.business_customer as bc, s.location as location, s.tenant as tenant
+    from vehicles v join colibri_scans s on (s.partition_key || '|' || s.row_key) = v.colibri_scan_key
+    where v.id in (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})`)) as unknown as { rows: { id: string; bc: string; location: string; tenant: string }[] };
+  const by = new Map(res.rows.map((r) => [r.id, { businessCustomer: r.bc, location: r.location, tenant: r.tenant }]));
+  for (const v of list) v.colibriSource = by.get(v.id) ?? null;
+}
+
+/** Field profile (technician / headliner): which kind of work he is assigned for on each car, so the app can show him only his own work. */
+export async function attachMyAssign(db: Pick<Db, "select">, u: Principal, list: ClientVehicle[]): Promise<void> {
+  const mine = list.filter((v) => fieldProfile(u, v.orgId));
+  if (!mine.length) return;
+  const rows = await db.select().from(vehicleAssignments).where(and(eq(vehicleAssignments.userId, u.id), inArray(vehicleAssignments.vehicleId, mine.map((v) => v.id))));
+  for (const v of mine) v.myAssign = rows.filter((r) => r.vehicleId === v.id).map((r) => (r.type === "demontage" ? "demontage" : "pdr"));
+}
+
 export async function clientVehicleById(db: Db, u: Principal, id: string): Promise<ClientVehicle | null> {
   const [r] = await db.select().from(vehicles).where(eq(vehicles.id, id));
   if (!r || r.deletedAt) return null;
   const as = await assigneesOf(db, [id]);
   const names = await userNames(db, [r.updatedBy]);
-  return toClient(u, r, as.get(id) ?? [], names, await loadOrgSettings(db, r.orgId));
+  const cv = toClient(u, r, as.get(id) ?? [], names, await loadOrgSettings(db, r.orgId), await loadMethodMap(db, r.orgId));
+  if (cv) { await attachColibriSource(db, [cv]); await attachMyAssign(db, u, [cv]); }
+  return cv;
 }
 
 async function userNames(db: Pick<Db, "select">, ids: (string | null)[]): Promise<Map<string, string>> {
@@ -160,7 +195,7 @@ async function userNames(db: Pick<Db, "select">, ids: (string | null)[]): Promis
   return m;
 }
 
-async function lockVehicle(tx: Tx, u: Principal, vehicleId: string): Promise<{ row: VehicleRow; ref: VehicleRef }> {
+export async function lockVehicle(tx: Tx, u: Principal, vehicleId: string): Promise<{ row: VehicleRow; ref: VehicleRef }> {
   const [row] = await tx.select().from(vehicles).where(eq(vehicles.id, vehicleId)).for("update");
   if (!row || row.deletedAt) throw new Reject("vehicle_not_found");
   const as = await assigneesOf(tx, [vehicleId]);
@@ -169,11 +204,12 @@ async function lockVehicle(tx: Tx, u: Principal, vehicleId: string): Promise<{ r
   return { row, ref };
 }
 
-const need = (u: Principal, perm: Parameters<typeof can>[1], ref: VehicleRef) => { if (!can(u, perm, ref)) throw new Reject("not_allowed"); };
+export const need = (u: Principal, perm: Parameters<typeof can>[1], ref: VehicleRef) => { if (!can(u, perm, ref)) throw new Reject("not_allowed"); };
 
 async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<OpOutcome> {
   const at = stampOf(op.at);
   const db = tx as unknown as Db;
+  if (isRepairOp(op)) return applyRepairOp(deps, tx, u, op, at);
   switch (op.type) {
     case "vehicle.create": return createVehicle(tx, u, op, at);
 
@@ -184,13 +220,15 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const bad = PRICE_HEADER_FIELDS.filter((f) => f in op.fields && !perms.has("prix.voir"));
       if (bad.length) throw new Reject("field_not_allowed", { fields: bad.join(", ") });
       const links = pick(op.fields as Record<string, unknown>, LINK_FIELDS);
-      const headerOnly = omit(op.fields as Record<string, unknown>, LINK_FIELDS);
+      const methodF = pick(op.fields as Record<string, unknown>, METHOD_FIELDS);
+      const headerOnly = omit(op.fields as Record<string, unknown>, [...LINK_FIELDS, ...METHOD_FIELDS]);
       const stamps = { ...(row.groupAt as Record<string, number>) };
       const h = mergeFields(row.header as Record<string, unknown>, stamps, HEADER_PREFIX, headerOnly, at);
       const l = mergeFields({ clientStationId: row.clientStationId, insurerId: row.insurerId, campaignId: row.campaignId }, h.nextStamps, HEADER_PREFIX, links, at);
       for (const f of ["clientStationId", "insurerId"] as const) {
         const id = l.next[f] as string | null;
-        if (id && l.applied.includes(f)) await assertStationOrInsurer(tx, f, id, row.orgId);
+        // only a CHANGED customer is checked: a car whose customer was a hall before V5 keeps it and stays editable
+        if (id && l.applied.includes(f) && id !== (f === "clientStationId" ? row.clientStationId : row.insurerId)) await assertStationOrInsurer(tx, f, id, row.orgId);
       }
       const set: Partial<typeof vehicles.$inferInsert> = { header: h.next, groupAt: l.nextStamps };
       if (l.applied.includes("clientStationId")) {
@@ -199,7 +237,20 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       }
       if (l.applied.includes("insurerId")) set.insurerId = (l.next.insurerId as string | null) ?? null;
       if (l.applied.includes("campaignId")) set.campaignId = (l.next.campaignId as string | null) ?? null;
-      return commit(tx, u, row, set, [...h.applied, ...l.applied], [...h.stale, ...l.stale], op.type, { before: pick(row.header as never, h.applied), after: pick(h.next, h.applied) });
+      const extraApplied: string[] = [];
+      if (Object.keys(methodF).length) {
+        // changing the calculation method is a privilege, and impossible once the vehicle has been measured: a new calculation = a new expertise
+        if (Object.keys(row.panels as object).length) throw new Reject("method_locked");
+        const land = ((h.next as Record<string, unknown>).land as "DE" | "ES" | undefined) ?? "DE";
+        const resolved = await resolveMethodChoice(tx, row.orgId, land, methodF.methodId as string | null | undefined, methodF.methodVersion as number | null | undefined);
+        if (!resolved) throw new Reject("invalid_input");
+        // choosing a method by hand is a privilege; following the insurer (or the system method of the country) is automatic and open to everyone who may edit
+        const automatic = await methodForInsurer(tx, row.orgId, (l.next.insurerId as string | null) ?? null, land);
+        if (!(automatic && automatic.id === resolved.id) && !perms.has("commission.modifier") && !perms.has("methoden.gerer")) throw new Reject("not_allowed");
+        if ((h.nextStamps["method"] ?? 0) <= at) { set.methodId = resolved.id; set.methodVersion = resolved.version; h.nextStamps["method"] = at; extraApplied.push("method"); }
+        set.groupAt = h.nextStamps;
+      }
+      return commit(tx, u, row, set, [...h.applied, ...l.applied, ...extraApplied], [...h.stale, ...l.stale], op.type, { before: pick(row.header as never, h.applied), after: pick(h.next, h.applied) });
     }
 
     case "vehicle.shares": {
@@ -238,19 +289,66 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
     case "vehicle.status": {
       const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
       need(u, "vehicules.changer_statut", ref);
+      if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // a technician / headliner never changes a status ("Fertig" would skip the Finish checks)
       if (op.statut === "attente" && !(op.motif ?? "").trim()) throw new Reject("motif_required");
+      const refuse = op.statut === "refuse";
+      if (refuse) {
+        if (!parseRefuseMotif(op.motif).valid) throw new Reject("motif_required"); // one of the reasons, with an optional comment
+        if (!(REFUSABLE_FROM as readonly string[]).includes(row.statut) || row.repairStage != null) throw new Reject("refuse_status"); // not once the repair started
+      }
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.status ?? 0) > at) return commit(tx, u, row, {}, [], ["status"], op.type, {}, true);
       stamps.status = at;
       const now = new Date();
       const set: Partial<typeof vehicles.$inferInsert> = {
-        statut: op.statut, statutMotif: op.statut === "attente" ? (op.motif ?? "").trim() : null, statutDepuis: now, groupAt: stamps,
-        statutAvant: op.statut === "attente" ? row.statut : null,
+        statut: op.statut, statutMotif: op.statut === "attente" ? (op.motif ?? "").trim() : refuse ? (op.motif ?? "").trim() : null, statutDepuis: now, groupAt: stamps,
+        // leaving "on hold" / "refused" offers the status the car had before
+        statutAvant: op.statut === "attente" ? row.statut : refuse ? (row.statut === "refuse" ? row.statutAvant : row.statut) : null,
       };
       if (op.statut === "reparatur") set.repAt = now;
       else if (op.statut === "arrive" || op.statut === "besichtigung") set.repAt = null;
+      // the older status path keeps the board column consistent (it never sends the automatic report nor checks the Finish rules)
+      if (op.statut === "reparatur") { if (!row.repairStage || row.repairStage === "finish") set.repairStage = row.repairStage === "finish" ? "pdr" : "bereit"; if (!row.repairStage) set.repairEnteredAt = now; await partsToTodos(tx, row, u.id); }
+      else if (op.statut === "fertig") set.repairStage = "finish";
+      else if (op.statut === "arrive" || op.statut === "besichtigung") set.repairStage = null;
       await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: op.statut, motif: set.statutMotif ?? null, userId: u.id });
-      return commit(tx, u, row, set, ["status"], [], op.type, { before: { statut: row.statut }, after: { statut: op.statut, motif: set.statutMotif } });
+      const cancelled = refuse && row.statut !== "refuse" ? await cancelWhenRefused(tx, row, u.id) : [];
+      const out = await commit(tx, u, row, set, ["status"], [], op.type, { before: { statut: row.statut }, after: { statut: op.statut, motif: set.statutMotif } });
+      if (!refuse || row.statut === "refuse") return out;
+      const mc = { db: deps.db, mailer: deps.mailer };
+      return { ...out, after: async () => { for (const id of cancelled) await sendBookingMail(mc, "cancelled", id, u.id); await sendRefusalMail(mc, row.id, set.statutMotif ?? null, u.id); } };
+    }
+
+    case "vehicle.handover": {
+      const { row, ref } = await lockVehicle(tx, u, op.vehicleId);
+      need(u, "vehicules.changer_statut", ref);
+      if (fieldProfile(u, row.orgId)) throw new Reject("not_allowed"); // technician / headliner: no customer data, no hand-over
+      const h = op.handover;
+      const [dup] = await tx.select({ id: vehicleHandovers.id, vehicleId: vehicleHandovers.vehicleId }).from(vehicleHandovers).where(eq(vehicleHandovers.id, h.id));
+      if (dup) { if (dup.vehicleId === row.id) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id }; throw new Reject("not_allowed"); } // a replayed operation is applied once
+      const received = new Date();
+      const signed = new Date(h.signedAt);
+      const when = signed.getTime() > received.getTime() + 10 * 60_000 ? received : signed; // a phone clock far in the future is not trusted
+      await tx.insert(vehicleHandovers).values({
+        id: h.id, vehicleId: row.id, kind: h.kind, customerName: h.customerName, customerEmail: h.customerEmail, remarks: h.remarks, signedAt: when, signedBy: u.id,
+        stationId: row.stationId, signature: h.signature as never, sendReceipt: h.sendReceipt && !!h.customerEmail,
+      });
+      // never edited: the new signature replaces the previous one of the same kind (which stays in the database)
+      await tx.update(vehicleHandovers).set({ replacedBy: h.id }).where(and(eq(vehicleHandovers.vehicleId, row.id), eq(vehicleHandovers.kind, h.kind), isNull(vehicleHandovers.replacedBy), ne(vehicleHandovers.id, h.id)));
+      await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "handover_signed", payload: { kind: h.kind, handoverId: h.id } as never }); // history: no personal data
+      const set: Partial<typeof vehicles.$inferInsert> = h.kind === "drop_off" ? { dropOffSignedAt: when } : { pickUpSignedAt: when };
+      if (h.kind === "pick_up") {
+        // handing the car back = status "Returned" (same effect as the status change, unless a newer status change already won)
+        const stamps = { ...(row.groupAt as Record<string, number>) };
+        if ((stamps.status ?? 0) <= at && row.statut !== "rendu") {
+          stamps.status = at;
+          Object.assign(set, { statut: "rendu", statutMotif: null, statutAvant: null, statutDepuis: received, groupAt: stamps });
+          await tx.insert(vehicleStatusHistory).values({ vehicleId: row.id, statut: "rendu", userId: u.id });
+        }
+      }
+      // the audit log keeps the reference, never the name, e-mail or drawing
+      const out = await commit(tx, u, row, set, ["handover"], [], op.type, { after: { handoverId: h.id, kind: h.kind } });
+      return { ...out, after: () => finishHandover({ db: deps.db, storage: deps.storage, mailer: deps.mailer }, h.id) };
     }
 
     case "vehicle.move": {
@@ -258,6 +356,7 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       need(u, "vehicules.deplacer", ref); // right on the SOURCE site
       const [dest] = await tx.select().from(stations).where(and(eq(stations.id, op.toStationId), eq(stations.orgId, row.orgId)));
       if (!dest || !dest.active) throw new Reject("station_unknown");
+      if (!isPlaceType(dest.type)) throw new Reject("station_not_a_place"); // a body shop is a customer, never a place
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.site ?? 0) > at) return commit(tx, u, row, {}, [], ["site"], op.type, {}, true);
       stamps.site = at;
@@ -265,8 +364,9 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const warnings: string[] = [];
       if (dest.capacite > 0) {
         const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles)
-          .where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu")));
-        if (n >= dest.capacite) warnings.push("capacity_full");
+          .where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur")));
+        // the occupancy counts cars in repair: a car that is not being repaired does not take a place
+        if (row.statut === "reparatur" && n >= dest.capacite) warnings.push("capacity_full");
       }
       if (row.stationId && row.stationId !== dest.id) {
         const [from] = await tx.select().from(stations).where(eq(stations.id, row.stationId));
@@ -288,7 +388,9 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       }
       const cf = row.colibriFile as { key?: string } | null;
       if (cf?.key) await deps.storage.delete(cf.key).catch(() => undefined);
-      await tx.update(vehicles).set({ deletedAt: new Date(), seq, updatedBy: u.id, updatedAt: new Date(), colibriFile: null }).where(eq(vehicles.id, row.id));
+      await tx.update(vehicles).set({ deletedAt: new Date(), seq, updatedBy: u.id, updatedAt: new Date(), colibriFile: null, colibriScanKey: null }).where(eq(vehicles.id, row.id));
+      // the Colibri scan this car was made from is available again
+      await tx.update(colibriScans).set({ importStatus: "new", vehicleId: null, importedBy: null, importedAt: null, updatedAt: new Date() }).where(and(eq(colibriScans.vehicleId, row.id), eq(colibriScans.importStatus, "imported")));
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: row.id, before: { kennzeichen: (row.header as Record<string, unknown>).kennzeichen } });
       return { status: "ok", orgId: row.orgId, seq };
     }
@@ -325,7 +427,8 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       }
       const recipients = await recipientsOfVehicle(tx, row, op.report.type);
       if (!recipients.length) throw new Reject("report_no_recipients");
-      await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id });
+      const replyTo = await replyToFor(tx, u.id, row.orgId); // the contact address of the organisation or the sender's own e-mail (see reply_to.ts)
+      await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id, replyTo: replyTo ?? null });
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "report", entityId: op.report.id, after: { vehicleId: row.id, type: op.report.type, recipients } });
       return { status: "ok", orgId: row.orgId, seq: row.seq };
     }
@@ -371,14 +474,25 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
 
 async function assertStationOrInsurer(tx: Tx, field: "clientStationId" | "insurerId", id: string, orgId: string) {
   if (field === "clientStationId") {
-    const [s] = await tx.select({ id: stations.id }).from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId)));
+    const [s] = await tx.select({ id: stations.id, type: stations.type }).from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId)));
     if (!s) throw new Reject("station_unknown");
+    if (s.type !== "carrosserie") throw new Reject("client_not_bodyshop"); // the customer is a body shop (V5)
   }
   // insurers are managed in phase 4; ids are accepted only if they exist in this org
   else {
     const r = (await tx.execute(sql`select 1 from insurers where id = ${id} and org_id = ${orgId}`)) as unknown as { rows: unknown[] };
     if (!r.rows.length) throw new Reject("invalid_input");
   }
+}
+
+/** A method asked for by the client: must belong to the organisation, be live, fit the country, and the version must exist (default: current). */
+async function resolveMethodChoice(tx: Tx, orgId: string, land: "DE" | "ES", methodId: string | null | undefined, version: number | null | undefined) {
+  if (!methodId) return null;
+  const [m] = await tx.select().from(calcMethods).where(and(eq(calcMethods.id, methodId), eq(calcMethods.orgId, orgId)));
+  if (!m || m.archivedAt || m.country !== land) return null;
+  const v = version ?? m.currentVersion;
+  const [ver] = await tx.select().from(calcMethodVersions).where(and(eq(calcMethodVersions.methodId, m.id), eq(calcMethodVersions.version, v)));
+  return ver ? { id: m.id, version: v } : null;
 }
 
 /** Commission (mode + %) of the customer carrosserie, copied onto the vehicle when the customer is set. */
@@ -394,12 +508,13 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
   const v = op.vehicle;
   const [dest] = await tx.select().from(stations).where(eq(stations.id, v.stationId));
   if (!dest) throw new Reject("station_unknown");
+  if (!isPlaceType(dest.type)) throw new Reject("station_not_a_place");
   const [exists] = await tx.select().from(vehicles).where(eq(vehicles.id, v.id)).for("update");
   if (exists) {
     if (exists.createdBy === u.id && exists.orgId === dest.orgId) return { status: "ok", orgId: exists.orgId, seq: exists.seq };
     throw new Reject("vehicle_exists");
   }
-  const ref: VehicleRef = { id: v.id, orgId: dest.orgId, stationId: v.stationId, clientStationId: v.clientStationId, campaignId: v.campaignId, insurerId: v.insurerId, assigneeIds: [] };
+  const ref: VehicleRef = { id: v.id, orgId: dest.orgId, stationId: v.stationId, clientStationId: v.clientStationId, campaignId: v.campaignId, insurerId: v.insurerId, assigneeIds: [u.id] };
   if (!can(u, "vehicules.creer", ref)) throw new Reject("not_allowed");
   if (v.clientStationId) await assertStationOrInsurer(tx, "clientStationId", v.clientStationId, dest.orgId);
   if (v.insurerId) await assertStationOrInsurer(tx, "insurerId", v.insurerId, dest.orgId);
@@ -407,7 +522,12 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
   // fields the creator may not set are dropped (the server default applies), not rejected
   let header: Record<string, unknown> = { ...v.header };
   if (!perms.has("prix.voir")) header = omit(header, PRICE_HEADER_FIELDS);
-  header = omit(header, LINK_FIELDS);
+  header = omit(header, [...LINK_FIELDS, ...METHOD_FIELDS]);
+  // frozen calculation method: the one asked for (if valid), else the insurer's, else the system method of the country
+  const land = ((header.land as "DE" | "ES" | undefined) ?? "DE");
+  const asked = v.header as Record<string, unknown>;
+  const chosen = (asked.methodId ? await resolveMethodChoice(tx, dest.orgId, land, asked.methodId as string, asked.methodVersion as number | undefined) : null)
+    ?? await methodForInsurer(tx, dest.orgId, v.insurerId, land);
   const shares: Record<string, unknown> = perms.has("repartition_interne.voir") ? { ...v.shares } : {};
   Object.assign(shares, await commissionSnapshot(tx, v.clientStationId, v.stationId));
   const stamps: Record<string, number> = { status: at, site: at };
@@ -420,12 +540,15 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
     id: v.id, orgId: dest.orgId, stationId: v.stationId, clientStationId: v.clientStationId, campaignId: v.campaignId, insurerId: v.insurerId,
     statut: v.statut, statutDepuis: now, repAt: v.statut === "reparatur" ? now : null, header: header as never, panels: v.panels as never, panelsAt,
     shares: shares as never, groupAt: stamps, seq, createdBy: u.id, updatedBy: u.id,
+    methodId: chosen?.id ?? null, methodVersion: chosen?.version ?? null,
   });
   await tx.insert(vehicleStatusHistory).values({ vehicleId: v.id, statut: v.statut, userId: u.id });
+  // an account that only sees the cars assigned to it (technician, freelancer) is assigned to the car it creates, or it would vanish
+  if (u.grants.some((g) => g.orgId === dest.orgId && (g.scope === "assigne" || g.scope === "campagne"))) await tx.insert(vehicleAssignments).values({ vehicleId: v.id, userId: u.id, type: "pdr" }).onConflictDoNothing();
   await audit(tx as unknown as Db, { orgId: dest.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: v.id, after: { stationId: v.stationId, ...pick(header, ["kennzeichen", "land"]) } });
   const warnings: string[] = [];
   if (dest.capacite > 0) {
-    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu")));
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles).where(and(eq(vehicles.stationId, dest.id), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur")));
     if (n > dest.capacite) warnings.push("capacity_full");
   }
   return { status: "ok", orgId: dest.orgId, seq, warnings };
@@ -455,6 +578,7 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   const reset = clientEpoch !== null && clientEpoch !== epoch;
   const since = reset || clientEpoch === null ? 0 : sinceIn;
   const settings = await loadOrgSettings(db, orgId);
+  const methods = await loadMethodMap(db, orgId);
 
   const vRows = await db.select().from(vehicles).where(and(eq(vehicles.orgId, orgId), gt(vehicles.seq, since))).orderBy(asc(vehicles.seq)).limit(limit + 1);
   const orgVehicleIds = db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.orgId, orgId));
@@ -474,14 +598,21 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   const visible = new Map<string, boolean>();
   const outVehicles: ClientVehicle[] = [], gone: string[] = [];
   for (const r of allRows.values()) {
-    const cv = r.deletedAt ? null : toClient(u, r, as.get(r.id) ?? [], names, settings);
+    const cv = r.deletedAt ? null : toClient(u, r, as.get(r.id) ?? [], names, settings, methods);
     visible.set(r.id, !!cv);
   }
   for (const r of vs) {
-    const cv = r.deletedAt ? null : toClient(u, r, as.get(r.id) ?? [], names, settings);
+    const cv = r.deletedAt ? null : toClient(u, r, as.get(r.id) ?? [], names, settings, methods);
     if (cv) outVehicles.push(cv); else gone.push(r.id);
   }
-  const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map(photoToClient);
+  // repair data (to-dos, checks, comments, planning, booking) travels inside the vehicle, filtered by what this user may see
+  const sent = new Set(outVehicles.map((x) => x.id));
+  await attachColibriSource(db, outVehicles);
+  await attachMyAssign(db, u, outVehicles);
+  const repair = await repairDataFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
+  for (const cv of outVehicles) { const x = repair.get(cv.id); if (x) cv.repair = x; }
+  const photoNames = await userNames(db, ps.map((p) => p.takenBy));
+  const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map((p) => photoToClient(p, photoNames));
 
   const cursor = Math.max(since, ...vs.map((r) => r.seq), ...ps.map((p) => p.seq));
   return {
@@ -490,10 +621,10 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   };
 }
 
-export const photoToClient = (p: PhotoRow): ClientPhoto => ({
+export const photoToClient = (p: PhotoRow, names?: Map<string, string>): ClientPhoto => ({
   id: p.id, vehicleId: p.vehicleId, label: p.label, phase: p.phase as ClientPhoto["phase"], source: p.source, inPdf: p.inPdf,
   takenAt: p.takenAt.toISOString(), takenBy: p.takenBy, sort: p.sort, hasFile: !!p.fileKey, colibriPosition: p.colibriPosition,
-  colibriIndex: p.colibriIndex, deleted: !!p.deletedAt, seq: p.seq,
+  colibriIndex: p.colibriIndex, deleted: !!p.deletedAt, seq: p.seq, repairStage: p.repairStage, role: p.role, takenByName: p.takenBy ? names?.get(p.takenBy) ?? null : null,
 });
 
 /**
@@ -520,12 +651,12 @@ export async function visibleStations(db: Db, u: Principal, orgId: string, vs: P
   return all.filter((x) => ids.has(x.id));
 }
 
-/** Vehicles physically present per site: every status but `rendu`, deleted ones excluded. */
+/** Occupancy of a site = the cars being repaired there right now (status "reparatur"), deleted ones excluded. */
 export async function occupancyOf(db: Pick<Db, "select">, orgId: string, stationIds: string[]): Promise<Record<string, number>> {
   const out: Record<string, number> = Object.fromEntries(stationIds.map((id) => [id, 0]));
   if (!stationIds.length) return out;
   const rows = await db.select({ id: vehicles.stationId, n: sql<number>`count(*)::int` }).from(vehicles)
-    .where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), ne(vehicles.statut, "rendu"), inArray(vehicles.stationId, stationIds)))
+    .where(and(eq(vehicles.orgId, orgId), isNull(vehicles.deletedAt), eq(vehicles.statut, "reparatur"), inArray(vehicles.stationId, stationIds)))
     .groupBy(vehicles.stationId);
   for (const r of rows) if (r.id) out[r.id] = r.n;
   return out;
@@ -535,18 +666,23 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const list = await visibleStations(db, u, orgId, vs);
   const showCommission = canOrg(u, "commission.modifier", orgId) || canOrg(u, "stations.gerer", orgId);
   const st: ClientStation[] = list.map((s) => ({
-    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active, azureTenant: s.azureTenant,
+    id: s.id, type: s.type, name: s.name, country: s.country, capacite: s.capacite, active: s.active, azureTenant: s.azureTenant, repairsPerDay: s.repairsPerDay, address: s.address,
     ...(showCommission ? { commissionMode: s.commissionMode, commissionPct: Number(s.commissionPct) } : {}),
   }));
   const [me] = await db.select().from(users).where(eq(users.id, u.id));
   const perms = new Set<string>();
   u.grants.filter((g) => g.orgId === orgId).forEach((g) => g.permissions.forEach((p) => perms.add(p)));
   if (u.isSuperadmin) PERMISSIONS.forEach((p) => perms.add(p));
-  let people: { id: string; name: string }[] = [];
+  let people: PullResponse["refs"]["people"] = [];
+  // roles and stations of the people of the organisation (sub-line of the pickers; an assignment without a station = all stations)
+  const accessRows = await db.select({ userId: roleAssignments.userId, stationId: roleAssignments.stationId, role: roles.name }).from(roleAssignments).innerJoin(roles, eq(roles.id, roleAssignments.roleId)).where(eq(roleAssignments.orgId, orgId));
+  const access = new Map<string, { roles: Set<string>; stationIds: Set<string> }>();
+  for (const r of accessRows) { const e = access.get(r.userId) ?? { roles: new Set<string>(), stationIds: new Set<string>() }; e.roles.add(r.role); if (r.stationId) e.stationIds.add(r.stationId); access.set(r.userId, e); }
   if (canOrg(u, "vehicules.assigner", orgId)) {
     const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, orgId));
-    people = rows.map((r) => ({ id: r.id, name: r.name || r.email }));
+    people = rows.map((r) => ({ id: r.id, name: r.name || r.email, roles: [...(access.get(r.id)?.roles ?? [])], stationIds: [...(access.get(r.id)?.stationIds ?? [])] }));
   }
+  const fp = fieldProfile(u, orgId);
   const priceSafe = visibleSettings(u, orgId, settings);
   // master data for the pickers
   const internal = u.isSuperadmin || u.grants.some((g) => g.orgId === orgId && ["station", "assigne", "campagne"].includes(g.scope));
@@ -562,12 +698,21 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const maySplit = u.isSuperadmin || perms.has("repartition_interne.voir");
   const techRows = maySplit ? await db.select().from(technicians).where(and(eq(technicians.orgId, orgId), eq(technicians.active, true))).orderBy(asc(technicians.name)) : [];
   const occ = await occupancyOf(db, orgId, list.map((x) => x.id));
+  const bodyshops = perms.has("reparatur.board")
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
+    : [];
+  const repairLocations = perms.has("termine.buchen")
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "hall"), eq(stations.active, true))).orderBy(asc(stations.name)))
+      .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
+    : [];
   return {
-    stations: st, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms] }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),
     companies: compRows.map((co) => ({ id: co.id, name: co.name, address: co.address, taxId: co.taxId, email: co.email, footer: co.footer, hasLogo: !!co.logoKey, logo: (co.logoMeta as { kind: "jpg" | "png"; width: number; height: number } | null) ?? null })),
-    technicians: techRows.map((tc) => ({ id: tc.id, name: tc.name, userId: tc.userId, defaultPctPdr: Number(tc.defaultPctPdr), defaultPctDemontage: Number(tc.defaultPctDemontage) })),
+    technicians: techRows.map((tc) => ({ id: tc.id, name: tc.name, userId: tc.userId, defaultPctPdr: Number(tc.defaultPctPdr), defaultPctDemontage: Number(tc.defaultPctDemontage), kind: (tc.kind === "headliner" ? "headliner" : "pdr") as "pdr" | "headliner", stationIds: tc.userId ? [...(access.get(tc.userId)?.stationIds ?? [])] : [] })),
+    methods: await clientMethods(db, orgId, u.isSuperadmin || perms.has("prix.voir")),
+    insurerMethods: (await db.select().from(insurerMethods).innerJoin(insurers, eq(insurers.id, insurerMethods.insurerId)).where(eq(insurers.orgId, orgId))).map((x) => ({ insurerId: x.insurer_methods.insurerId, country: x.insurer_methods.country, methodId: x.insurer_methods.methodId })),
   };
 }

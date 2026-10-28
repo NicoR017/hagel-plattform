@@ -7,7 +7,7 @@ import { hashPassword, hashToken, newToken, verifyPassword } from "./crypto";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
 import { audit } from "./audit";
-import { invitations, loginTokens, memberships, organizations, roleAssignments, roles, sessions, users } from "./schema";
+import { invitations, loginTokens, memberships, organizations, roleAssignments, roles, sessions, technicians, users } from "./schema";
 
 export class HttpError extends Error {
   constructor(public status: 400 | 401 | 403 | 404 | 409 | 429 | 502, public code: ErrorCode, public params: Record<string, string> = {}) { super(code); }
@@ -127,6 +127,31 @@ export interface InviteParams {
   orgId: string; email: string; roleId: string; stationId: string | null;
   scopeClientStationId: string | null; scopeInsurerId: string | null; scopeCampaignId: string | null;
   assignmentExpiresAt: Date | null; invitedBy: string; language: Lang;
+  /** with the Technician role: PDR technician (default) or headliner */
+  technicianKind?: "pdr" | "headliner";
+}
+
+const localPart = (email: string) => email.split("@")[0];
+
+/**
+ * The invited technician is in the list of technicians (Verwaltung) straight away, before the invitation is accepted:
+ * a record with the e-mail address (the weekly report goes there) and, once the account exists, linked to it.
+ * An existing record of the same e-mail or account is reused, never duplicated.
+ */
+export async function ensureTechnician(db: Db, o: { orgId: string; email: string; userId: string | null; name?: string; kind?: "pdr" | "headliner" }) {
+  const mail = o.email.trim().toLowerCase();
+  const rows = await db.select().from(technicians).where(eq(technicians.orgId, o.orgId));
+  const found = rows.find((x) => (o.userId && x.userId === o.userId) || (x.email ?? "").trim().toLowerCase() === mail);
+  if (found) {
+    const set: Partial<typeof technicians.$inferInsert> = {};
+    if (o.userId && !found.userId) set.userId = o.userId;
+    // the placeholder name (the part of the address before the @) gives way to the real name
+    if (o.name?.trim() && found.name.trim().toLowerCase() === localPart(mail)) set.name = o.name.trim();
+    if (!found.email) set.email = mail;
+    if (Object.keys(set).length) await db.update(technicians).set({ ...set, updatedAt: now() }).where(eq(technicians.id, found.id));
+    return;
+  }
+  await db.insert(technicians).values({ orgId: o.orgId, name: o.name?.trim() || localPart(mail), email: mail, userId: o.userId, kind: o.kind ?? "pdr", active: true });
 }
 
 export async function inviteUser(db: Db, cfg: Config, mailer: Mailer, p: InviteParams): Promise<{ id: string; existingUser: boolean }> {
@@ -137,6 +162,7 @@ export async function inviteUser(db: Db, cfg: Config, mailer: Mailer, p: InviteP
   if (existing && existing.status === "active") {
     // already has an account: grant access directly and tell them
     await addAccess(db, existing.id, p);
+    if (role.key === "technicien") await ensureTechnician(db, { orgId: p.orgId, email: p.email, userId: existing.id, name: existing.name, kind: p.technicianKind });
     await mailer.send({ to: p.email, ...accessMail(isLang(existing.language) ? existing.language : "de", org.name, `${cfg.appUrl}/login`) });
     await audit(db, { orgId: p.orgId, userId: p.invitedBy, action: "grant_access", entity: "user", entityId: existing.id, after: { roleId: p.roleId, stationId: p.stationId } });
     return { id: existing.id, existingUser: true };
@@ -149,6 +175,7 @@ export async function inviteUser(db: Db, cfg: Config, mailer: Mailer, p: InviteP
     assignmentExpiresAt: p.assignmentExpiresAt, language: p.language, tokenHash: hashToken(token),
     expiresAt: addMs(cfg.inviteTtlHours * 3600_000), invitedBy: p.invitedBy,
   }).returning();
+  if (role.key === "technicien") await ensureTechnician(db, { orgId: p.orgId, email: p.email, userId: null, kind: p.technicianKind });
   await sendInviteMail(cfg, mailer, p.email, org.name, token, p.language);
   await audit(db, { orgId: p.orgId, userId: p.invitedBy, action: "invite", entity: "invitation", entityId: inv.id, after: { email: p.email, roleId: p.roleId, stationId: p.stationId } });
   return { id: inv.id, existingUser: false };
@@ -201,6 +228,8 @@ export async function acceptInvitation(db: Db, cfg: Config, token: string, name:
     orgId: inv.orgId, roleId: inv.roleId, stationId: inv.stationId, scopeClientStationId: inv.scopeClientStationId,
     scopeInsurerId: inv.scopeInsurerId, scopeCampaignId: inv.scopeCampaignId, assignmentExpiresAt: inv.assignmentExpiresAt,
   });
+  const [invRole] = await db.select().from(roles).where(eq(roles.id, inv.roleId));
+  if (invRole?.key === "technicien") await ensureTechnician(db, { orgId: inv.orgId, email: inv.email, userId, name: existing?.name || name });
   await audit(db, { orgId: inv.orgId, userId, action: "accept_invitation", entity: "user", entityId: userId, after: { email: inv.email } });
   return createSession(db, cfg, userId, device);
 }

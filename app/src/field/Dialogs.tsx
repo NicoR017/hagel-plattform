@@ -9,12 +9,21 @@ import { Dialog, Field, NumInput, Seg } from "./ui";
 import { useField, useIssues, useVehicle } from "./store";
 import { toast } from "./toast";
 import { Occ } from "./occupancy";
+import { isPlace } from "./places";
+import { Picker, type PickItem } from "./Picker";
+import { TechPicker } from "./TechPicker";
+import { snapshotVehicles, undoMove, undoStatus } from "./undo";
+import { resolveUi, setUiMode, useUiMode } from "./uiMode";
+import { useAppConfig } from "../env";
 import type { Key } from "../i18n";
-import { STATUSES } from "@hagel/shared";
+import { REFUSE_REASONS, STATUSES } from "@hagel/shared";
 
+/** how long the "Rückgängig" button stays on screen */
+export const UNDO_MS = 6000;
 export const statusLabel = (s: string) => t(("st." + s) as Key);
-export const HOLD_REASONS = ["Teile", "Freigabe", "Demontage", "Sonstiges"] as const;
+export const HOLD_REASONS = ["Teile", "Freigabe", "Termin", "Demontage", "Sonstiges"] as const;
 export const holdReasonLabel = (r: string) => tOr("hold." + r, r);
+export const refuseReasonLabel = (r: string) => tOr("rf_" + r, r);
 
 /** Change status of one or many vehicles. "On hold" requires a reason. */
 export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[]; current?: string; onClose: () => void; onDone?: () => void }) {
@@ -22,17 +31,32 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
   const [statut, setSt] = useState(current ?? "besichtigung");
   // leaving 'on hold' offers the status the car had before (the server remembers it)
   const before = useVehicle(ids[0] ?? "");
-  const prev = current === "attente" && ids.length === 1 ? ((before?.statutAvant as string | null | undefined) ?? null) : null;
+  const prev = (current === "attente" || current === "refuse") && ids.length === 1 ? ((before?.statutAvant as string | null | undefined) ?? null) : null;
   useEffect(() => { if (prev) setSt(prev); }, [prev]);
   const [reason, setReason] = useState<string>("Teile");
   const [other, setOther] = useState("");
-  const motif = statut === "attente" ? (reason === "Sonstiges" ? other.trim() : reason) : "";
-  const valid = statut !== "attente" || !!motif;
+  const [refuseKey, setRefuseKey] = useState<string>(REFUSE_REASONS[0]);
+  const [refuseNote, setRefuseNote] = useState("");
+  // a refusal is only possible before the repair: the chip is greyed out for a car that is in repair, finished or returned
+  const canRefuse = ids.length !== 1 || !current || current === "arrive" || current === "besichtigung" || current === "attente" || current === "refuse";
+  const motif = statut === "attente" ? (reason === "Sonstiges" ? other.trim() : reason) : statut === "refuse" ? refuseKey + (refuseNote.trim() ? ": " + refuseNote.trim() : "") : "";
+  const valid = (statut !== "attente" || !!motif) && (statut !== "refuse" || canRefuse);
   return (
     <Dialog title={t("changeStatus")} onClose={onClose}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} onClick={() => setSt(s)}>{s === prev ? "↩ " : ""}{statusLabel(s)}</button>)}
+        {STATUSES.map((s) => <button key={s} className={"chip" + (s === statut ? " on" : "")} disabled={s === "refuse" && !canRefuse} onClick={() => setSt(s)}>{s === prev ? "↩ " : ""}{statusLabel(s)}</button>)}
       </div>
+      {statut === "refuse" && (
+        <div style={{ marginTop: 14 }}>
+          <Field label={t("rfTitle")}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {REFUSE_REASONS.map((r) => <button key={r} className={"chip" + (r === refuseKey ? " on" : "")} onClick={() => setRefuseKey(r)}>{refuseReasonLabel(r)}</button>)}
+            </div>
+          </Field>
+          <input className="inp" value={refuseNote} placeholder={t("rfComment")} maxLength={200} onChange={(e) => setRefuseNote(e.target.value)} />
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t("rfHint")}</div>
+        </div>
+      )}
       {statut === "attente" && (
         <div style={{ marginTop: 14 }}>
           <Field label={t("holdReason")}>
@@ -44,8 +68,10 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
         </div>
       )}
       <button className="pbtn" disabled={!valid} onClick={async () => {
+        // remember what each vehicle was, so the toast can undo the change (a second, logged operation)
+        const prev = await snapshotVehicles(f.db, ids);
         for (const id of ids) await setStatus(f.mut, id, statut, motif || undefined);
-        toast(`${ids.length} → ${statusLabel(statut)}`);
+        toast(`${ids.length} → ${statusLabel(statut)}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoStatus(f.mut, prev, statut); toast(t("v3Undone")); } });
         onDone?.(); onClose();
       }}>{t("apply")}</button>
     </Dialog>
@@ -55,7 +81,7 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
 /** Move to another site (right on the source site is checked by the server; the customer does not change). */
 export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from?: string | null; onClose: () => void; onDone?: () => void }) {
   const f = useField();
-  const sites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from);
+  const sites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from && isPlace(s));
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
   const dest = sites.find((s) => s.id === to);
@@ -64,13 +90,22 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
   // the server warns when the site is already full before the move; show the same warning as soon as the move would fill it
   const full = !!dest && dest.capacite > 0 && (occ[dest.id] ?? 0) + ids.length > dest.capacite;
   const tenantDiffers = !!dest && !!src?.azureTenant && !!dest.azureTenant && src.azureTenant !== dest.azureTenant;
+  const typeWord = (ty: string) => (ty === "hall" ? t("v3TypeHall") : ty === "parc" ? t("v3TypeParc") : t("v3TypeCarrosserie"));
+  const items: PickItem[] = sites.map((s) => {
+    const n = occ[s.id] ?? 0, isFull = s.capacite > 0 && n + ids.length > s.capacite;
+    const other = !!src?.azureTenant && !!s.azureTenant && src.azureTenant !== s.azureTenant;
+    return {
+      id: s.id, title: s.name, search: [typeWord(s.type), s.address],
+      sub: [typeWord(s.type), s.capacite ? t("pkPlaces").replace("{n}", String(n)).replace("{cap}", String(s.capacite)) : "", s.address].filter(Boolean).join(" · "),
+      tag: isFull ? t("pkFull") : other ? t("pkOtherTenant") : undefined,
+    };
+  });
   return (
     <Dialog title={t("moveTitle")} onClose={onClose}>
       <Field label={t("moveTo")}>
-        <select className="sel" value={to} onChange={(e) => setTo(e.target.value)}>
-          <option value="">—</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}{s.capacite ? ` (${occ[s.id] ?? 0}/${s.capacite})` : ""}</option>)}
-        </select>
+        <Picker items={items} multi={false} placeholder={t("pkStationPh")} hint={t("pkStationHint").replace("{n}", String(sites.length))}
+          chosen={dest ? [{ id: dest.id, label: dest.name, sub: items.find((i) => i.id === dest.id)?.sub }] : []}
+          onAdd={(it) => setTo(it.id)} onRemove={() => setTo("")} />
         {dest && (
           <div style={{ marginTop: 8 }}>
             <Occ present={(occ[dest.id] ?? 0) + ids.length} capacity={dest.capacite} /> <span className="muted" style={{ fontSize: 12 }}>{t("occupancy")} {t("afterMove")}</span>
@@ -82,8 +117,9 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
       <Field label={t("moveNote")}><input className="inp" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       <div className="muted" style={{ fontSize: 12 }}>{t("moveHint")}</div>
       <button className="pbtn" disabled={!dest} onClick={async () => {
+        const prev = await snapshotVehicles(f.db, ids);
         for (const id of ids) await moveVehicle(f.mut, id, to, note || undefined);
-        toast(`${ids.length} → ${dest!.name}`);
+        toast(`${ids.length} → ${dest!.name}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoMove(f.mut, prev, to, t("v3Undone")); toast(t("v3Undone")); } });
         onDone?.(); onClose();
       }}>{t("apply")}</button>
     </Dialog>
@@ -97,14 +133,14 @@ export function SharesDialog({ ids, onClose, onDone }: { ids: string[]; onClose:
   return (
     <Dialog title={`${t("sharesFor")} ${ids.length}`} onClose={onClose}>
       <Field label={t("techPdr")}>
-        <input className="inp" value={tn} placeholder={t("nameKeep")} onChange={(e) => setTn(e.target.value)} />
+        <TechPicker kind="pdr" name={tn} placeholder={t("pkKeepPh")} onChange={(s, pct) => { setTn(s); if (pct != null) setTp(pct); }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
           {[40, 45, 50, 55, 60].map((p) => <button key={p} className={"chip" + (tp === p ? " on" : "")} onClick={() => setTp(p)}>{p}</button>)}
           <NumInput value={tp} onChange={setTp} max={100} style={{ width: 84 }} /> %
         </div>
       </Field>
       <Field label={t("techDem")}>
-        <input className="inp" value={dn} placeholder={t("nameSameAsPdr")} onChange={(e) => setDn(e.target.value)} />
+        <TechPicker kind="dem" name={dn} placeholder={t("pkSamePh")} onChange={(s, pct) => { setDn(s); if (pct != null) setDp(pct); }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
           {[50, 70, 80, 100].map((p) => <button key={p} className={"chip" + (dp === p ? " on" : "")} onClick={() => setDp(p)}>{p}</button>)}
           <NumInput value={dp} onChange={setDp} max={100} style={{ width: 84 }} /> %
@@ -124,13 +160,15 @@ export function AssignDialog({ ids, vehicles, onClose, onDone }: { ids: string[]
   const f = useField();
   const people = f.refs?.people ?? [];
   const first = vehicles.find((v) => v.id === ids[0]);
+  const stationName = new Map((f.refs?.stations ?? []).map((s) => [s.id, s.name]));
+  const items: PickItem[] = people.map((p) => ({ id: p.id, title: p.name, sub: [(p.roles ?? []).join(", "), (p.stationIds ?? []).map((s) => stationName.get(s)).filter(Boolean).join(", ")].filter(Boolean).join(" · ") }));
   const [sel, setSel] = useState<string[]>(ids.length === 1 ? first?.assigneeIds ?? [] : []);
   return (
     <Dialog title={t("assignTitle")} onClose={onClose}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {people.map((p) => <button key={p.id} className={"chip" + (sel.includes(p.id) ? " on" : "")} onClick={() => setSel((s) => (s.includes(p.id) ? s.filter((x) => x !== p.id) : [...s, p.id]))}>{p.name}</button>)}
-        {!people.length && <span className="muted">{t("noData")}</span>}
-      </div>
+      <Picker multi items={items} placeholder={t("pkPeoplePh")} hint={t("pkPeopleHint").replace("{n}", String(people.length))}
+        chosen={sel.map((id) => ({ id, label: people.find((p) => p.id === id)?.name ?? id, sub: items.find((i) => i.id === id)?.sub }))}
+        onAdd={(it) => setSel((s) => (s.includes(it.id) ? s : [...s, it.id]))} onRemove={(id) => setSel((s) => s.filter((x) => x !== id))} />
+      {!people.length && <span className="muted">{t("noData")}</span>}
       <button className="pbtn" onClick={async () => {
         for (const id of ids) await assignVehicle(f.mut, id, "pdr", sel);
         toast(t("assigned"));
@@ -147,8 +185,13 @@ export function SettingsDialog({ onClose, onBackup }: { onClose: () => void; onB
   const canSettings = f.can("parametres.gerer");
   const s = f.refs?.settings;
   const [rateDE, setRateDE] = useState(s?.rateDE ?? 83), [rateES, setRateES] = useState(s?.rateES ?? 69), [teiler, setTeiler] = useState<10 | 12>((s?.defaultTeiler as 10 | 12) ?? 10);
+  const cfg = useAppConfig();
+  const ui = useUiMode(cfg?.uiV3Default);
   return (
     <Dialog title={t("settings")} onClose={onClose}>
+      <Field label={t("v3View")}>
+        <Seg value={ui} options={[{ value: "v3" as const, label: t("v3ViewNew") }, { value: "legacy" as const, label: t("v3ViewOld") }]} onChange={(m) => setUiMode(m)} />
+      </Field>
       <Field label={t("language")}>
         <Seg value={getLang()} options={LANG_LIST.map((l) => ({ value: l, label: l.toUpperCase() }))} onChange={(l) => { setLang(l); void api("PUT", "/me/language", { language: l }).catch(() => undefined); }} />
       </Field>

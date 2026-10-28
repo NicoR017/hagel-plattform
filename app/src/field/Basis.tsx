@@ -6,8 +6,11 @@ import { t } from "../i18n";
 import { applyColibriToVehicle, readColibriFile } from "../sync/colibriImport";
 import type { LocalVehicle } from "../sync/db";
 import { setHeader, setPrefs } from "../sync/mutations";
+import { defaultMethodFor, methodOfVehicle } from "./calc";
+import { MethodField } from "./MethodField";
 import { CustomerPicker, MoveDialog, StatusDialog, holdReasonLabel, statusLabel } from "./Dialogs";
 import { OcrDialog } from "./Ocr";
+import { Picker, type PickItem } from "./Picker";
 import { go } from "./route";
 import { useField } from "./store";
 import { toast } from "./toast";
@@ -32,9 +35,19 @@ export function Basis({ v }: { v: LocalVehicle }) {
   // legacy vehicles (before letterheads) map their old logo switch onto the seeded companies
   const currentCompany = x.companyId && companies.some((co) => co.id === x.companyId) ? x.companyId : (x.logo === "none" ? companies.find((co) => !co.hasLogo) : companies.find((co) => co.hasLogo))?.id ?? companies[0]?.id ?? "";
   const linked = new Set((f.refs?.stationInsurers ?? []).filter((l) => l.stationId === v.clientStationId).map((l) => l.insurerId));
-  // only insurers that work with this customer carrosserie (all of them when none is linked yet); the current one stays selectable
-  const insurerOptions = (f.refs?.insurers ?? []).filter((i) => !linked.size || linked.has(i.id) || i.id === v.insurerId);
-  const campaignOptions = (f.refs?.campaigns ?? []).filter((cp) => !cp.stationIds.length || (v.stationId && cp.stationIds.includes(v.stationId)) || cp.id === v.campaignId);
+  // every insurer can be found; the ones that work with this customer carrosserie come first
+  const customerName = f.stationName(v.clientStationId) || "";
+  const insurerItems: PickItem[] = (f.refs?.insurers ?? []).map((i) => ({
+    id: i.id, title: i.name, rank: linked.has(i.id) ? 0 : 1,
+    sub: linked.has(i.id) && customerName ? t("pkWorksWith").replace("{name}", customerName) : undefined,
+  }));
+  /** the method follows the insurer as long as nothing is measured and nobody chose one by hand */
+  const setInsurer = (id: string | null) => {
+    const cur = methodOfVehicle(f.refs, v), mapped = f.refs?.insurerMethods?.find((i) => i.insurerId === v.insurerId && i.country === land);
+    const auto = !cur || cur.isSystem || mapped?.methodId === cur.id;
+    const m = auto && edit && !Object.keys((v.panels ?? {}) as object).length ? defaultMethodFor(f.refs, id, land) : null;
+    set({ insurerId: id, ...(m && m.id !== cur?.id ? { methodId: m.id, methodVersion: m.version } : {}) });
+  };
 
   const importScan = async (file: File) => {
     setInfo(t("readingScan"));
@@ -71,24 +84,21 @@ export function Basis({ v }: { v: LocalVehicle }) {
 
       <Field label={t("basisLand")} hint={land === "ES" ? t("landHintES") : t("landHintDE")}>
         <Seg value={land} options={[{ value: "DE", label: "🇩🇪 Deutschland · BVAT" }, { value: "ES", label: "🇪🇸 España · IVA 21 %" }]}
-          onChange={(l) => { set({ land: l, stundensatz: prices ? (l === "ES" ? f.calc.rateES : f.calc.rateDE) : undefined } as HeaderFields); void setPrefs(f.db, { land: l }); }} />
+          onChange={(l) => {
+            // another country needs another engine: while nothing is measured yet the method follows (insurer's, else the system one)
+            const m = f.refs?.methods?.length && !Object.keys((v.panels ?? {}) as object).length ? defaultMethodFor(f.refs, v.insurerId, l) : null;
+            set({ land: l, stundensatz: prices ? (l === "ES" ? f.calc.rateES : f.calc.rateDE) : undefined, ...(m ? { methodId: m.id, methodVersion: m.version } : {}) } as HeaderFields);
+            void setPrefs(f.db, { land: l });
+          }} />
       </Field>
       {(f.refs?.insurers.length ?? 0) > 0 && (
         <Field label={t("insurer")}>
-          <select className="sel" disabled={!edit} value={v.insurerId ?? ""} onChange={(e) => set({ insurerId: e.target.value || null })}>
-            <option value="">—</option>
-            {insurerOptions.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-          </select>
+          <Picker items={insurerItems} multi={false} disabled={!edit} placeholder={t("pkInsurerPh")} hint={t("pkInsurerHint").replace("{n}", String(insurerItems.length))}
+            chosen={v.insurerId ? [{ id: v.insurerId, label: insurerItems.find((i) => i.id === v.insurerId)?.title ?? "—", sub: insurerItems.find((i) => i.id === v.insurerId)?.sub }] : []}
+            onAdd={(it) => setInsurer(it.id)} onRemove={() => setInsurer(null)} />
         </Field>
       )}
-      {(f.refs?.campaigns.length ?? 0) > 0 && (
-        <Field label={t("campaign")}>
-          <select className="sel" disabled={!edit} value={v.campaignId ?? ""} onChange={(e) => set({ campaignId: e.target.value || null })}>
-            <option value="">—</option>
-            {campaignOptions.map((cp) => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
-          </select>
-        </Field>
-      )}
+      <MethodField v={v} />
       {companies.length > 0 ? (
         <Field label={t("letterhead")} hint={t("letterheadHint")}>
           <select className="sel" disabled={!edit} value={currentCompany} onChange={(e) => { set({ companyId: e.target.value }); void setPrefs(f.db, { lastCompanyId: e.target.value }); }}>

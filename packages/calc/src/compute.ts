@@ -1,8 +1,8 @@
-import { DEFAULT_DEMONTAGE_EUR, DEFAULT_SETTINGS, teilerVals } from "./config";
+import { DEFAULT_AW_PARAMS, DEFAULT_DEMONTAGE_EUR, DEFAULT_SETTINGS, ES_MATRIX_DEFAULT } from "./config";
 import { panelBollos, panelRepairAW, panelStats } from "./bvat";
 import { adjustmentLabels, esCat, esHours, esKickback } from "./es";
 import type {
-  CalcPanel, CalcResult, CalcVehicle, EsAdjustment, GlassLine, Land, Settings, SharesDefaults, SharesInput, SharesResult,
+  AwParams, CalcMethodDef, CalcPanel, CalcResult, CalcVehicle, EsAdjustment, GlassLine, Land, Settings, SharesDefaults, SharesInput, SharesResult,
 } from "./types";
 
 export const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -31,21 +31,21 @@ export function glassList(v: CalcVehicle): GlassLine[] {
   return GLASS.filter((x) => g[x.k] && g[x.k]!.on).map((x) => ({ ...x, eur: Math.max(0, +(g[x.k]!.eur || 0)) }));
 }
 
-function activePanels(v: CalcVehicle, teiler: number | null): CalcPanel[] {
+function activePanels(v: CalcVehicle, teiler: number | null, aw: AwParams = DEFAULT_AW_PARAMS): CalcPanel[] {
   return Object.values(v.panels || {})
     .map((p) => ({
       ...p,
       ...panelStats(p),
       ...panelBollos(p),
-      repair: teiler == null ? 0 : panelRepairAW(p, teiler),
+      repair: teiler == null ? 0 : panelRepairAW(p, teiler, aw),
     }))
     .filter((p) => p.total > 0 || (p.big || 0) > 0);
 }
 
-export function computeDE(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS): CalcResult {
+export function computeDE(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS, aw: AwParams = DEFAULT_AW_PARAMS): CalcResult {
   const vs = vehicleSettings(v, s);
-  const t = teilerVals(vs.teiler), euroPerAW = vs.stundensatz / vs.teiler;
-  const panels = activePanels(v, vs.teiler);
+  const t = aw.extras[String(vs.teiler === 12 ? 12 : 10)], euroPerAW = vs.stundensatz / vs.teiler;
+  const panels = activePanels(v, vs.teiler, aw);
   const repairAW = panels.reduce((a, p) => a + p.repair, 0);
   const finishN = panels.filter((p) => p.finish && p.method !== "erneuern" && p.total > 0).length;
   const finishAW = Math.min(t.finishPer * finishN, t.finishCap);
@@ -54,8 +54,9 @@ export function computeDE(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS): CalcR
   const totalAW = repairAW + finishAW + ruestAW + greifAW + hohlAW + verbrAW;
   const awNetto = totalAW * euroPerAW;
   const kleberN = panels.filter((p) => p.kleber).length;
-  const kleberMat = kleberN === 0 ? 0 : kleberN <= 2 ? 10 : kleberN <= 5 ? 15 : 20;
-  const hohlMat = v.hohlraum ? 15 : 0;
+  const km = aw.kleberMaterial;
+  const kleberMat = kleberN === 0 ? 0 : kleberN <= 2 ? km.upTo2 : kleberN <= 5 ? km.upTo5 : km.more;
+  const hohlMat = v.hohlraum ? aw.hohlraumMaterial : 0;
   const bigCount = panels.reduce((a, p) => a + (p.big || 0), 0);
   const bigEur = panels.reduce((a, p) => a + (+(p.bigEur || 0)), 0);
   const demEur = demEurOf(v);
@@ -64,7 +65,7 @@ export function computeDE(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS): CalcR
   return withGlass({
     land: "DE", panels, repairAW, finishAW, ruestAW, greifAW, hohlAW, verbrAW, totalAW, awNetto,
     repairEur: repairAW * euroPerAW, kleberMat, hohlMat, bigCount, bigEur, demEur,
-    netto: awNetto + kleberMat + hohlMat + bigEur + demEur, vat: vatOf(v, s), euroPerAW, dents, avg,
+    netto: awNetto + kleberMat + hohlMat + bigEur + demEur, vat: aw === DEFAULT_AW_PARAMS ? vatOf(v, s) : aw.vat, euroPerAW, dents, avg,
     panelCount: panels.length, kleberN, glass: [], glassEur: 0, brutto: 0,
   }, v);
 }
@@ -119,8 +120,17 @@ function withGlass(c: CalcResult, v: CalcVehicle): CalcResult {
   return c;
 }
 
-export function computeVehicle(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS): CalcResult {
-  return vehicleLand(v) === "ES" ? computeES(v, s) : computeDE(v, s);
+/**
+ * `method` = the (versioned) calculation method frozen on the vehicle. Without a method, or with one whose engine does not
+ * fit the vehicle's country, the historical behaviour applies (organisation settings + built-in tables).
+ */
+export function computeVehicle(v: CalcVehicle, s: Settings = DEFAULT_SETTINGS, method?: CalcMethodDef | null): CalcResult {
+  if (vehicleLand(v) === "ES") {
+    // a Spanish method brings its own matrix (null = the built-in one), never the live organisation settings: that is what freezes an estimate
+    if (method?.engine === "matrix") return computeES(v, { ...s, esMatrix: method.params.esMatrix ?? ES_MATRIX_DEFAULT });
+    return computeES(v, s);
+  }
+  return method?.engine === "aw" ? computeDE(v, s, method.params) : computeDE(v, s);
 }
 
 export const SHARES_DEFAULTS: SharesDefaults = { techPct: 50, werkPct: 25, werkMode: "pct", demTechPct: 100 };

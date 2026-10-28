@@ -2,20 +2,22 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { auditLog, vehicleAssignments, vehicles, users } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
+import { berlinDate } from "../src/dashboard";
 
 let c: Ctx;
-let A: string, B: string, MINI: string;
+let A: string, B: string, MINI: string, CARRO: string; // A = hall, B = other hall, CARRO = customer carrosserie
 let chefA: string, chefB: string, tech: string, techId: string, assessor: string;
 
 const mk = (id: string, o: Record<string, unknown> = {}, h: Record<string, unknown> = {}) =>
-  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: A, header: { land: "ES", kennzeichen: "P-" + id.slice(0, 4), leistungsdatum: "2026-10-19", stundensatz: 69, ...h }, panels: { haube: dentsPanel("haube", { "20": 10, "40": 2 }) }, shares: { techName: "Ana", techPct: 50 }, ...o } });
+  op("vehicle.create", { vehicle: { id, stationId: A, clientStationId: CARRO, header: { land: "ES", kennzeichen: "P-" + id.slice(0, 4), leistungsdatum: "2026-10-19", stundensatz: 69, ...h }, panels: { haube: dentsPanel("haube", { "20": 10, "40": 2 }) }, shares: { techName: "Ana", techPct: 50 }, ...o } });
 const dash = (token: string, q = "") => call(c, "GET", `/dashboard${q}`, { token, org: c.orgES });
 const status = (token: string, id: string, statut: string, motif?: string) => push(c, token, [op("vehicle.status", { vehicleId: id, statut, ...(motif ? { motif } : {}) })]);
 
 beforeAll(async () => {
   c = await setup();
   const st = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-  A = st.find((s) => s.type === "carrosserie").id; B = st.find((s) => s.type === "hall").id;
+  CARRO = st.find((s) => s.type === "carrosserie").id;
+  A = st.find((s) => s.type === "hall" && s.name === "Nave Test A").id; B = st.find((s) => s.type === "hall" && s.id !== A).id;
   await call(c, "PUT", `/admin/orgs/${c.orgES}/tenants`, { token: c.superToken, body: { tenants: ["T1", "T2"] } });
   await call(c, "PUT", `/admin/stations/${A}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "T1", capacite: 10 } });
   await call(c, "PUT", `/admin/stations/${B}`, { token: c.superToken, org: c.orgES, body: { azure_tenant: "T2", capacite: 10 } });
@@ -30,18 +32,18 @@ afterAll(async () => { await c.h.close(); });
 
 const ids: Record<string, string> = {};
 describe("occupancy", () => {
-  it("present = every status but 'rendu'; the pull carries it for the visible sites", async () => {
+  it("occupancy = the cars in repair status right now; the pull carries it for the visible sites", async () => {
     for (const k of ["a", "b", "c", "d"]) ids[k] = uuid();
     expect((await push(c, assessor, [mk(ids.a), mk(ids.b), mk(ids.c), mk(ids.d)])).body.results.every((r: any) => r.status === "ok")).toBe(true);
     await status(assessor, ids.b, "reparatur"); await status(assessor, ids.c, "attente", "Teile"); await status(assessor, ids.d, "rendu");
     const p = await pull(c, assessor, c.orgES);
-    expect(p.refs.occupancy[A]).toBe(3);
+    expect(p.refs.occupancy[A]).toBe(1); // only b is being repaired (a arrived, c is on hold, d was returned)
     expect(p.refs.occupancy[B]).toBe(0);
     expect(p.refs.stations.find((s: any) => s.id === A).azureTenant).toBe("T1");
     // leaving 'on hold' can return to the status before: the client gets it
     expect(p.vehicles.find((v: any) => v.id === ids.c)).toMatchObject({ statut: "attente", statutAvant: "arrive" });
     const adm = (await call(c, "GET", "/admin/stations", { token: c.superToken, org: c.orgES })).body as any[];
-    expect(adm.find((s) => s.id === A)).toMatchObject({ present: 3, capacite: 10 });
+    expect(adm.find((s) => s.id === A)).toMatchObject({ present: 1, capacite: 10 });
   });
   it("a site the user may not see is not in the occupancy", async () => {
     const p = await pull(c, tech, c.orgES);
@@ -51,6 +53,7 @@ describe("occupancy", () => {
 
 describe("moves", () => {
   it("into a full site: warning, not a block (audited); into another tenant: warning", async () => {
+    await status(assessor, ids.a, "reparatur"); // a place is taken by a car in repair only
     const r1 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.a, toStationId: MINI })]);
     expect(r1.body.results[0]).toMatchObject({ status: "ok" });
     expect(r1.body.results[0].warnings ?? []).toEqual([]); // MINI was empty
@@ -65,9 +68,9 @@ describe("moves", () => {
   });
   it("the customer does not change with a move, and the occupancy follows", async () => {
     const [v] = await c.h.db.select().from(vehicles).where(eq(vehicles.id, ids.b));
-    expect(v.stationId).toBe(B); expect(v.clientStationId).toBe(A);
+    expect(v.stationId).toBe(B); expect(v.clientStationId).toBe(CARRO);
     const p = await pull(c, assessor, c.orgES);
-    expect(p.refs.occupancy[B]).toBe(1); expect(p.refs.occupancy[MINI]).toBe(1); expect(p.refs.occupancy[A]).toBe(1);
+    expect(p.refs.occupancy[B]).toBe(1); expect(p.refs.occupancy[MINI]).toBe(1); expect(p.refs.occupancy[A]).toBe(0); // c is on hold, d returned
   });
 });
 
@@ -80,14 +83,14 @@ describe("dashboard", () => {
   it("site cards: occupancy, status counts, arrivals / departures today (moves included)", async () => {
     const d = (await dash(c.superToken)).body;
     const s = (id: string) => d.sites.find((x: any) => x.id === id);
-    expect(s(A)).toMatchObject({ capacity: 10, present: 1 });
+    expect(s(A)).toMatchObject({ capacity: 10, present: 0 });
     expect(s(MINI)).toMatchObject({ capacity: 1, present: 1 });
     expect(s(B).present).toBe(1);
     // vehicles were created today at A; two of them left by a move; one arrived at B and one at MINI
     expect(s(A).arrivalsToday.n).toBe(4); expect(s(A).departuresToday.n).toBe(3); // a, b (moved) and d (rendu today)
     expect(s(MINI).arrivalsToday.n).toBe(2); expect(s(MINI).departuresToday.n).toBe(1); expect(s(B).arrivalsToday.n).toBe(1); // MINI: a and b came, b left again
     expect(s(A).byStatus.rendu.n + s(B).byStatus.reparatur.n).toBeGreaterThan(0);
-    expect(s(A).presentIds.length).toBe(1);
+    expect(s(A).presentIds.length).toBe(0);
   });
 
   it("scope: a chef of site B sees only the vehicles of B; filters narrow the data", async () => {
@@ -97,7 +100,7 @@ describe("dashboard", () => {
     const all = (await dash(c.superToken)).body;
     expect(all.vehicles).toBe(4);
     expect((await dash(c.superToken, `?sites=${B}`)).body.vehicles).toBe(1);
-    expect((await dash(c.superToken, `?client=${A}&sites=${A}`)).body.vehicles).toBe(2); // c (attente) and d (rendu)
+    expect((await dash(c.superToken, `?client=${CARRO}&sites=${A}`)).body.vehicles).toBe(2); // c (attente) and d (rendu)
     expect((await dash(c.superToken, `?insurer=${uuid()}`)).body.vehicles).toBe(0);
   });
 
@@ -159,7 +162,7 @@ describe("dashboard", () => {
 });
 
 describe("weekly technician sheets (pay per technician)", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = berlinDate(new Date()); // the dashboard days are Berlin days (UTC differs between 22:00 and 24:00)
   const sheets = (token: string, q = "") => call(c, "GET", `/dashboard/technician-sheets${q}`, { token, org: c.orgES });
 
   it("cars that became 'fertig' in the period are listed per technician with the technician's share", async () => {

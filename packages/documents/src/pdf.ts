@@ -2,9 +2,11 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFImage, PDFPage } from "pdf-lib";
 import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
-import { dentBreak, docText, esFormula, esLines, esRange, imgLabel, plabel, zustStr } from "./text";
-import type { DocPhoto, DocVehicle, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
-import { TECH_LABELS, techDate, type TechSheetData } from "./techsheet";
+import { dentBreak, docText, handoverText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
+import { SIG_H, SIG_W } from "./types";
+import type { DocPhoto, DocVehicle, HandoverDoc, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
+import { TECH_LABELS, techDate, type TechLang, type TechSheetData } from "./techsheet";
+import { INSURER_REPORT_LABELS, reportDate, reportInt, reportMoney, reportPercent, type InsurerReportData, type InsurerReportKpi, type InsurerReportOptions, type InsurerReportRow } from "./insurer_report";
 
 const W = 595.28, H = 841.89, L = 42, R = 553;
 
@@ -179,6 +181,114 @@ function photoGrid(cv: Canvas, cells: Cell[], head: () => void, rowH: number) {
   if (col === 1) cv.y -= rowH;
 }
 
+/** "19.10.2026, 10:15" -> ["19.10.2026", "10:15"] */
+function splitDateTime(s: string): [string, string] {
+  const m = /^(.*?),?\s+(\d{1,2}:\d{2})$/.exec(s.trim());
+  return m ? [m[1], m[2]] : [s, ""];
+}
+
+/** Wraps by measured width; words longer than the line are cut. Never overflows `maxW`. */
+function wrapWidth(cv: Canvas, str: string, maxW: number, size: number, bold = false): string[] {
+  const out: string[] = [];
+  for (const par of String(str ?? "").split(/\r?\n/)) {
+    let cur = "";
+    for (const word of par.split(/\s+/).filter(Boolean)) {
+      let w = word;
+      while (cv.widthOf(w, size, bold) > maxW) {
+        let k = w.length - 1;
+        while (k > 1 && cv.widthOf(w.slice(0, k), size, bold) > maxW) k--;
+        if (cur) { out.push(cur); cur = ""; }
+        out.push(w.slice(0, k)); w = w.slice(k);
+      }
+      const t = cur ? cur + " " + w : w;
+      if (cur && cv.widthOf(t, size, bold) > maxW) { out.push(cur); cur = w; } else cur = t;
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+/** Framed box (x, yTop = top edge, w x h) with the strokes scaled from SIG_W x SIG_H; points outside the box are ignored. */
+function drawSignature(cv: Canvas, strokes: [number, number][][], x: number, yTop: number, w: number, h: number) {
+  cv.RG(150, 158, 172);
+  cv.line(x, yTop, x + w, yTop, 0.8); cv.line(x, yTop - h, x + w, yTop - h, 0.8);
+  cv.line(x, yTop, x, yTop - h, 0.8); cv.line(x + w, yTop, x + w, yTop - h, 0.8);
+  const sx = w / SIG_W, sy = h / SIG_H;
+  const col = rgb(10 / 255, 25 / 255, 90 / 255);
+  const ok = (p: unknown): p is [number, number] =>
+    Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && p[0] >= 0 && p[0] <= SIG_W && p[1] >= 0 && p[1] <= SIG_H;
+  const pt = (p: [number, number]) => ({ x: x + p[0] * sx, y: yTop - p[1] * sy });
+  for (const st of Array.isArray(strokes) ? strokes : []) {
+    if (!Array.isArray(st)) continue;
+    if (st.length === 1) {
+      if (ok(st[0])) cv.page.drawCircle({ ...pt(st[0]), size: 0.9, color: col });
+      continue;
+    }
+    let prev: [number, number] | null = null;
+    for (const p of st) {
+      if (!ok(p)) { prev = null; continue; }
+      if (prev) cv.page.drawLine({ start: pt(prev), end: pt(p), thickness: 1.4, color: col });
+      prev = p;
+    }
+  }
+}
+
+/** One-page receipt the customer signs at drop-off / pick-up. Language of the vehicle's country. */
+export async function generateHandoverReceipt(
+  v: DocVehicle, h: HandoverDoc, opts: { letterhead?: Letterhead | null; now?: Date; timeZone?: string } = {},
+): Promise<Uint8Array> {
+  const cv = await Canvas.create(opts.now || new Date());
+  const lh = opts.letterhead || null;
+  const land: Land = v.land === "ES" ? "ES" : "DE";
+  const HT = handoverText(land);
+  const pick = h.kind === "pick_up";
+  const title = pick ? HT.titlePick : HT.titleDrop;
+  cv.top();
+  cv.y = await drawLetterhead(cv, lh);
+  cv.rgbc(22, 35, 63); cv.rect(L, cv.y - 30, R - L, 34);
+  cv.rgbc(255, 255, 255); cv.T(L + 10, cv.y - 18, title, 15, true);
+  cv.black(); cv.y -= 56;
+
+  const VX = L + 150, maxW = R - VX;
+  const kv = (label: string, value: string) => {
+    const lines = wrapWidth(cv, value && value.trim() ? value : "—", maxW, 10).slice(0, 12);
+    cv.black(); cv.T(L, cv.y, label, 9.5, true);
+    lines.forEach((ln) => { cv.T(VX, cv.y, ln, 10); cv.y -= 14; });
+    cv.y -= 4;
+  };
+  const [date, time] = splitDateTime(fmtDateTime(land, h.signedAt, opts.timeZone));
+  const veh = [v.modell, v.kennzeichen].filter(Boolean).join(" · ");
+  kv(HT.vehicle, veh);
+  kv(HT.plate, v.kennzeichen || "—");
+  kv(HT.vin, v.fin || "—");
+  if (v.claimNumber) kv(HT.claim, v.claimNumber);
+  if (v.insurerName) kv(HT.insurer, v.insurerName);
+  if (v.kunde) kv(HT.bodyShop, v.kunde);
+  kv(HT.dateTime, time ? date + ", " + time : date);
+  kv(HT.customer, h.customerName);
+  if (h.customerEmail) kv(HT.email, h.customerEmail);
+  kv(HT.place, [h.stationName, h.stationAddress].filter(Boolean).join(", "));
+  kv(HT.remarks, h.remarks);
+  kv(pick ? HT.receivedByPick : HT.receivedByDrop, h.receivedBy);
+
+  cv.y -= 10;
+  const sentence = (pick ? HT.sentencePick : HT.sentenceDrop)
+    .replace("{name}", () => h.customerName).replace("{date}", () => date).replace("{time}", () => time)
+    .replace("{station}", () => h.stationName).replace("{user}", () => h.receivedBy);
+  cv.black();
+  wrapWidth(cv, sentence, R - L, 10.5).slice(0, 10).forEach((ln) => { cv.T(L, cv.y, ln, 10.5); cv.y -= 15; });
+  cv.y -= 14;
+  cv.T(L, cv.y, HT.signature + ":", 9.5, true); cv.y -= 8;
+  drawSignature(cv, h.strokes, L, cv.y, 240, 80);
+  cv.y -= 80 + 14;
+  cv.RG(0, 0, 0); cv.line(L, cv.y + 6, L + 240, cv.y + 6, 0.6);
+  cv.T(L, cv.y - 6, h.customerName, 9.5);
+  cv.black();
+  drawFooters(cv, lh);
+  cv.doc.setTitle(title + " " + (v.kennzeichen || ""));
+  return cv.doc.save();
+}
+
 export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOptions = {}): Promise<Uint8Array> {
   const cv = await Canvas.create(opts.now || new Date());
   const lh = opts.letterhead || null;
@@ -198,6 +308,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     cv.y -= 15;
   }
   cv.T(L, cv.y, X.datum + ": " + fmtDateL(land, v.leistungsdatum) + "     " + X.zustand + ": " + zustStr(v), 10); cv.y -= 26;
+  if ((v.methodName || "").trim()) { cv.y += 8; cv.rgbc(120, 128, 142); cv.T(L, cv.y, X.methode + ": " + v.methodName!.trim(), 8); cv.black(); cv.y -= 18; }
   cv.rgbc(228, 238, 229); cv.rect(L, cv.y - 26, R - L, 30);
   if (c.es) {
     cv.rgbc(94, 140, 99);
@@ -217,6 +328,19 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     cv.black(); cv.y -= 18;
   };
   const brk = () => { if (cv.y < 70) { cv.np(); cv.top(); tableHeader(); } };
+  /** "Folgende Teile sind zu ersetzen": highlighted box under the panel table (no prices) */
+  const partsBox = () => {
+    const parts = partsOf(v);
+    if (!parts.length) return;
+    const lines = parts.flatMap((p) => wrapText("- " + p, 92));
+    const h = 26 + lines.length * 13;
+    if (cv.y - h < 70) { cv.np(); cv.top(); }
+    cv.y -= 8;
+    cv.rgbc(253, 240, 225); cv.rect(L, cv.y - h + 8, R - L, h);
+    cv.rgbc(138, 74, 6); cv.T(L + 8, cv.y - 8, X.teile, 10.5, true);
+    cv.black(); lines.forEach((ln, i) => cv.T(L + 12, cv.y - 22 - i * 13, ln, 10));
+    cv.y -= h + 6;
+  };
   tableHeader();
   const row = (bauteil: string, dellen: string, oe: string, aw: string, euro: string, opt: { fill?: RGB | null; white?: boolean; bold?: boolean } = {}) => {
     brk();
@@ -249,6 +373,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
       subLines(p);
     });
     row("TOTAL  (" + e.small + " + " + e.large + " × 2)", String(c.dents), String(c.avg), String(e.bollos), "", { fill: [22, 35, 63], white: true, bold: true });
+    partsBox();
     cv.y -= 10; if (cv.y < 120) { cv.np(); cv.top(); }
     cv.rgbc(110, 120, 140);
     cv.T(L, cv.y, "Bollos: hasta 30 mm = 1, más de 30 mm = 2.  Categoría " + e.cat.cat + " (" + esRange(e.cat) + " bollos), tope " + h1(e.cat.cap_h) + " = " + eur(e.cap) + ".", 8.5); cv.y -= 12;
@@ -273,6 +398,7 @@ export async function generateKvaPdf(v: DocVehicle, c: CalcResult, opts: KvaOpti
     const neb = (l: string, aw: number) => { if (aw > 0) row(l, "", "", num(aw), eur(aw * c.euroPerAW), {}); };
     neb(X.finish, c.finishAW); neb(X.ruest, c.ruestAW); neb(X.greif, c.greifAW); neb(X.hohl, c.hohlAW); neb(X.verbr, c.verbrAW);
     row(X.gesamt.toUpperCase(), String(c.dents), String(c.avg), num(c.totalAW), eur(c.awNetto), { fill: [22, 35, 63], white: true, bold: true });
+    partsBox();
     cv.y -= 14;
     const tot = (l: string, val: string, bold: boolean) => { cv.T(R - 235, cv.y, l, 10, bold); cv.T(R - 95, cv.y, val, 10, bold); cv.y -= 15; };
     tot(X.awnetto, eur(c.awNetto), false);
@@ -330,6 +456,19 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
     cv.T(L, cv.y, [v.insurerName ? X.versicherung + ": " + v.insurerName : "", v.claimNumber ? X.schaden + ": " + v.claimNumber : ""].filter(Boolean).join("     "), 10);
     cv.y -= 15;
   }
+  if (opts.amounts) {
+    // amounts of the estimate (net / VAT / gross); the internal split is never part of this document
+    cv.rgbc(228, 238, 229); cv.rect(L, cv.y - 8, R - L, 24);
+    cv.rgbc(47, 85, 53);
+    cv.T(L + 8, cv.y, X.netto + ": " + eur(opts.amounts.netto) + "     " + X.mwst + ": " + eur(opts.amounts.mwst) + "     " + X.brutto + ": " + eur(opts.amounts.brutto), 10, true);
+    cv.black(); cv.y -= 26;
+  }
+  if (partsOf(v).length) {
+    // the repair photo report names the parts to replace in its header
+    cv.rgbc(138, 74, 6);
+    wrapText(X.teile + " " + partsOf(v).join(", "), 100).forEach((ln) => { cv.T(L, cv.y, ln, 9.5); cv.y -= 13; });
+    cv.black();
+  }
   cv.y -= 14;
   const emb = await embedPhotos(cv, opts.photos || []);
   const phases: [PhotoPhase, string][] = [["besichtigung", X.phBesichtigung], ["reparatur", X.phReparatur], ["fertig", X.phFertig]];
@@ -347,6 +486,35 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
     })), () => { head(); cv.T(L, cv.y, title, 12, true); cv.y -= 22; }, rowH);
     cv.y -= 6;
   }
+  if (opts.handovers) {
+    const HT = handoverText(land);
+    cv.np(); cv.top();
+    cv.rgbc(22, 35, 63); cv.rect(L, cv.y - 30, R - L, 34);
+    cv.rgbc(255, 255, 255); cv.T(L + 10, cv.y - 18, HT.signaturesTitle, 15, true);
+    cv.black(); cv.y -= 56;
+    const blocks: [string, HandoverDoc | null][] = [[HT.blockDrop, opts.handovers.dropOff], [HT.blockPick, opts.handovers.pickUp]];
+    for (const [title, h] of blocks) {
+      cv.black(); cv.T(L, cv.y, title, 12, true);
+      cv.RG(225, 229, 238); cv.line(L, cv.y - 4, R, cv.y - 4, 0.6);
+      cv.y -= 22;
+      if (!h) {
+        cv.rgbc(110, 120, 140); cv.T(L, cv.y, HT.unsigned, 10.5); cv.black(); cv.y -= 40;
+        continue;
+      }
+      const lab = h.kind === "pick_up" ? HT.receivedByPick : HT.receivedByDrop;
+      const [d, t] = splitDateTime(fmtDateTime(land, h.signedAt, opts.timeZone));
+      cv.T(L, cv.y, HT.dateTime + ": " + (t ? d + ", " + t : d), 10); cv.y -= 14;
+      cv.T(L, cv.y, HT.customer + ": " + h.customerName, 10); cv.y -= 14;
+      cv.T(L, cv.y, lab + ": " + h.receivedBy, 10); cv.y -= 14;
+      const rem = (h.remarks || "").trim();
+      if (rem) {
+        wrapWidth(cv, HT.remarks + ": " + rem, R - L, 9.5).slice(0, 3).forEach((ln) => { cv.T(L, cv.y, ln, 9.5); cv.y -= 13; });
+      }
+      cv.y -= 6;
+      drawSignature(cv, h.strokes, L, cv.y, 240, 80);
+      cv.y -= 80 + 40;
+    }
+  }
   drawFooters(cv, lh);
   cv.doc.setTitle(X.fotobericht + " " + (v.kennzeichen || ""));
   return cv.doc.save();
@@ -358,11 +526,13 @@ export async function generateRepairPhotoReport(v: DocVehicle, opts: RepairRepor
  * "PDR Technician Worksheet" like the paper one: technician, site, period, table of the cars finished in the period with the amount,
  * summary and two signature lines. One section per technician (it flows to further pages when the table is long). Internal document.
  */
-export async function generateTechnicianWorksheets(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: "de" | "en" = "de", now: Date = new Date()): Promise<Uint8Array> {
+export async function generateTechnicianWorksheets(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: TechLang = "de", now: Date = new Date()): Promise<Uint8Array> {
   const l = TECH_LABELS[lang];
   const cv = await Canvas.create(now);
-  const money = (n: number) => `${n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-  const aw = (n: number) => n.toLocaleString(lang === "de" ? "de-DE" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // French uses a narrow no-break space (U+202F) as thousands separator: the PDF font (WinAnsi) cannot draw it
+  const num = (n: number) => n.toLocaleString(({ de: "de-DE", en: "en-GB", fr: "fr-FR", es: "es-ES" })[lang], { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[  ]/g, " ");
+  const money = (n: number) => `${num(n)} €`;
+  const aw = num;
   const period = `${data.from ? techDate(data.from) : "…"} – ${data.to ? techDate(data.to) : "…"}`;
   // columns: start, end, plate, model, AW (right), amount (right)
   const X = [L, L + 78, L + 156, L + 246, L + 420, R];
@@ -414,5 +584,157 @@ export async function generateTechnicianWorksheets(data: { from: string | null; 
       cv.T(L, cv.y - 15, l.date, 10.5); cv.T(L + 110, cv.y - 15, label, 10.5);
     }
   });
+  return cv.doc.save();
+}
+
+// ------------------------------------------------------------------ V6: the automatic insurer report
+
+const KPI_COLOR: Record<InsurerReportKpi, RGB> = { inspected: [91, 143, 214], repaired: [94, 140, 99], backlog: [224, 160, 44], upcoming: [123, 91, 214], progress: [22, 35, 63], refused: [162, 59, 46] };
+
+/**
+ * The report for an insurer: the figures of the period as tiles, the evolution and the overall progress as charts, and (when asked) an annex
+ * with the cars. For the insurer: never the internal split; amounts only when the data carry them.
+ */
+export async function generateInsurerReport(data: InsurerReportData, opts: InsurerReportOptions): Promise<Uint8Array> {
+  const lang = opts.lang, l = INSURER_REPORT_LABELS[lang];
+  const now = opts.now ?? new Date();
+  const cv = await Canvas.create(now);
+  const D = (iso: string | null | undefined) => reportDate(lang, iso);
+  const clip = (str: string, w: number, size: number, bold = false) => { let t = str; while (t.length > 1 && cv.widthOf(t, size, bold) > w) t = t.slice(0, -1); return t; };
+  const fig = data.figures;
+  const NAVY: RGB = [22, 35, 63], GREY: RGB = [110, 120, 140];
+  const col = (c: RGB) => cv.rgbc(c[0], c[1], c[2]);
+
+  // ---- page 1: header
+  cv.y = (await drawLetterhead(cv, opts.letterhead)) - 6;
+  col(NAVY); cv.T(L, cv.y, l.title, 20, true); cv.y -= 22;
+  cv.black(); col(NAVY);
+  const insurers = data.insurers.join(", ");
+  cv.T(L, cv.y, `${l.insurer}: `, 11, true); cv.T(L + cv.widthOf(`${l.insurer}: `, 11, true), cv.y, clip(insurers || data.name, R - L - 80, 11), 11); cv.y -= 22;
+  cv.rgbc(243, 246, 250); cv.rect(L, cv.y - 34, R - L, 46);
+  col(NAVY); cv.T(L + 10, cv.y, `${l.period}: ${D(data.period.from)} - ${D(data.period.to)}`, 11.5, true);
+  col(GREY);
+  cv.T(L + 10, cv.y - 14, `${l.cumulative}: ${data.projectStart ? `${l.sinceStart} (${D(data.projectStart)})` : l.sinceStart} ${l.until} ${D(data.period.to)}`, 9);
+  cv.T(L + 10, cv.y - 27, `${l.asOf} ${D(data.asOf)}`, 9);
+  cv.y -= 56;
+
+  // ---- the figures as tiles, two per row, in the order of the report
+  const GAP = 12, TW = (R - L - GAP) / 2, TH = 84;
+  const tile = (k: InsurerReportKpi, x: number, top: number) => {
+    const c = KPI_COLOR[k];
+    cv.rgbc(243, 246, 250); cv.rect(x, top - TH, TW, TH);
+    col(c); cv.rect(x, top - TH, 5, TH);
+    col(GREY);
+    const lines = wrapWidth(cv, l.kpi[k], TW - 24, 9.5, true).slice(0, 2);
+    lines.forEach((ln, i) => cv.T(x + 14, top - 16 - i * 11, ln, 9.5, true));
+    col(NAVY);
+    const big = k === "progress" ? reportPercent(lang, fig.progress)
+      : k === "backlog" ? reportInt(lang, fig.backlog) : k === "upcoming" ? reportInt(lang, fig.upcoming)
+      : reportInt(lang, fig[k].period);
+    cv.T(x + 14, top - 54, big, 26, true);
+    col(GREY);
+    const sub = k === "progress" ? `${reportInt(lang, fig.repaired.total)} ${l.of} ${reportInt(lang, fig.inspected.total)}`
+      : k === "backlog" || k === "upcoming" ? `${l.asOf} ${D(data.asOf)}`
+      : `${l.total}: ${reportInt(lang, fig[k].total)}`;
+    cv.T(x + 14, top - 72, sub, 9);
+    if (k === "progress") {
+      const bw = TW - 28, share = Math.max(0, Math.min(100, fig.progress ?? 0)) / 100;
+      cv.rgbc(225, 229, 238); cv.rect(x + 14, top - 80, bw, 5);
+      col(KPI_COLOR.repaired); if (share > 0) cv.rect(x + 14, top - 80, bw * share, 5);
+    }
+    cv.black();
+  };
+  data.kpis.forEach((k, i) => {
+    if (i % 2 === 0 && cv.y - TH < 70) { cv.np(); cv.top(); }
+    tile(k, L + (i % 2) * (TW + GAP), cv.y);
+    if (i % 2 === 1 || i === data.kpis.length - 1) cv.y -= TH + GAP;
+  });
+
+  // ---- chart 1: the evolution, period by period
+  const show = { inspected: data.kpis.includes("inspected"), repaired: data.kpis.includes("repaired") };
+  if (data.trend.length && (show.inspected || show.repaired)) {
+    const CH = 130;
+    if (cv.y - CH - 60 < 60) { cv.np(); cv.top(); }
+    cv.y -= 6; col(NAVY); cv.T(L, cv.y, l.trendTitle, 12, true);
+    // legend, right
+    let lx = R;
+    for (const [k, label] of ([["repaired", l.trendRepaired], ["inspected", l.trendInspected]] as const)) {
+      if (!show[k]) continue;
+      const w = cv.widthOf(label, 8.5); lx -= w; col(GREY); cv.T(lx, cv.y, label, 8.5); lx -= 12; col(KPI_COLOR[k]); cv.rect(lx, cv.y, 8, 8); lx -= 14;
+    }
+    const base = cv.y - CH - 8, plotTop = cv.y - 22;
+    const series = (["inspected", "repaired"] as const).filter((k) => show[k]);
+    const max = Math.max(1, ...data.trend.flatMap((t) => series.map((k) => t[k])));
+    const slot = (R - L) / data.trend.length, bw = Math.min(26, (slot - 10) / series.length);
+    cv.RG(225, 229, 238); cv.line(L, base, R, base, 0.8); cv.line(L, plotTop, R, plotTop, 0.4);
+    col(GREY); cv.T(L, plotTop + 3, reportInt(lang, max), 7.5);
+    data.trend.forEach((t, i) => {
+      const cx = L + slot * i + slot / 2;
+      series.forEach((k, j) => {
+        const v = t[k], h = ((plotTop - base) * v) / max, x = cx - (bw * series.length) / 2 + j * bw;
+        col(KPI_COLOR[k]); if (h > 0) cv.rect(x, base, bw - 1.5, h);
+        col(NAVY); const txt = reportInt(lang, v); cv.T(x + (bw - 1.5) / 2 - cv.widthOf(txt, 7.5) / 2, base + h + 3, txt, 7.5);
+      });
+      col(GREY);
+      const lab = `${t.to.slice(8, 10)}/${t.to.slice(5, 7)}`;
+      cv.T(cx - cv.widthOf(lab, 7.5) / 2, base - 11, lab, 7.5);
+    });
+    cv.black(); cv.y = base - 26;
+  }
+
+  // ---- chart 2: the overall progress
+  if (data.kpis.includes("progress")) {
+    if (cv.y - 70 < 60) { cv.np(); cv.top(); }
+    col(NAVY); cv.T(L, cv.y, l.progressTitle, 12, true); cv.y -= 22;
+    const total = fig.inspected.total, done = fig.repaired.total, refused = data.kpis.includes("refused") ? Math.min(fig.refused.total, Math.max(0, total - done)) : 0;
+    cv.rgbc(225, 229, 238); cv.rect(L, cv.y - 8, R - L, 18);
+    if (total > 0) {
+      col(KPI_COLOR.repaired); cv.rect(L, cv.y - 8, ((R - L) * done) / total, 18);
+      if (refused) { col(KPI_COLOR.refused); cv.rect(L + ((R - L) * done) / total, cv.y - 8, ((R - L) * refused) / total, 18); }
+    }
+    cv.y -= 26; col(GREY);
+    cv.T(L, cv.y, l.progressText.replace("{r}", reportInt(lang, done)).replace("{i}", reportInt(lang, total)) + (fig.progress != null ? ` (${reportPercent(lang, fig.progress)})` : ""), 9.5);
+    cv.black(); cv.y -= 22;
+  }
+
+  // ---- the annex: the cars behind the figures
+  if (data.annex) {
+    cv.np(); cv.top(); col(NAVY); cv.T(L, cv.y, l.annex, 15, true); cv.y -= 24;
+    const amounts = data.showAmounts;
+    const cols = amounts ? [54, 90, 82, 50, 66, 105, 64] : [54, 120, 112, 50, 66, 109];
+    const X: number[] = []; cols.reduce((x, w) => { X.push(x); return x + w; }, L);
+    const heads = [l.plate, l.model, l.bodyshop, l.inspected, l.status, l.detail, ...(amounts ? [l.net] : [])];
+    const head = () => {
+      cv.rgbc(243, 243, 243); cv.rect(L, cv.y - 6, R - L, 20); cv.black();
+      heads.forEach((h, i) => { const last = amounts && i === heads.length - 1, t = clip(h, cols[i] - (last ? 2 : 6), 8.5, true); if (last) cv.T(R - 3 - cv.widthOf(t, 8.5, true), cv.y, t, 8.5, true); else cv.T(X[i] + 3, cv.y, t, 8.5, true); });
+      cv.RG(22, 35, 63); cv.line(L, cv.y - 6, R, cv.y - 6, 1.4); cv.y -= 20;
+    };
+    const detail = (r: InsurerReportRow) => [
+      r.repairedOn ? `${l.repairedOn} ${D(r.repairedOn)}` : "", r.refusedOn ? `${l.refusedOn} ${D(r.refusedOn)}` : "",
+      r.appointmentOn ? `${l.appointmentOn} ${D(r.appointmentOn)}` : "",
+    ].filter(Boolean).join(" · ");
+    if (!data.annex.length) { cv.black(); cv.T(L, cv.y, l.none, 11); } else {
+      head();
+      for (const r of data.annex) {
+        if (cv.y < 70) { cv.np(); cv.top(); head(); }
+        cv.black();
+        const cells = [r.plate, r.model, r.bodyshop, D(r.inspectedOn), (l.statuses as Record<string, string>)[r.status] ?? r.status, detail(r)];
+        cells.forEach((t, i) => cv.T(X[i] + 3, cv.y, clip(t, cols[i] - 6, 8.5), 8.5));
+        if (amounts) { const t = r.net == null ? "—" : reportMoney(lang, r.net); cv.T(R - 4 - cv.widthOf(t, 8.5), cv.y, t, 8.5); }
+        cv.RG(225, 229, 238); cv.line(L, cv.y - 5, R, cv.y - 5, 0.5);
+        cv.y -= 16;
+      }
+    }
+  }
+
+  // ---- every page: the date it was made and the page number; then the letterhead footer
+  const pages = cv.doc.getPages();
+  pages.forEach((pg, i) => {
+    cv.page = pg; col(GREY);
+    cv.T(L, 38, `${l.generated} ${D(now.toISOString().slice(0, 10))}`, 8);
+    const t = `${l.page} ${i + 1} / ${pages.length}`; cv.T(R - cv.widthOf(t, 8), 38, t, 8);
+    cv.black();
+  });
+  drawFooters(cv, opts.letterhead);
   return cv.doc.save();
 }

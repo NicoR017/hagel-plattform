@@ -6,6 +6,7 @@ import { audit } from "./audit";
 import { HttpError } from "./auth";
 import type { AzureSource } from "./azure";
 import { importScans } from "./azure_import";
+import { deviceRoutes } from "./colibri_devices";
 import { loadMappingContext, mapScan, newScansOfTenants, normalizeName, reconcileLinks, syncAzure, tenantsOfOrg } from "./azure_sync";
 import type { Db } from "./db";
 import type { Env } from "./env";
@@ -20,13 +21,22 @@ interface Deps {
   validationHook: (r: { success: boolean }, c: Context) => Response | undefined;
 }
 
-const keyInput = z.object({ keys: z.array(z.object({ partitionKey: z.string().min(1).max(300), rowKey: z.string().max(300) })).min(1).max(50) });
+/** lower case, no accents, only letters and digits ("AB-123" = "ab 123") */
+const fold = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+/** the words of a search text, each folded the same way (empty words dropped) */
+const foldWords = (q: string) => q.split(/\s+/).map(fold).filter(Boolean);
+
+const keyInput = z.object({ station_id: z.string().uuid().optional(), keys: z.array(z.object({ partitionKey: z.string().min(1).max(300), rowKey: z.string().max(300) })).min(1).max(50) });
 
 export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }: Deps) {
   const r = new Hono<Env>();
   let lastManualSync = 0;
 
-  /** Scans waiting for import that point to a site where the user may import (and, for admins, the ones that still need a mapping). */
+  /**
+   * Scans waiting for import. V5: a user sees only the scans of the scanners that stand in HIS stations (the station of a scan is the one its
+   * scanner was assigned to on that day). An administrator (stations.gerer) sees every station of the organisation and the scans whose scanner
+   * has no station yet ("without station"). Enforced here, not in the page.
+   */
   r.get("/azure/scans", needAuth, needOrg, async (c) => {
     const u = c.get("principal"), orgId = c.get("orgId");
     const tenants = await tenantsOfOrg(db, orgId);
@@ -38,23 +48,38 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     const out = [];
     for (const s of rows) {
       const m = mapScan(s, ctx);
-      const mine = m.orgId === orgId && m.stationId && canOrg(u, "colibri.importer", orgId, m.stationId);
-      const adminUnmapped = !m.orgId && isAdmin; // only visible to admins of an organisation that owns this tenant
-      if (!mine && !adminUnmapped) continue;
+      const inMyOrg = m.orgId === orgId && !!m.stationId;
+      const mine = inMyOrg && canOrg(u, "colibri.importer", orgId, m.stationId);
+      const withoutStation = !m.stationId && m.tenantOrgIds.includes(orgId);
+      if (!mine && !(isAdmin && (inMyOrg || withoutStation))) continue;
       out.push({
         partitionKey: s.partitionKey, rowKey: s.rowKey, scanDateTime: s.scanDateTime, plate: s.plate, brand: s.brand, model: s.model, colibriNumber: s.colibriNumber,
         businessCustomer: s.businessCustomer, claimNumber: s.claimNumber, location: s.location, dentsTotal: s.dentsTotal, tenant: s.tenant,
         stationId: m.stationId, stationName: m.stationId ? stName.get(m.stationId) ?? "" : "", clientName: m.clientStationId ? stName.get(m.clientStationId) ?? "" : "",
-        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings, importable: m.importable && !!mine,
+        insurerName: m.insurerId ? insName.get(m.insurerId) ?? "" : "", warnings: m.warnings,
+        // a scan without a station can only be started by an administrator who picks the station (the scanner stays without one)
+        withoutStation, importable: !s.scanFailed && (!!mine || (isAdmin && withoutStation)),
       });
     }
-    out.sort((a, b) => String(b.scanDateTime ?? b.partitionKey).localeCompare(String(a.scanDateTime ?? a.partitionKey)));
-    return c.json(out.slice(0, 300));
+    // search (from 2 characters): every word must match one of plate, brand / model, body shop, insurer, Colibri number or station.
+    // Case, accents, spaces and hyphens do not matter ("ab 123" finds "AB-123"). Done AFTER the visibility rule: it never widens what a user may see.
+    const words = foldWords(c.req.query("q") ?? "");
+    const found = words.length && words.join("").length >= 2
+      ? out.filter((x) => {
+          const hay = fold([x.plate, x.brand, x.model, `${x.brand} ${x.model}`, x.businessCustomer, x.clientName, x.insurerName, x.colibriNumber, x.stationName].join(" "));
+          return words.every((w) => hay.includes(w));
+        })
+      : out;
+    // newest first, by the real time (a Date compared as text is not chronological)
+    const at = (x: { scanDateTime: Date | string | null; partitionKey: string }) => (x.scanDateTime ? new Date(x.scanDateTime).getTime() : 0);
+    found.sort((a, b) => at(b) - at(a) || b.partitionKey.localeCompare(a.partitionKey));
+    return c.json(found.slice(0, 300));
   });
 
   r.post("/azure/scans/import", needAuth, needOrg, zValidator("json", keyInput, validationHook), async (c) => {
     if (!az) throw new HttpError(409, "azure_unavailable");
-    const results = await importScans({ db, az, storage, hub }, c.get("principal"), c.req.valid("json").keys, c.get("orgId"));
+    const body = c.req.valid("json");
+    const results = await importScans({ db, az, storage, hub }, c.get("principal"), body.keys, c.get("orgId"), body.station_id ?? null);
     return c.json({ results });
   });
 
@@ -71,7 +96,7 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     const ctx = await loadMappingContext(db);
     const rows = await newScansOfTenants(db, tenants);
     const unmappedCustomers = new Map<string, { name: string; tenant: string; scans: number }>();
-    const unmappedLocations = new Map<string, { location: string; tenant: string; scans: number }>();
+    const noStation = new Map<string, { tenant: string; number: string; scans: number }>();
     let importable = 0, blocked = 0;
     for (const s of rows) {
       const m = mapScan(s, ctx);
@@ -81,16 +106,16 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
         const e = unmappedCustomers.get(k) ?? { name: s.businessCustomer, tenant: s.tenant, scans: 0 };
         e.scans++; unmappedCustomers.set(k, e);
       }
-      if (m.warnings.includes("location_unmapped")) {
-        const k = `${s.tenant}|${normalizeName(s.location)}`;
-        const e = unmappedLocations.get(k) ?? { location: s.location, tenant: s.tenant, scans: 0 };
-        e.scans++; unmappedLocations.set(k, e);
+      if (!m.stationId) {
+        const k = `${s.tenant}|${s.colibriNumber}`;
+        const e = noStation.get(k) ?? { tenant: s.tenant, number: s.colibriNumber, scans: 0 };
+        e.scans++; noStation.set(k, e);
       }
     }
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(colibriScans);
     return c.json({
       configured: !!az, sasExpiresAt: az?.expiresAt?.()?.toISOString() ?? null, tenants, lastRuns: runs.map((x) => ({ at: x.startedAt, finishedAt: x.finishedAt, ok: x.ok, error: x.error, stats: x.stats })),
-      scansMirrored: n, waiting: { importable, blocked }, unmappedCustomers: [...unmappedCustomers.values()].filter((e) => e.name), unmappedLocations: [...unmappedLocations.values()],
+      scansMirrored: n, waiting: { importable, blocked }, unmappedCustomers: [...unmappedCustomers.values()].filter((e) => e.name), scannersWithoutStation: [...noStation.values()].sort((a, b) => b.scans - a.scans),
     });
   });
 
@@ -160,5 +185,6 @@ export function azureRoutes({ db, hub, storage, az, needAuth, needOrg, validatio
     return c.json(out);
   });
 
+  r.route("/", deviceRoutes({ db, hub, needAuth, needOrg, validationHook }));
   return r;
 }

@@ -16,18 +16,23 @@ const SIDE: { key: string; x: number; y: number; w: number; h: number; hx: numbe
 ];
 const HOLM = [{ key: "dachholm_l", x: 112, y: 238, w: 20, h: 122 }, { key: "dachholm_r", x: 248, y: 238, w: 20, h: 122 }];
 
-export function CarSvg({ panels, glass, onPanel, onGlass }: {
+export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
   panels: Record<string, Panel>; glass?: { ws?: { on?: boolean }; rs?: { on?: boolean } };
   onPanel: (key: string) => void; onGlass: (k: "ws" | "rs") => void;
+  /** field view: colour of a panel by what is done to it (null = nothing, grey); without it the panel is green when it has dents */
+  tint?: (key: string) => { fill: string; stroke: string } | null;
 }) {
   const stat = (k: string) => panelStats(panels[k] ?? { key: k });
-  const fill = (a: boolean) => (a ? "#86b08a" : "#e7ebf1"), stroke = (a: boolean) => (a ? "#5e8c63" : "#aab3c0"), sw = (a: boolean) => (a ? 2.4 : 1.3);
+  const on = (k: string) => (tint ? !!tint(k) : stat(k).total > 0);
+  const fillOf = (k: string) => (tint ? tint(k)?.fill ?? "#e7ebf1" : on(k) ? "#86b08a" : "#e7ebf1");
+  const strokeOf = (k: string) => (tint ? tint(k)?.stroke ?? "#aab3c0" : on(k) ? "#5e8c63" : "#aab3c0");
+  const sw = (a: boolean) => (a ? 2.4 : 1.3);
   const label = (k: string, cx: number, cy: number) => {
-    const st = stat(k), a = st.total > 0;
+    const st = stat(k), a = on(k), counted = st.total > 0;
     return (
       <>
-        <text x={cx} y={cy - (a ? 6 : 0)} textAnchor="middle" fontSize="12" fontWeight="700" fill={a ? "#fff" : "#16233f"} style={{ pointerEvents: "none" }}>{tOr("ps." + k, PANEL_MAP[k].short)}</text>
-        {a && <text x={cx} y={cy + 13} textAnchor="middle" fontSize="12.5" fontWeight="800" fill="#fff" style={{ pointerEvents: "none" }}>{st.total} / {st.avgClass}</text>}
+        <text x={cx} y={cy - (counted ? 6 : 0)} textAnchor="middle" fontSize="12" fontWeight="700" fill={a ? "#fff" : "#16233f"} style={{ pointerEvents: "none" }}>{tOr("ps." + k, PANEL_MAP[k].short)}</text>
+        {counted && <text x={cx} y={cy + 13} textAnchor="middle" fontSize="12.5" fontWeight="800" fill="#fff" style={{ pointerEvents: "none" }}>{st.total} / {st.avgClass}</text>}
       </>
     );
   };
@@ -50,30 +55,30 @@ export function CarSvg({ panels, glass, onPanel, onGlass }: {
       {gl("ws", "150,182 230,182 246,230 134,230", 210, t("windscreen"))}
       {gl("rs", "134,364 246,364 230,410 150,410", 391, t("rearWindow"))}
       {SIDE.map((p) => {
-        const a = stat(p.key).total > 0;
+        const a = on(p.key);
         return (
           <g key={p.key} style={{ cursor: "pointer" }} onClick={() => onPanel(p.key)} role="button" aria-label={tOr("pn." + p.key, PANEL_MAP[p.key].de)}>
-            <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="15" fill={fill(a)} stroke={stroke(a)} strokeWidth={sw(a)} />
+            <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="15" fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
             {p.hx != null && <rect x={p.hx} y={p.y + p.h / 2 - 12} width="6" height="24" rx="3" fill={a ? "#fff" : "#aab3c0"} opacity=".85" />}
             {label(p.key, p.x + p.w / 2, p.y + p.h / 2)}
           </g>
         );
       })}
       {CENTER.map((p) => {
-        const a = stat(p.key).total > 0;
+        const a = on(p.key);
         return (
           <g key={p.key} style={{ cursor: "pointer" }} onClick={() => onPanel(p.key)} role="button" aria-label={tOr("pn." + p.key, PANEL_MAP[p.key].de)}>
-            <path d={p.d} fill={fill(a)} stroke={stroke(a)} strokeWidth={sw(a)} />
+            <path d={p.d} fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
             {label(p.key, p.cx, p.cy)}
           </g>
         );
       })}
       {HOLM.map((p) => {
-        const st = stat(p.key), a = st.total > 0, cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+        const st = stat(p.key), a = on(p.key), cx = p.x + p.w / 2, cy = p.y + p.h / 2;
         return (
           <g key={p.key} style={{ cursor: "pointer" }} onClick={() => onPanel(p.key)} role="button" aria-label={tOr("pn." + p.key, PANEL_MAP[p.key].de)}>
-            <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="9" fill={fill(a)} stroke={stroke(a)} strokeWidth={sw(a)} />
-            <text x={cx} y={cy} transform={`rotate(-90 ${cx} ${cy})`} textAnchor="middle" fontSize="11" fontWeight="800" fill={a ? "#fff" : "#16233f"} style={{ pointerEvents: "none" }}>{tOr("ps." + p.key, "Holm")}{a ? ` ${st.total}/${st.avgClass}` : ""}</text>
+            <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="9" fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
+            <text x={cx} y={cy} transform={`rotate(-90 ${cx} ${cy})`} textAnchor="middle" fontSize="11" fontWeight="800" fill={a ? "#fff" : "#16233f"} style={{ pointerEvents: "none" }}>{tOr("ps." + p.key, "Holm")}{st.total > 0 ? ` ${st.total}/${st.avgClass}` : ""}</text>
           </g>
         );
       })}

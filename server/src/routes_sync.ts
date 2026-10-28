@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { ocrInput, pushInput, type PushResponse } from "@hagel/shared";
+import { KNOWN_OP_TYPES, errorMessage, ocrInput, pickLang, pushInput, type PushResponse } from "@hagel/shared";
 import { HttpError } from "./auth";
 import type { Db } from "./db";
 import type { Env } from "./env";
@@ -14,6 +14,7 @@ import { photos, reportSends, users, vehicleAssignments, vehicles } from "./sche
 import type { Mailer } from "./email";
 import { reportMail } from "./mails";
 import { recipientsOfVehicle } from "./reports";
+import { replyToInfo } from "./reply_to";
 import { audit } from "./audit";
 import type { Storage } from "./storage";
 import { colibriKey, nextSeq, photoKey, photoToClient, processPull, processPush, refOf } from "./sync";
@@ -31,8 +32,14 @@ const MAX_PDF = 15 * 1024 * 1024;
 export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }: Deps) {
   const r = new Hono<Env>();
 
-  r.post("/sync/push", needAuth, zValidator("json", pushInput, validationHook), async (c) => {
-    const { results, touched } = await processPush({ db, hub, storage }, c.get("principal"), c.req.valid("json").ops);
+  r.post("/sync/push", needAuth, async (c) => {
+    const raw = (await c.req.json().catch(() => null)) as { ops?: unknown } | null;
+    // an op type this version does not know (client newer than server): refuse the batch BEFORE applying anything, the client keeps it queued
+    const unknown = Array.isArray(raw?.ops) ? (raw!.ops as { type?: unknown }[]).find((o) => typeof o?.type === "string" && !KNOWN_OP_TYPES.includes(o.type)) : undefined;
+    if (unknown) return c.json({ error: errorMessage("unsupported_op", pickLang(c.req.header("x-lang"), c.req.header("accept-language"))), code: "unsupported_op", opType: unknown.type }, 409);
+    const parsed = pushInput.safeParse(raw);
+    if (!parsed.success) return validationHook({ success: false }, c) as Response;
+    const { results, touched } = await processPush({ db, hub, storage, mailer }, c.get("principal"), parsed.data.ops);
     for (const [orgId, seq] of touched) hub.publish(orgId, seq);
     return c.json({ results } satisfies PushResponse);
   });
@@ -140,7 +147,8 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const v = await vehicleFor(c.get("principal"), c.req.query("vehicleId") ?? "", "vehicules.voir");
     const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
     if (!can(c.get("principal"), reportPerm(type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(403, "forbidden");
-    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation") });
+    const reply = await replyToInfo(db, c.get("principal").id, v.orgId);
+    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation"), replyTo: reply.address ?? null, replyToSource: reply.source });
   });
 
   /** History of what was sent for a vehicle. */
@@ -150,7 +158,19 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const ref = refOf(v, as.map((a) => a.userId));
     if (!can(c.get("principal"), "kva.envoyer", ref) && !can(c.get("principal"), "rapport_reparation.envoyer", ref)) throw new HttpError(403, "forbidden");
     const rows = await db.select({ r: reportSends, name: users.name, email: users.email }).from(reportSends).leftJoin(users, eq(users.id, reportSends.sentBy)).where(eq(reportSends.vehicleId, v.id));
-    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    return c.json(rows.map(({ r: x, name, email }) => ({ id: x.id, type: x.type, lang: x.lang, status: x.status, error: x.error, recipients: x.recipients, sentAt: x.sentAt, createdAt: x.createdAt, sentBy: name || email, hasFile: !!x.fileKey, replyTo: x.replyTo })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+  });
+
+  /** The stored PDF of a report that was sent from the server (same permission as the history). */
+  r.get("/reports/:id/file", needAuth, async (c) => {
+    const [rep] = await db.select().from(reportSends).where(eq(reportSends.id, c.req.param("id")));
+    if (!rep || !rep.fileKey || (rep.type !== "kva" && rep.type !== "reparation")) throw new HttpError(404, "vehicle_not_found");
+    const v = await vehicleFor(c.get("principal"), rep.vehicleId, "vehicules.voir");
+    const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
+    if (!can(c.get("principal"), reportPerm(rep.type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(404, "vehicle_not_found");
+    const f = await storage.get(rep.fileKey);
+    if (!f) throw new HttpError(404, "vehicle_not_found");
+    return new Response(f.bytes as BodyInit, { headers: { "content-type": "application/pdf", "cache-control": "private, no-store" } });
   });
 
   /** The PDF of a queued report: stored, then e-mailed to the recipients computed when the op was accepted. */
@@ -181,7 +201,7 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const safe = (c.req.header("x-filename") ?? "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80);
     const filename = safe.toLowerCase().endsWith(".pdf") ? safe : `${rep.type === "kva" ? (lang === "es" ? "Presupuesto" : "Kostenvoranschlag") : (lang === "es" ? "Informe_reparacion" : "Fotobericht_Reparatur")}_${(h.kennzeichen ?? "Fahrzeug").replace(/[^A-Za-z0-9]+/g, "-")}.pdf`;
     try {
-      await mailer.send({ to: rep.recipients, subject: mail.subject, text: mail.text, replyTo: me?.email, attachments: [{ filename, content: bytes, contentType: "application/pdf" }] });
+      await mailer.send({ to: rep.recipients, subject: mail.subject, text: mail.text, replyTo: rep.replyTo ?? me?.email, attachments: [{ filename, content: bytes, contentType: "application/pdf" }] });
     } catch (e) {
       await db.update(reportSends).set({ status: "failed", error: String((e as Error).message).slice(0, 300), fileKey: key }).where(eq(reportSends.id, rep.id));
       throw new HttpError(502, "report_failed");

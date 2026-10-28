@@ -1,4 +1,4 @@
-import type { EsMatrix, Orientation, Settings } from "./types";
+import type { AwParams, CalcMethodDef, EsMatrix, Orientation, Settings } from "./types";
 import bvat from "./data/bvat_aw_table_2025.json";
 import esMatrixJson from "./data/es_matrix.json";
 import panelsJson from "./data/panels.json";
@@ -30,3 +30,21 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const DEFAULT_DEMONTAGE_EUR = 150;
+
+/**
+ * The BVAT 2025 engine exactly as it always was. A calculation method with these values reproduces the historical results
+ * to the cent (golden cases). Factors are stored as factors (not percentages) so no floating-point arithmetic is introduced.
+ */
+export const DEFAULT_AW_PARAMS: AwParams = {
+  vat: 0.19,
+  aluFactor: 1.25,
+  kleberFactor: 1.3,
+  ptpFactor: 0.6,
+  extras: { "10": teilerVals(10), "12": teilerVals(12) },
+  kleberMaterial: { upTo2: 10, upTo5: 15, more: 20 },
+  hohlraumMaterial: 15,
+};
+
+/** Parameters of the system methods (what a fresh organisation gets). `esMatrix: null` = the built-in matrix. */
+export const systemMethodDef = (engine: "aw" | "matrix", esMatrix: EsMatrix | null = null): CalcMethodDef =>
+  engine === "aw" ? { engine: "aw", params: JSON.parse(JSON.stringify(DEFAULT_AW_PARAMS)) } : { engine: "matrix", params: { esMatrix } };

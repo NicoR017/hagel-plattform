@@ -1,10 +1,10 @@
+import { isPlace } from "./places";
 import { useMemo, useRef, useState } from "react";
 import { STATUSES } from "@hagel/shared";
 import { buildXlsx, eur, fmtDate, h1, num, xlsxFileName } from "@hagel/documents";
-import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { t } from "../i18n";
 import { applyColibriToVehicle, colibriBadge, readColibriFile } from "../sync/colibriImport";
-import { createVehicle, deleteVehicle, getPrefs } from "../sync/mutations";
+import { createVehicle, getPrefs } from "../sync/mutations";
 import { go, useRoute } from "./route";
 import { Occ } from "./occupancy";
 import { readDashFilter } from "./dashFilter";
@@ -14,7 +14,6 @@ import { BackupImport } from "./BackupImport";
 import { ScansDialog } from "./Scans";
 import { useField, useVehicles } from "./store";
 import { toast } from "./toast";
-import { confirmDialog } from "./ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -35,7 +34,6 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const [site, setSite] = useState("");
   const [customer, setCustomer] = useState("");
   const [insurer, setInsurer] = useState("");
-  const [campaign, setCampaign] = useState("");
   const [sel, setSel] = useState<Set<string> | null>(null);
   const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "settings" | "backup" | "scans">(null);
   const [busy, setBusy] = useState("");
@@ -46,17 +44,18 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   const dashIds = useMemo(() => (dashF ? new Set(dashF.ids) : null), [dashF]);
   const prices = f.can("prix.voir");
   const split = f.can("repartition_interne.voir");
-  const rows = useMemo(() => all.map((v) => ({ v, c: computeVehicle(v as unknown as CalcVehicle, f.calc) })), [all, f.calc]);
+  const rows = useMemo(() => all.map((v) => ({ v, c: f.calcOf(v) })), [all, f.calcOf]);
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const q = query.toLowerCase();
   const filtered = sorted.filter(({ v }) =>
-    (!dashIds || dashIds.has(v.id)) && (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) && (!insurer || v.insurerId === insurer) && (!campaign || v.campaignId === campaign) &&
+    (!dashIds || dashIds.has(v.id)) && (filter === "all" || v.statut === filter) && (!day || v.leistungsdatum === day) && (!site || v.stationId === site) && (!customer || v.clientStationId === customer) && (!insurer || v.insurerId === insurer) &&
     `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.demTechName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(STATUSES.map((s) => [s, all.filter((v) => v.statut === s).length]));
   const days = [...new Set(all.map((v) => v.leistungsdatum as string).filter(Boolean))].sort().reverse();
   const sumNet = filtered.reduce((a, r) => a + r.c.netto, 0);
-  const sites = f.refs?.stations ?? [];
-  const customers = sites.filter((s) => s.type === "carrosserie");
+  const allStations = f.refs?.stations ?? [];
+  const sites = allStations.filter(isPlace); // places only: a body shop is a customer
+  const customers = allStations.filter((s) => s.type === "carrosserie");
   const ids = sel ? [...sel] : [];
   const selected = filtered.filter((r) => sel?.has(r.v.id)).map((r) => r.v);
 
@@ -152,16 +151,11 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
             {customers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
-        {((f.refs?.insurers.length ?? 0) > 0 || (f.refs?.campaigns.length ?? 0) > 0) && (
+        {(f.refs?.insurers.length ?? 0) > 0 && (
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             {(f.refs?.insurers.length ?? 0) > 0 && (
               <select className="sel" value={insurer} onChange={(e) => setInsurer(e.target.value)} aria-label={t("insurer")}>
                 <option value="">{t("allInsurers")}</option>{f.refs!.insurers.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </select>
-            )}
-            {(f.refs?.campaigns.length ?? 0) > 0 && (
-              <select className="sel" value={campaign} onChange={(e) => setCampaign(e.target.value)} aria-label={t("campaign")}>
-                <option value="">{t("allCampaigns")}</option>{f.refs!.campaigns.map((cp) => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
               </select>
             )}
           </div>
@@ -215,10 +209,6 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
                     </div>
                   </div>
                 </div>
-                {!sel && f.can("vehicules.supprimer") && (
-                  <button style={{ width: "100%", padding: 8, background: "transparent", border: "none", borderTop: "1px solid var(--line)", color: "var(--brick)", fontSize: 13, minHeight: 44 }}
-                    onClick={() => { if (confirmDialog(`${t("deleteVehicleQ")} ${v.kennzeichen ?? ""}?`)) void deleteVehicle(f.mut, v.id); }}>🗑 {t("delete")}</button>
-                )}
               </div>
             );
           })}

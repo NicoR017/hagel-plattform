@@ -1,4 +1,5 @@
 import { computeVehicle, type CalcResult } from "@hagel/calc";
+import { methodDefOf, methodOfVehicle, printableMethodName } from "./calc";
 import { appendScanPdf, generateKvaPdf, generateRepairPhotoReport, kvaFileName, mailTexts, type DocPhoto, type DocVehicle, type Letterhead } from "@hagel/documents";
 import type { LocalDb, LocalPhoto, LocalVehicle, Refs } from "../sync/db";
 import type { SyncEngine } from "../sync/engine";
@@ -10,6 +11,8 @@ export function toDoc(v: LocalVehicle, refs: Refs | undefined): DocVehicle {
     ...x, id: v.id, land: x.land === "ES" ? "ES" : "DE", status: v.statut,
     stationName: refs?.stations.find((s) => s.id === v.stationId)?.name ?? "", colibriFile: v.colibriFile,
     insurerName: refs?.insurers.find((i) => i.id === v.insurerId)?.name ?? "",
+    partsToReplace: Array.isArray(x.partsToReplace) ? (x.partsToReplace as string[]) : [],
+    method: methodDefOf(refs, v), methodName: printableMethodName(methodOfVehicle(refs, v)),
   } as DocVehicle;
 }
 
@@ -75,12 +78,17 @@ export async function buildRepairReport(db: LocalDb, engine: SyncEngine, v: Loca
   return generateRepairPhotoReport(toDoc(v, refs), { letterhead: await letterheadFor(v, refs, db, engine), photos: await photosForDoc(db, engine, v.id, false) });
 }
 
-/** Share sheet with the file when the browser supports it, otherwise a download. Returns false when the user cancelled. */
+/** a phone or a tablet: its share sheet is how a file gets saved or sent; on a computer the share dialog of the browser cannot save to a folder */
+export const isMobileDevice = () => typeof navigator !== "undefined" && (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+/** the file goes through the share sheet (phones, tablets) rather than into the downloads folder */
+export const sharesFiles = () => isMobileDevice() && typeof navigator.canShare === "function";
+
+/** Share sheet with the file on a phone or tablet that has one; on a computer (and anywhere else) the file is downloaded. Returns false when the user cancelled. */
 export async function shareOrDownload(bytes: Uint8Array | Blob, fileName: string, mime: string, share?: { title?: string; text?: string }): Promise<boolean> {
   const blob = bytes instanceof Blob ? bytes : new Blob([bytes as BlobPart], { type: mime });
   const file = new File([blob], fileName, { type: mime });
   try {
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: share?.title ?? fileName, text: share?.text }); return true; }
+    if (sharesFiles() && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: share?.title ?? fileName, text: share?.text }); return true; }
   } catch (e) { if ((e as Error)?.name === "AbortError") return false; }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove();

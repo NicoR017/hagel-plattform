@@ -1,4 +1,4 @@
-import type { ClientPhoto, ClientVehicle, Op, OpResult, PullResponse, PushResponse } from "@hagel/shared";
+import { isV3Op, type ClientPhoto, type ClientVehicle, type Op, type OpResult, type PullResponse, type PushResponse } from "@hagel/shared";
 import { cursorKey, epochKey, refsKey, type LocalDb, type LocalPhoto, type LocalVehicle, type OutboxRow } from "./db";
 import { applyOpLocal, rebuild, vehicleIdOfOp } from "./ops";
 
@@ -107,8 +107,11 @@ export class SyncEngine {
 
   async flush(): Promise<void> {
     for (;;) {
-      const rows = await this.db.outbox.orderBy("id").limit(BATCH).toArray();
+      let rows = await this.db.outbox.orderBy("id").limit(BATCH).toArray();
       if (!rows.length) break;
+      // newer op types travel in batches of their own, so an older server can never block (or drop) the older ops queued before them
+      const firstOther = rows.findIndex((r) => isV3Op(r.op.type) !== isV3Op(rows[0].op.type));
+      if (firstOther > 0) rows = rows.slice(0, firstOther);
       let res: Awaited<ReturnType<Http>>;
       rows.forEach((r) => this.inflight.add(r.id!));
       try {
@@ -117,6 +120,8 @@ export class SyncEngine {
       rows.forEach((r) => this.inflight.delete(r.id!));
       if (res.status === 401) { this.set({ signedOut: true }); return; }
       if (res.status >= 500 || res.status === 429) { this.set({ lastError: `HTTP ${res.status}` }); return; }
+      // the server does not know this op type yet (409), or rejects the whole batch because it is older than the app (400 on a v3 batch): keep it queued
+      if ((res.status === 409 && res.data?.code === "unsupported_op") || (res.status === 400 && isV3Op(rows[0].op.type))) { this.set({ lastError: `HTTP ${res.status}` }); return; }
       if (res.status !== 200) {
         // the whole batch is malformed (400): isolate by dropping the first op so the queue cannot block forever
         const bad = rows[0];

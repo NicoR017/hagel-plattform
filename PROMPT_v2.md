@@ -10,7 +10,7 @@ You are rebuilding an existing, production-used mobile PWA for hail-damage (PDR,
 - UI language: **German** (with the i18n file ready for Spanish UI later). Customer documents: **German or Spanish** depending on the vehicle's country. Never mix languages inside a document.
 - Never lose data.
 
-**Terminology (important).** Carrosserie (FR), taller (ES), Werkstatt (DE), station (EN) and "plateforme" all mean **the same thing**: a physical **site** where vehicles are kept and repaired. In this document it is called a **site**; in code `station`; in the UI **"Werkstatt"** (DE), **"Taller"** (ES), **"Carrosserie"** (FR), **"Station"** (EN) via i18n. A site has a `type`:
+**Terminology (important).** Carrosserie (FR), taller (ES), Werkstatt (DE), station (EN) and "plateforme" all mean **the same thing**: a physical **site** where vehicles are kept and repaired. In this document it is called a **site**; in code `station`; in the UI it is called **"Station"** in every language (decided by Nicolas, to avoid confusion between countries). A site has a `type`:
 - `carrosserie`: a body shop. It is **also the customer**: it hands over cars, earns a commission, receives reports, works with several insurers, and corresponds to a Colibri **BusinessCustomer** in Azure.
 - `hall` / `parc`: a PDR Team hall or a logistics yard. Has a capacity but no commission and no reports.
 Each vehicle has two site references: **`station_id` = where it is now** and **`client_station_id` = the carrosserie that handed it over (the customer)**. The customer never changes when the vehicle is moved.
@@ -91,11 +91,26 @@ All services run on **Railway** (Nicolas already hosts three sites there), regio
   - `assurance`: vehicles of one insurer (external insurer account)
 - **A user gets one role per site** (`role_assignments`: user, org, site or NULL = all sites, role, optional scope client/insurer/campaign, optional `expires_at`). Example: chief at Talavera, assessor at Madrid.
 - **Resolution for every request:** current site of the vehicle (or its customer site for scope `client`) → user's role on that site → permission → scope check → field filtering. Implement this once, server-side, in a single tested module (`can(user, action, vehicle)` + `filterFields(user, vehicle)`), and reuse it for API reads, sync pull, sync push, exports and PDFs. Write exhaustive unit tests for it.
-- **Default roles** (seeded, editable): Admin d'organisation · Chef de site (Werkstattleiter) · Aufnehmer/Expert · Technicien (scope `assigne`, `ma_part.voir`, no prices) · Freelance (scope `campagne`, expiry) · Carrosserie (scope `client`, sees its vehicles, progress, photos, KVA and `ma_commission.voir`) · Assureur (scope `assurance`, sees everything about its files: KVA with prices, photos of all phases, Colibri PDF; **no internal split**, see open decisions).
+- **Default roles** (seeded, editable): Admin d'organisation · Chef de station (Stationsleiter) · Aufnehmer/Expert · Technicien (scope `assigne`, `ma_part.voir`, no prices) · Freelance (scope `campagne`, expiry) · Carrosserie (scope `client`, sees its vehicles, progress, photos, KVA and `ma_commission.voir`) · Assureur (scope `assurance`, sees everything about its files: KVA with prices, photos of all phases, Colibri PDF; **no internal split**, see open decisions).
 - The UI hides what a user cannot do, but security relies only on the server.
 
-### 3.4 Admin screens
-Users (invite, role per site, deactivate, sessions), roles (permission checklist + scope), sites (carrosseries, halls, yards), insurers, campaigns, technicians, letterheads, settings (rates, ES matrix, delay thresholds), audit log.
+### 3.4 Admin screens ("Verwaltung" — see the mockup)
+Opened from a **"Verwaltung"** button in the app header (only for users with an admin permission); same layout as the vehicle detail: left menu + content, desktop-first but usable on a phone. Sections:
+- **Übersicht:** KPI cards (active users / open invitations, Azure sync status / open mappings, stations / full ones, roles) + last audit entries; each card links to its section.
+- **Benutzer:** table (name, e-mail, roles per station, status Aktiv / Eingeladen / Deaktiviert, last login, actions Bearbeiten / Erneut senden / Deaktivieren–Reaktivieren / **Löschen**). Delete = permanent after a confirmation dialog; the user can no longer log in, sessions are revoked, history and audit entries keep the reference as "gelöschter Benutzer" (no data loss on vehicles). The super-admin cannot be deleted or deactivated. **"Benutzer einladen"** dialog: e-mail, organisation, station (or all), role, optional access end date → sends the magic link (48 h, single use).
+- **Rollen & Rechte:** role tabs; per role: name, visibility scope (assigned / station / campaign / customer / insurer), permission checklist grouped (Fahrzeuge, Finanzen, Dokumente & Fotos, Colibri & Dashboard, Verwaltung) showing German label + permission key; "angepasst – noch nicht gespeichert" state; "+ Neue Rolle"; **"Rolle löschen"** with a confirmation dialog: if users hold the role, the admin must pick a replacement role that is assigned to them in the same step. The organisation-admin role cannot be deleted.
+- **Stationen:** table (name/city, type/tenant, occupancy x/capacity with colour, insurers, PDF recipients, commission, **Bearbeiten**). The same dialog creates and **edits** a station: name, type, **tenant (required)**, capacity, address, commission, Azure BusinessCustomer, **insurers of the station** (checkboxes; pre-filled from the Azure links, editable), and the **list of PDF recipients**:
+  - several e-mail addresses, added one by one (validated) and removable;
+  - **when an insurer is selected, its report e-mail is added automatically** to the list (shown as "automatisch · <insurer>"), but only if that insurer is set to receive reports; unselecting the insurer removes it; an automatic address can also be removed individually (stored as an exclusion for that station);
+  - warning when the list is empty;
+  - data: `stations.report_emails[]` (manual), `station_insurers` (selected insurers), `stations.excluded_insurer_emails[]`; the effective recipient list = manual + e-mails of selected insurers that receive reports − exclusions, computed server-side when a KVA/Fotobericht is sent (§5.2), and recorded in `report_sends`.
+- **Versicherungen:** names/IDs from Azure (read-only) + editable send rules (receive reports yes/no, which reports, e-mail) + **calculation method per country** (DE and ES dropdowns, "— Standard —" = system method of that country).
+- **Berechnungsmethoden** (calculation methods, see §6.5): tabs per method; system methods read-only with "Kopieren & anpassen"; "+ Neue Methode"; editable parameters depending on the engine; live **test calculation** on a sample vehicle; "Verwendet von" (which insurers use it); delete (custom only; affected insurers fall back to the standard).
+- **Techniker:** with/without account, stations, default PDR % and De-/Re %.
+- **Kampagnen**, **Briefköpfe** (letterheads): simple lists with create/edit.
+- **Preise & Einstellungen:** DE/ES rates, default Teiler, default De-/Re amount, VAT, the editable **Spain matrix** (category, bollos from/to, max hours) with the open A–G/A–F question, delay thresholds per status.
+- **Colibri / Azure:** sync status cards (last sync, new scans, open mappings, errors), **Tenants → Organisationen** table (super-admin only), and the **"Zuordnung offen"** list (unknown Colibri Locations and BusinessCustomer–insurer links) with a target picker and "Zuordnen".
+- **Audit-Log:** time, user, action, object, before → after; filterable.
 
 ## 4. Data model (PostgreSQL)
 
@@ -110,7 +125,7 @@ sessions              id, user_id, refresh_hash, device, expires_at, revoked_at
 roles                 id, org_id, name, description, scope, permissions[], is_system
 role_assignments      user_id, org_id, station_id (NULL = all), role_id,
                       scope_client_station_id, scope_insurer_id, scope_campaign_id, expires_at
-stations              SITE = carrosserie / taller / Werkstatt / station ("Werkstatt" in the DE UI)
+stations              SITE = carrosserie / taller / Werkstatt / station ("Station" in the UI)
                       id, org_id, type (carrosserie|hall|parc), name, address, country, capacite,
                       azure_tenant (required), azure_location_aliases[],
                       -- carrosserie only:
@@ -120,6 +135,9 @@ org_tenants           org_id, azure_tenant              -- tenants an organisati
 azure_tenants         mirror of Azure table Tenants (name = PartitionKey = RowKey)
 insurers              id, org_id, name, report_emails[], send_reports (bool),
                       reports_to_send (kva|reparation|both), azure_insurance_id
+calc_methods          id, org_id, name, engine (aw|matrix), country, base_method_id, params JSONB,
+                      is_system, version                                   -- §6.5
+insurer_methods       insurer_id, country, method_id
 station_insurers      station_id (carrosserie), insurer_id, azure_link_id,
                       azure_link_names[] (history of link names)
 technicians           id, org_id, user_id (nullable, external without account), name,
@@ -147,13 +165,50 @@ settings              per org: DE rate (83), ES rate (69), default Teiler, defau
 audit_log             org_id, user_id, action, entity, entity_id, before, after, at
 ```
 
-**Vehicle fields (from v20):** land (`DE`|`ES`), kennzeichen, fin, modell, kunde snapshot (name, e-mail), leistungsdatum, teiler, stundensatz, notiz, zustand[] (Trocken, Nass, Sauber, Schmutzig, Gut, Mangelhaft, Ungenügend; ES output: Seco, Mojado, Limpio, Sucio, Bueno, Deficiente, Insuficiente), greifzone, hohlraum, verbringung, demontage, demontageEur, glass {ws:{on,eur}, rs:{on,eur}}, **panels** (JSONB), repAt, techName, techPct, demTechName, demTechPct, werkPct, werkMode (`pct`|`staffel`), colibri (import meta: method, kunde, sprache, at, imported, reportTotal, rowSum, unknown[]), colibriFile (file key).
+**Vehicle fields (from v20):** land (`DE`|`ES`), kennzeichen, fin, modell, kunde snapshot (name, e-mail), leistungsdatum, teiler, stundensatz, notiz, zustand[] (Trocken, Nass, Sauber, Schmutzig, Gut, Mangelhaft, Ungenügend; ES output: Seco, Mojado, Limpio, Sucio, Bueno, Deficiente, Insuficiente), greifzone, hohlraum, verbringung, demontage, demontageEur, glass {ws:{on,eur}, rs:{on,eur}}, **panels** (JSONB), **parts_to_replace** (text[], labels of parts to replace, printed in the KVA), repAt, techName, techPct, demTechName, demTechPct, werkPct, werkMode (`pct`|`staffel`), colibri (import meta: method, kunde, sprache, at, imported, reportTotal, rowSum, unknown[]), colibriFile (file key).
 
 **Panel object:** `{key, dents:{"10":n,"20":n,…,"80":n}, big (dents >85 mm), bigEur (DE manual amount), alu, kleber, method: "sanft"|"ptp"|"erneuern", finish (DE), awManual, baseAW}`.
 
 Every price constant lives in `settings` or in `/packages/calc` config, never scattered in UI code.
 
 ## 5. Features to keep (complete inventory of v20) + v2 changes
+
+### 5.0 Navigation (UI flow — see the clickable mockup "Hagel-Kalk – Maquette UI")
+1. **Dashboard / Stationen:** after login the user sees KPIs and the list of the stations he has access to (occupancy bar `present / capacity`, counts Kalkulation / Reparatur / new Colibri scans) and **chooses the station he works in today** (remembered as default for next time).
+2. **Station → choose the mode:** three large cards **"Kalkulation"** (Besichtigung, Colibri import, Erfassung, KVA), **"Reparatur"** (technicians, appointments, repair photos, Fotobericht) and **"Alle Fahrzeuge"** (every vehicle of the station whatever its status, including Zurückgegeben), each with its counts; "Station wechseln".
+3. **Vehicle list** of that station, filtered by mode: Kalkulation = Angekommen, Besichtigung, Wartet (Freigabe); Reparatur = Reparatur, Wartet (Teile), Fertig; Alle Fahrzeuge = all 6 statuses (one filter chip per status). Status filter chips, search, "Colibri-Scans (n)", "+ Fahrzeug".
+   - **Change status and move in every mode, in one or two taps:** each row has "Status" and "Verschieben" buttons; rows have checkboxes, and a sticky bar appears on selection ("n ausgewählt · Status ändern · In andere Station verschieben · Auswahl aufheben").
+   - **Status dialog:** the 6 statuses as large choices; "Wartet" requires a reason (Teile, Freigabe Versicherung, Demontage, Sonstiges).
+   - **Move dialog:** target stations of the same organisation with their occupancy; warning (not a block) when the target is full; reminder that the customer carrosserie, commission and report recipients stay unchanged; optional note.
+   - After confirming: toast with the result and **"Rückgängig"** (undo, ~5 s); everything goes to the audit log / Verlauf. A vehicle that no longer matches the current mode or station disappears from the list.
+4. **Expertise-Assistent** (Kalkulation and Alle Fahrzeuge; buttons "+ Neue Expertise" and "Colibri-Scans (n)" in the list, and "Im Expertise-Assistenten bearbeiten" in the vehicle's Erfassung section). It is **the v20 workflow, in the v20 look** (navy #16233f, green chips #5e8c63 / #e4eee5, rounded cards, toggles, large touch targets):
+   - **Step 0 – Scan wählen:** list of the station's new Azure scans (plate, model, time, Colibri number, carrosserie–insurer link, dent count, Scan ✓ / Scan prüfen) → "Übernehmen"; plus "Colibri-PDF manuell importieren" and "Ohne Scan starten".
+   - Then the **4 v20 tabs as steps** with a dark header (plate, model, link, scan badge) and a step bar **1 Basis · 2 Erfassung · 3 Bilder (n) · 4 KVA / Presupuesto**; tabs stay freely clickable (not a locked wizard).
+   - **Basis** = v20 §5.2 Basis (country switch, **calculation method chosen automatically from the insurer** (§6.5, overridable), Colibri import result, plate/FIN with camera, model, customer station, insurer, claim number, date, letterhead, Teiler + rate "= x € pro AW", condition chips, DE toggles, De-/Remontage, ES M1/M2/M3, notes).
+   - **Erfassung** = v20 (14 panels laid out as the car seen from above + windscreen/rear window; panel dialog as a bottom sheet with the 8 size classes and >85 mm as −/+ counters, Aluminium, Klebetechnik, 3 repair methods with explanation, Finish (DE), Entfernen/Speichern; ES summary box with bollos, category, formula and adjustments).
+   - **Zu ersetzende Teile / Piezas a sustituir** (in Erfassung, below the car): free-text labels entered one by one ("Hinzufügen"), plus quick-pick suggestions (DE: Zierleiste Dach li, Dachreling, Emblem Heckklappe, Antenne, Clips Verkleidung; ES equivalents); each can be removed. Stored on the vehicle as `parts_to_replace[]` (text, order). They are printed in the **KVA/Presupuesto PDF** in a highlighted box under the panel table ("Folgende Teile sind zu ersetzen:" / "Piezas a sustituir:"), in the plain-text KVA, and in the Fotobericht header. No price is attached to them.
+   - **Bilder** = v20 + Colibri photos already present + checklist of required views. **Tapping a photo opens it full screen** (lightbox) with label, source/position, previous/next, and actions: change label, include in PDF yes/no, delete (with permission). Same lightbox in the vehicle's Bilder section.
+   - **KVA** = v20 document preview (title bar, customer/insurer/claim, green summary box, panel table with size breakdown and PTP/Erneuern sub-lines, totals) + internal split box (never in the KVA) + actions Senden · PDF speichern/teilen · In Reparatur verschieben · Als Text kopieren.
+   - **Reparaturtermin buchen** (in the KVA step, before the actions): a classic month calendar over the whole year (month/year navigation) showing each working day's free places from the station capacity (`stations.repairs_per_day`; full days, weekends and past days not selectable), time, customer phone (only to call the customer) and e-mail (all required), carrosserie recipients shown automatically; the same booking is also available in the vehicle detail (side-menu section "Reparaturtermin", only for Angekommen, Besichtigung and Wartet; hidden for Reparatur, Fertig and Zurückgegeben), with Verschieben / Stornieren; no technician is linked to the booking; "Termin buchen & Bestätigung senden" e-mails the customer and the carrosserie. The vehicle stays in Besichtigung with a "Termin <day>" badge and **moves automatically to Reparatur / column "Bereit" on the appointment day** (daily worker job). The Reparatur board shows the upcoming bookings above the columns (Stornieren / Verschieben). Details: `PROMPT_v3_ui.md` §5.5b.
+   - A **sticky bottom bar** always shows the live net amount and AW/Bollos, with "‹ Zurück" and "Weiter ›".
+   - All numbers come from `/packages/calc` (the mockup uses a simplified DE formula; the real app must use the BVAT table and match the golden cases).
+5. **Reparatur-Ablauf** (Reparatur mode: tapping a vehicle opens it; elsewhere "Reparatur öffnen" in the vehicle header). Same v20 look and sticky bottom bar as the expertise; 4 freely clickable steps:
+   - **1 Auftrag:** status buttons (Reparatur starten → status `reparatur` + repAt; Pausieren → status dialog preset to Wartet with reason; In andere Station → move dialog); assigned PDR and De-/Re technicians; appointment; **time tracking** per technician (Start/Stopp, minutes per day, table `work_logs`: vehicle, user, start, end); the job from the expertise (method, panels, dents, parts to replace, notes) and the money part filtered by permission: chef sees net, shares and remaining PDR; a technician sees **only his own share** ("Dein Anteil").
+   - **2 Arbeiten:** progress bar; one row per panel with dents (sizes, Kleber/PTP/Erneuern) and a 3-state status **Offen / In Arbeit / Erledigt** + "Foto" button that attaches a repair-phase photo to that panel; De-/Remontage toggles (demontiert / remontiert); spare parts from `parts_to_replace` with status **Bestellt / Geliefert / Eingebaut**. Stored in `repair_tasks` (vehicle, panel_key, status, user, at) and `part_status`.
+   - **3 Fotos:** phases Vorher (read-only, from the expertise incl. Colibri) / Während / Nachher; Kamera/Galerie; **required "Nachher" views** (Vorderansicht, Heckansicht, Seite links, Seite rechts, Dach) as a checklist.
+   - **4 Abschluss:** quality checklist — automatic: all panels done, Nachher photos complete, parts installed + De-/Re done; manual: Lichtkontrolle (technician), **Endabnahme by the Chef de station** (permission-restricted). Fotobericht preview (Vorher/Während/Nachher with counts and times, DE/ES title, letterhead) with the station's effective recipient list; actions **Fotobericht senden**, **Als Fertig melden** (only when the checklist is complete; shows what is missing), **An Kunde übergeben** (status `rendu`).
+   - The mockup has an "Ansicht als: Chef / Techniker" switch only to demonstrate permission filtering; the real app derives it from the user's role.
+6. **Vehicle detail:** dark header band (plate | model | claim number | status badge | **"Status ändern"** | **"Verschieben"** | "Kommentare" button; same dialogs as in the list) + **left side menu** (stacks on top on phones) whose sections depend on the mode:
+   - Kalkulation: Allgemeine Daten · Erfassung · Bilder · KVA & Dokumente · Kommunikation · **GT Motive** · Verlauf
+   - Reparatur: Allgemeine Daten · PDR-Techniker · Reparaturtermine · Bilder · Dokumente & Fotobericht · Kommunikation · Verlauf
+   - Alle Fahrzeuge: all sections (Allgemeine Daten · Erfassung · PDR-Techniker · Reparaturtermine · Bilder · KVA & Dokumente · Kommunikation · GT Motive · Verlauf)
+   - "Allgemeine Daten" shows the status stepper, customer station, current station, insurer, claim number, vehicle data, campaign, letterhead and the Colibri scan card.
+   - **Kommentare:** internal comments per vehicle (who, when), never in customer documents.
+   - **Reparaturtermine:** weekly planning per technician (new table `repair_appointments`: vehicle, technician, date, duration).
+   - **GT Motive:** placeholder section for the upcoming GT Motive API integration (Spain): link the vehicle to a GT Motive claim, push the estimate and photos, read back the status. Build only the UI shell and a `gtmotive` integration module interface in this rebuild; the API connection comes later.
+   - **Verlauf:** status history, moves, sends, imports.
+- **"Zurück" button at the top left of the app header** on every screen except the dashboard: detail → vehicle list → mode choice → stations (one level up each time; also mapped to the browser/Android back button). The breadcrumb stays as a secondary aid.
+- Desktop: fixed side menu like a back-office tool; phone: the same screens, side menu stacked above the content (two items per row).
 
 ### 5.1 Vehicle list (home: "Schnellkalkulationen")
 - **Status filter** replaces the v20 folders: Angekommen · Besichtigung · Wartet · Reparatur · Fertig · Zurückgegeben (see §10), each with its count. Plus filters: current site, customer carrosserie, campaign, carrosserie, insurer.
@@ -235,7 +290,7 @@ Every price constant lives in `settings` or in `/packages/calc` config, never sc
 
 ### 5.5 Sites (carrosseries) and insurers
 - Replaces the v20 customer list: the customer of a vehicle is always a **carrosserie site**. Picker with search, recently used first, limited to sites of the user's organisation and tenant(s).
-- Site record (UI "Werkstatt"): type, name, address, country, capacity, tenant (required at creation), location aliases; for type carrosserie: Azure BusinessCustomer, report e-mails, commission (pct or Staffel), linked insurers.
+- Site record (UI "Station"): type, name, address, country, capacity, tenant (required at creation), location aliases; for type carrosserie: Azure BusinessCustomer, report e-mails, commission (pct or Staffel), linked insurers.
 - Insurer record: name, report e-mails, "Berichte erhalten" on/off, which reports (KVA / Reparatur / both).
 - BusinessCustomer/insurer names and their links come from Azure (§8.3) and are read-only; business fields are edited in the app. Sites and insurers not in Azure can be created manually.
 - Migration: v20 customers are matched to existing carrosserie sites or created as carrosserie sites (admin review list).
@@ -278,6 +333,15 @@ Every price constant lives in `settings` or in `/packages/calc` config, never sc
 - Carrosserie € = basis × commission % (mode pct) or the kickback (mode staffel, ES only). Mode and % come from the customer carrosserie site (`client_station_id`), snapshotted on the vehicle.
 - Technician € = PDR basis × technician %. De/Re technician € = De/Re € × De/Re %.
 - Remaining PDR = basis − carrosserie − technician − De/Re technician.
+
+### 6.5 Calculation methods (configurable, assigned per insurer)
+- A **calculation method** = an engine + parameters + document type. Engines (implemented in `/packages/calc`, nothing else is user-programmable):
+  - `aw` (BVAT): AW table (BVAT 2025), Teiler 10/12, hourly rate, VAT, Aluminium %, Klebetechnik %, PTP %, plus the fixed BVAT extras of §6.2 → document Kostenvoranschlag (DE).
+  - `matrix` (bollo matrix): hourly rate, VAT, category table (A–G max 30 h, or A–F max 24 h, or an admin-edited table), Adhesivo %, Push to Paint %, Sustituir −h, Aluminio +h → document Presupuesto (ES).
+- **System methods** "BVAT 2025" and "Matriz PDR Team A–G" are exactly v20 §6.2/§6.3, locked, and must pass the 22 golden cases. Custom methods are created by copying a method and changing parameters ("Kopieren & anpassen").
+- Table `calc_methods` (id, org_id, name, engine, country, base_method_id, params JSONB, is_system, version) and `insurer_methods` (insurer_id, country, method_id). Every change creates a **new version**; a vehicle stores `method_id` + `method_version` + a snapshot of the parameters, so existing estimates never change.
+- **Resolution in the expertise:** insurer of the vehicle (from the Colibri BusinessCustomer link or chosen) + country → its method; none → the system method of the country. The Basis step shows the method with its source ("automatisch aus Versicherung Allianz" / "Standard" / "manuell gewählt") and a summary of its parameters; users with `commission.modifier` or an admin permission may override it for one vehicle (audited). The method name is printed small on the KVA/Presupuesto.
+- Unit tests: every engine with default parameters reproduces the golden cases; parameter changes are covered by extra fixtures.
 
 ## 7. Letterheads and campaigns
 - **Companies / letterheads (Briefkopf):** replaces the v20 "logo: PDR Team / none" switch. Table of issuing companies (name, logo, address, tax ID, e-mail, footer text). Seed "PDR Team GmbH" (with logo) and "Neutral (ohne Logo)". Each vehicle chooses one; default = the user's last choice. With "Neutral", the PDF shows no logo and no "PDR Team" anywhere (the ES box title becomes just "Matriz").
@@ -323,12 +387,12 @@ The Colibri system (owned by the Colibri team, Nicolas is part of it) stores eve
 
 ### 8.5 "Scans verfügbar" screen
 - Lists not-yet-imported scans of the user's sites (permission `colibri.importer`), i.e. only scans with the **site's tenant** that point to the site: date/time, plate, model, carrosserie/insurer, Colibri number, mapping warnings.
-- Import one or several: server downloads the PDF → `/packages/colibri` (v20 algorithm) → creates the vehicle (country from the site/organisation default, status `besichtigung`, current site, customer carrosserie, carrosserie, insurer, claim number, campaign if one is active for that site) → attaches the PDF and photos → marks the scan imported (`colibri_scan_id` unique, no duplicates).
+- Import one or several: server downloads the PDF → `/packages/colibri` (v20 algorithm) → creates the vehicle (country from the site/organisation default, status `besichtigung`, current site, customer carrosserie, insurer, claim number, campaign if one is active for that site) → attaches the PDF and photos → marks the scan imported (`colibri_scan_id` unique, no duplicates).
 - Report check: parsed total vs report total (v20) and vs `DentsTotalNumber` → Scan ✓ / Scan prüfen ⚠.
 - Local PDF import (single and bulk, v20) stays available as fallback.
 
 ## 9. Sites and vehicle moves
-- **Site = carrosserie = taller = Werkstatt = station** (one concept, UI "Werkstatt"): type (carrosserie|hall|parc), name, address, country, **capacity (number of places)**, **tenant (chosen at creation, required)**, Colibri location aliases; for carrosseries also BusinessCustomer link, report e-mails, commission and linked insurers.
+- **Site = carrosserie = taller = Werkstatt = station** (one concept, UI "Station"): type (carrosserie|hall|parc), name, address, country, **capacity (number of places)**, **tenant (chosen at creation, required)**, Colibri location aliases; for carrosseries also BusinessCustomer link, report e-mails, commission and linked insurers.
 - **Occupancy** = vehicles physically present (`station_id`) = all statuses except `rendu`. Indicator `present / capacity`: green < 80 %, orange ≥ 80 %, red when full, red flashing when over capacity.
 - Moving or importing into a full site shows a **warning, not a block**; the action stays possible and is audited.
 - **Move:** direct change of `station_id` from the vehicle or in multi-select (permission `vehicules.deplacer` on the source site; destination = sites of the same organisation; warning if the destination has another tenant). History in `vehicle_moves` (from, to, who, when, note).

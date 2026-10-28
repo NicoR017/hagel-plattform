@@ -1,3 +1,4 @@
+import { isPlace } from "./places";
 import { useRef, useState } from "react";
 import { api } from "../api";
 import { eur } from "@hagel/documents";
@@ -10,7 +11,7 @@ import { useField } from "./store";
 /** "Alte Sicherung importieren": reads a v20 JSON backup, creates the vehicles / photos / scans through the normal queue, verifies the totals. */
 export function BackupImport({ onClose }: { onClose: () => void }) {
   const f = useField();
-  const sites = (f.refs?.stations ?? []).filter((s) => s.active);
+  const sites = (f.refs?.stations ?? []).filter((s) => s.active && isPlace(s));
   const [backup, setBackup] = useState<OldBackup | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [err, setErr] = useState("");
@@ -36,7 +37,7 @@ export function BackupImport({ onClose }: { onClose: () => void }) {
     setErr("");
     const land = (f.refs?.stations.find((x) => x.id === stationId)?.country ?? "ES");
     for (const name of plan.unmatched) {
-      try { await api("POST", "/admin/stations", { type: "carrosserie", name, country: land === "DE" ? "DE" : "ES", capacite: 0 }); }
+      try { await api("POST", "/admin/bodyshops", { name, country: land === "DE" ? "DE" : "ES" }); }
       catch (e) { setErr(`${name}: ${(e as Error).message}`); return; }
     }
     await f.engine.syncNow(f.orgId);

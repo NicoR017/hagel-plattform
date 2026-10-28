@@ -9,6 +9,7 @@ export interface TechSheetData {
   totals: { n: number; aw: number; pdrEur: number; demEur: number; eur: number };
 }
 
+export type TechLang = "de" | "en" | "fr" | "es";
 export const TECH_LABELS = {
   de: {
     overview: "Übersicht", title: "PDR Technician Worksheet", tech: "Techniker", site: "Standort", period: "Zeitraum", start: "Arbeitsbeginn", end: "Arbeitsende", plate: "Kennzeichen", model: "Modell",
@@ -21,6 +22,18 @@ export const TECH_LABELS = {
     aw: "AW", pdr: "PDR pay", dem: "De-/re-mounting pay", pay: "Amount", summary: "Summary", cars: "Vehicles repaired", totalAw: "Total AW",
     totalPdr: "Total PDR pay", totalDem: "Total de-/re-mounting pay", total: "Total pay", date: "Date", signSite: "Signature of the site manager", signTech: "Signature of the technician",
     ovCars: "Vehicles", ovPdr: "PDR €", ovDem: "De-/re-mounting €", ovTotal: "Total €", sum: "Total", none: "No vehicles in this period.",
+  },
+  fr: {
+    overview: "Aperçu", title: "PDR Technician Worksheet", tech: "Technicien", site: "Site", period: "Période", start: "Début des travaux", end: "Fin des travaux", plate: "Immatriculation", model: "Modèle",
+    aw: "AW", pdr: "Rémunération PDR", dem: "Rémunération démontage", pay: "Montant", summary: "Récapitulatif", cars: "Véhicules réparés", totalAw: "Total AW",
+    totalPdr: "Total rémunération PDR", totalDem: "Total rémunération démontage", total: "Total rémunération", date: "Date", signSite: "Signature du responsable de site", signTech: "Signature du technicien",
+    ovCars: "Véhicules", ovPdr: "PDR €", ovDem: "Démontage €", ovTotal: "Total €", sum: "Total", none: "Aucun véhicule sur cette période.",
+  },
+  es: {
+    overview: "Resumen", title: "PDR Technician Worksheet", tech: "Técnico", site: "Sede", period: "Periodo", start: "Inicio del trabajo", end: "Fin del trabajo", plate: "Matrícula", model: "Modelo",
+    aw: "AW", pdr: "Pago PDR", dem: "Pago desmontaje", pay: "Importe", summary: "Resumen", cars: "Vehículos reparados", totalAw: "Total AW",
+    totalPdr: "Total pago PDR", totalDem: "Total pago desmontaje", total: "Total a pagar", date: "Fecha", signSite: "Firma del responsable de la sede", signTech: "Firma del técnico",
+    ovCars: "Vehículos", ovPdr: "PDR €", ovDem: "Desmontaje €", ovTotal: "Total €", sum: "Total", none: "Ningún vehículo en este periodo.",
   },
 } as const;
 const L = TECH_LABELS;
@@ -36,7 +49,7 @@ function colL(i: number): string {
 }
 
 // cell styles (index into cellXfs below)
-const S = { def: 0, title: 1, bold: 2, head: 3, money: 4, num: 5, totMoney: 6, totLabel: 7, int: 8, line: 9, headRight: 10, totNum: 11 } as const;
+export const S = { def: 0, title: 1, bold: 2, head: 3, money: 4, num: 5, totMoney: 6, totLabel: 7, int: 8, line: 9, headRight: 10, totNum: 11 } as const;
 
 const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -66,9 +79,9 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </styleSheet>`;
 
 type Cell = string | number | null | undefined;
-type Row = { ht?: number; cells: [Cell, number][] };
+export type Row = { ht?: number; cells: [Cell, number][] };
 
-function sheetXml(widths: number[], rows: Row[]): string {
+export function sheetXml(widths: number[], rows: Row[]): string {
   const body = rows.map((r, ri) => {
     const rr = ri + 1;
     const cells = r.cells.map(([v, st], ci) => {
@@ -86,25 +99,26 @@ function sheetXml(widths: number[], rows: Row[]): string {
 <sheetData>${body}</sheetData><pageSetup orientation="portrait" fitToHeight="0"/></worksheet>`;
 }
 
-const sheetName = (s: string, used: Set<string>) => {
+export const sheetName = (s: string, used: Set<string>) => {
   const base = (s.replace(/[\\/?*[\]:]/g, "-").trim().slice(0, 28) || "Sheet");
   let n = base, i = 2;
   while (used.has(n.toLowerCase())) n = `${base.slice(0, 26)} ${i++}`;
   used.add(n.toLowerCase());
   return n;
 };
-const r2 = (n: number) => Math.round(n * 100) / 100;
+export const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** `Abrechnung_<from>_<to>.xlsx` style name for the download. */
-export function techWorkbookFileName(from: string | null, to: string | null, lang: "de" | "en" = "de"): string {
-  return `${lang === "de" ? "Technikerabrechnung" : "Technician_pay"}_${from ?? "alle"}_${to ?? "alle"}.xlsx`;
+export function techWorkbookFileName(from: string | null, to: string | null, lang: TechLang = "de"): string {
+  const base = { de: "Technikerabrechnung", en: "Technician_pay", fr: "Paie_techniciens", es: "Pago_tecnicos" }[lang];
+  return `${base}_${from ?? "alle"}_${to ?? "alle"}.xlsx`;
 }
 
 /**
  * Workbook: one overview sheet (cars and pay per technician) and one worksheet per technician laid out like the paper "PDR Technician
  * Worksheet": header, table of finished cars, summary, signature lines.
  */
-export function buildTechnicianWorkbook(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: "de" | "en" = "de"): Uint8Array {
+export function buildTechnicianWorkbook(data: { from: string | null; to: string | null; sheets: TechSheetData[] }, lang: TechLang = "de"): Uint8Array {
   const l = L[lang];
   const period = [data.from ? fmtDate(data.from) : "…", data.to ? fmtDate(data.to) : "…"].join(" – ");
   const used = new Set<string>([l.overview.toLowerCase()]);
@@ -146,6 +160,11 @@ export function buildTechnicianWorkbook(data: { from: string | null; to: string 
     sheets.push({ name: sheetName(t.technician, used), xml: sheetXml([14, 14, 16, 22, 10, 16, 20, 18], rows) });
   }
 
+  return packSheets(sheets);
+}
+
+/** zips worksheets (name + xml) into a workbook with the shared styles */
+export function packSheets(sheets: { name: string; xml: string }[]): Uint8Array {
   const enc = new TextEncoder();
   const NS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`;
   const F = (name: string, str: string) => ({ name, data: enc.encode(str) });
@@ -166,6 +185,6 @@ export function buildTechnicianWorkbook(data: { from: string | null; to: string 
 }
 
 export const techDate = fmtDate;
-export function techPdfFileName(from: string | null, to: string | null, lang: "de" | "en" = "de"): string {
+export function techPdfFileName(from: string | null, to: string | null, lang: TechLang = "de"): string {
   return techWorkbookFileName(from, to, lang).replace(/\.xlsx$/, ".pdf");
 }
