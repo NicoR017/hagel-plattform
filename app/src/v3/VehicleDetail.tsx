@@ -261,7 +261,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {cur === "termin" && <section className="panel" style={{ padding: 16 }}><h3 style={{ margin: "0 0 10px" }}>📅 {t("v4BookTitle")}</h3><BookingForm v={v} /></section>}
           {cur === "erfassung" && embed(
             <>
-              <Erfassung v={v} />
+              <Erfassung v={v} coloured={mode === "all"} />
               {f.can("vehicules.modifier") && <div style={{ padding: "0 14px 16px" }}><button className="pbtn sec" onClick={() => go({ page: "expertise", id, step: "erfassung", ctx })}>{t("v4EditInAssistant")}</button></div>}
             </>,
           )}

@@ -15,24 +15,17 @@ import { toast } from "../field/toast";
 import { Dialog } from "../field/ui";
 import { REPAIR_STAGES, stageOf } from "./boardLogic";
 import { alsoRemoval, countKinds, fieldPanels, hasStepPhoto, isActive, isFinished, isMine, nextStep, tally, type FieldKind, type FieldPanel, type FieldVehicle, type Intervention } from "./fieldLogic";
+import { Chip, KIND } from "./kinds";
 import { stageLabel } from "./RepairBoard";
 import { typeLabel } from "./Stations";
 import type { Key } from "../i18n";
 
-/** colours by intervention: green PDR, orange push to paint, red replace (grey = removal/refit, blue = spare part) */
-const KIND: Record<Intervention, { bg: string; fg: string; fill: string; stroke: string; label: Key }> = {
-  pdr: { bg: "#E4EEE5", fg: "#2F5535", fill: "#86b08a", stroke: "#5e8c63", label: "fvPdr" },
-  ptp: { bg: "#FDF0E1", fg: "#8A4A06", fill: "#F0A64B", stroke: "#C9781A", label: "fvPtp" },
-  replace: { bg: "#FBE4E1", fg: "#8F1D14", fill: "#E0796D", stroke: "#A23B2E", label: "fvReplace" },
-};
 const GREY = { bg: "#EEF0F3", fg: "#3B4555" }, BLUE = { bg: "#E3ECFD", fg: "#1D4FB8" };
 const panelName = (k: string) => tOr("pn." + k, PANEL_MAP[k]?.de ?? k);
 const panelShort = (k: string) => tOr("ps." + k, PANEL_MAP[k]?.short ?? k);
 const plateOf = (v: LocalVehicle) => String((v as Record<string, unknown>).kennzeichen || "—");
 const modelOf = (v: LocalVehicle) => String((v as Record<string, unknown>).modell || "");
 const asField = (v: LocalVehicle) => v as unknown as FieldVehicle;
-
-const Chip = ({ bg, fg, children }: { bg: string; fg: string; children: ReactNode }) => <span className="badge" style={{ background: bg, color: fg, fontSize: 12 }}>{children}</span>;
 
 export function useFieldKind(): { kind: FieldKind; meId: string; name: string } | null {
   const f = useField();

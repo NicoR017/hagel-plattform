@@ -8,8 +8,11 @@ import { CarSvg } from "./CarSvg";
 import { GlassDialog, PanelDialog, panelName } from "./Panel";
 import { PartsBox } from "./PartsBox";
 import { useField } from "./store";
+import { countKinds, fieldPanels } from "../v3/fieldLogic";
+import { Chip, KIND } from "../v3/kinds";
 
-export function Erfassung({ v }: { v: LocalVehicle }) {
+/** `coloured`: the schema is coloured by what is done to each panel, like the technician sees it (green PDR, orange push to paint, red replace), with the legend and the counts */
+export function Erfassung({ v, coloured }: { v: LocalVehicle; coloured?: boolean }) {
   const f = useField();
   const [panel, setPanelKey] = useState<string | null>(null);
   const [glass, setGlass] = useState<"ws" | "rs" | null>(null);
@@ -21,10 +24,18 @@ export function Erfassung({ v }: { v: LocalVehicle }) {
   const editable = f.can("vehicules.modifier");
   const a = split ? computeShares(v as never, c) : null;
   const pmap = (v.panels ?? {}) as Record<string, Panel>;
+  const kinds = coloured ? fieldPanels({ panels: pmap }) : [];
+  const tint = coloured ? (k: string) => { const p = kinds.find((q) => q.key === k); return p ? { fill: KIND[p.kind].fill, stroke: KIND[p.kind].stroke } : null; } : undefined;
+  const counts = countKinds(kinds);
 
   return (
     <div style={{ padding: "14px 14px 8px" }}>
-      <CarSvg panels={pmap} glass={cv.glass} onPanel={(k) => editable && setPanelKey(k)} onGlass={(k) => editable && f.can("prix.voir") && setGlass(k)} />
+      <CarSvg panels={pmap} glass={cv.glass} tint={tint} onPanel={(k) => editable && setPanelKey(k)} onGlass={(k) => editable && f.can("prix.voir") && setGlass(k)} />
+      {coloured && (
+        <div className="fv-counts" aria-label={t("fvLegend")}>
+          {(["pdr", "ptp", "replace"] as const).map((k) => <Chip key={k} {...KIND[k]}>{t(KIND[k].label)}{counts[k] > 0 ? ` · ${counts[k]}` : ""}</Chip>)}
+        </div>
+      )}
       {e && e.bollos > 0 && (
         <div style={{ background: "var(--bg)", borderRadius: 14, padding: "12px 14px", marginTop: 10, fontSize: 13, lineHeight: 1.55 }}>
           <div className="row"><b style={{ fontSize: 15 }}>{e.bollos} Bollos → {t("cat")} {e.cat.cat}</b>{prices && <b style={{ fontSize: 15, color: "var(--greenDk)" }}>{eur(e.matrixEur)}</b>}</div>
