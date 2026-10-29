@@ -22,6 +22,19 @@ export const inflateAny: Inflate = async (bytes) => {
   return null;
 };
 
+/** Declared /Length of the stream whose keyword starts at `streamIdx` (direct value or indirect `n g R`). */
+function streamLength(s: string, streamIdx: number): number | null {
+  const dictStart = s.lastIndexOf("obj", streamIdx);
+  const dict = s.slice(dictStart, streamIdx + 1);
+  const ref = /\/Length\s+(\d+)\s+(\d+)\s+R/.exec(dict);
+  if (ref) {
+    const o = new RegExp("(?:^|[^\\d])" + ref[1] + "\\s+" + ref[2] + "\\s+obj\\s*(\\d+)").exec(s);
+    return o ? parseInt(o[1], 10) : null;
+  }
+  const d = /\/Length\s+(\d+)/.exec(dict);
+  return d ? parseInt(d[1], 10) : null;
+}
+
 /**
  * Reads the original Colibri PDF: inflates every content stream and extracts
  * `1 0 0 1 x y Tm <hex> Tj` text items with coordinates (one array per page stream).
@@ -36,7 +49,12 @@ export async function colibriPages(buf: ArrayBuffer | Uint8Array, inflate: Infla
     const st = m.index + m[0].length;
     let en = s.indexOf("endstream", st);
     if (en < 0) continue;
-    while (en > st && (u8[en - 1] === 10 || u8[en - 1] === 13 || u8[en - 1] === 32)) en--;
+    // Exact length from the stream dictionary (/Length n or /Length n 0 R): the compressed
+    // data may itself end with 0x0A/0x0D/0x20 (Adler-32 byte), so never trim blindly.
+    const len = streamLength(s, m.index);
+    if (len != null && st + len <= en) en = st + len;
+    else if (u8[en - 1] === 10) en -= u8[en - 2] === 13 ? 2 : 1; // only the EOL before endstream
+    else if (u8[en - 1] === 13) en--;
     const inf = await inflate(u8.subarray(st, en));
     if (!inf) continue;
     const txt = bin2str(inf);
