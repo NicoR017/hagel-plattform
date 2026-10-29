@@ -30,3 +30,27 @@ describe.skipIf(!existsSync(file))("real Colibri PDF (EN, Germany method, 2026-1
     expect(scanCheck(v.colibri!, 618).ok).toBe(true);
   });
 });
+
+const file2 = new URL("../../../fixtures/real/colibri_en_0742GCK.pdf", import.meta.url);
+
+describe.skipIf(!existsSync(file2))("real Colibri PDF (EN, Germany method, 2026-10-29, table stream ends with 0x0D)", () => {
+  it("parses to the report total with no unknown rows", async () => {
+    const res = parseColibri(await colibriPages(readFileSync(file2)));
+    expect(res.reportTotal).toBe(84);
+    expect(res.imported).toBe(84);
+    expect(res.rowSum).toBe(84);
+    expect(res.unknown).toEqual([]);
+    expect(res.found).toBe(8);
+    expect(res.head.kennzeichen).toBe("0742 GCK");
+    expect(res.head.datum).toBe("29.10.2026 9:48");
+    expect(res.head.method).toBe("GERMANY");
+    expect(Object.keys(res.panels).sort()).toEqual(["dach", "dachholm_l", "dachholm_r", "haube", "heck", "kfl_vr", "tuer_vl", "tuer_vr"]);
+    expect(res.panels.haube.dents).toEqual({ 20: 13, 30: 10, 40: 5, 60: 1, 70: 1, 80: 1 });
+    expect(res.panels.dach.dents).toEqual({ 20: 25, 30: 9, 40: 4, 80: 1 });
+  });
+  it("apply + scanCheck", async () => {
+    const res = parseColibri(await colibriPages(readFileSync(file2)));
+    const v = applyColibri({ panels: {} }, res, new Date("2026-10-29T00:00:00Z"));
+    expect(scanCheck(v.colibri!, 84).ok).toBe(true);
+  });
+});
