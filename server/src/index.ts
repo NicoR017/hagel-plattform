@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
 import { createDb } from "./db";
-import { ConsoleMailer, ModeMailer, ResendMailer } from "./email";
+import { ModeMailer, makeBaseMailer, parseFrom } from "./email";
 import { seed } from "./seed";
 import { seedStaging } from "./scripts/seed_staging";
 import { storageFromEnv } from "./storage";
@@ -19,8 +19,8 @@ import { FakeCitas } from "./citas_fake";
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
 const storage = storageFromEnv();
-const mailer = new ModeMailer(cfg.emailApiKey ? new ResendMailer(cfg.emailApiKey, cfg.emailFrom) : new ConsoleMailer(), cfg.mailMode, cfg.mailRedirectTo);
-console.log(`env=${cfg.appEnv} mail=${cfg.mailMode}${cfg.mailRedirectTo ? " -> " + cfg.mailRedirectTo : ""}`);
+const mailer = new ModeMailer(makeBaseMailer(cfg), cfg.mailMode, cfg.mailRedirectTo);
+console.log(`env=${cfg.appEnv} mail: provider=${cfg.emailProvider} from=${parseFrom(cfg.emailFrom).address} MAIL_MODE=${cfg.mailMode}${cfg.mailRedirectTo ? " -> " + cfg.mailRedirectTo : ""}`);
 if (process.env.SEED_SUPERADMIN_EMAIL) await seed(h.db, { superadminEmail: process.env.SEED_SUPERADMIN_EMAIL, testSites: process.env.SEED_TEST_SITES === "1", storage });
 
 // staging only, and only when asked: fake vehicles and test accounts (skipped for organisations that already have vehicles)

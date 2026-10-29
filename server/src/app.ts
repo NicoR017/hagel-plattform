@@ -13,6 +13,7 @@ import {
 import type { Config } from "./config";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
+import { runMailTest } from "./mail_test";
 import type { Env } from "./env";
 import { Hub } from "./hub";
 import { canOrg, hasOrgPermission, isMemberOfOrg, type Principal } from "./permissions";
@@ -245,6 +246,15 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   // ---------- admin ----------
   const admin = new Hono<Env>();
   admin.use("*", needAuth);
+
+  // test mail through the configured mailer (so MAIL_MODE applies); always addressed to the calling super-admin
+  admin.post("/mail-test", requireSuper, zValidator("json", z.object({ withAttachment: z.enum(["none", "small", "large"]).default("none"), replyTo: z.string().trim().toLowerCase().email().max(200).optional() }), validationHook), async (c) => {
+    const b = c.req.valid("json"), p = c.get("principal");
+    const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, p.id));
+    const r = await runMailTest(mailer, cfg.emailProvider, { to: u.email, withAttachment: b.withAttachment, replyTo: b.replyTo });
+    await audit(db, { userId: p.id, action: "mail_test", entity: "mail", after: { provider: r.provider, attachment: b.withAttachment, replyTo: b.replyTo ?? null, ok: r.ok, ms: r.ms, error: r.error ?? null } });
+    return c.json(r);
+  });
 
   // organisations (super-admin)
   admin.get("/orgs", requireSuper, async (c) => c.json(await db.select().from(organizations)));

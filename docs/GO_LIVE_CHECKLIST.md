@@ -114,6 +114,14 @@ Une quatrième étape **n'est pas une migration** et se lance à la main : le sc
 - [ ] Test hors ligne : un téléphone signe un dépôt en mode avion, se reconnecte → la signature arrive une seule fois, le reçu PDF est créé. Un ancien téléphone (v4) garde ses opérations en file (rien de perdu).
 - [ ] E-mail du reçu client : en `MAIL_MODE=redirect`, reçu chez Nicolas ; en cas d'échec, l'état « échec » et le bouton « Renvoyer » apparaissent dans la fiche du véhicule.
 
+## K2. E-mails via Microsoft Graph (branche `feature/graph-mail`)
+Le choix du fournisseur se fait par variables : `GRAPH_*` → Graph ; sinon `EMAIL_API_KEY` → Resend ; sinon console. **Fusionner et déployer le code ne change rien en prod tant que les `GRAPH_*` n'y sont pas posés** (la prod reste sur Resend).
+- [ ] Staging : `provider=graph from=noreplay-spain@pdr-team.com MAIL_MODE=redirect` dans le log ; `mail-test` sans PJ / petite PJ / grosse PJ (~5 Mo) reçus, objet `[STAGING → …]`, présents dans « Éléments envoyés » ; lien de connexion, reçu client, rapport PDF (« Répondre » → `replyTo`) ; pas de spam ; mauvais secret → erreur claire + « Renvoyer », sans crash ; `GRAPH_*` retirés → retour Resend/console.
+- [ ] Prod, étape 1 (le soir, dès 20:00 Madrid) : fusion + déploiement du code seul → le log dit toujours `provider=resend`, un lien de connexion part normalement.
+- [ ] Prod, étape 2 : Nicolas lance `render_set_mail.ps1 -Api <srv-id api prod> -Production` (secret **prod** distinct du staging, `EMAIL_FROM=noreplay-spain@pdr-team.com`) → redéploiement → log `provider=graph` → `mail-test` vers Nicolas uniquement (`MAIL_MODE=live` : le test part à l'adresse du super-admin appelant) → un vrai lien de connexion.
+- [ ] **Ne pas retirer `EMAIL_API_KEY` de la prod** tant que Graph n'a pas tourné plusieurs jours sans erreur.
+- [ ] Retour arrière : supprimer les trois `GRAPH_*` de l'api prod, redéployer (Resend reprend, pas de revert de code).
+
 ## L. Décisions v5 déjà validées par Nicolas
 - Signature : permission `vehicules.changer_statut` réutilisée ; dépôt « à signer » seulement pour les voitures qui entrent au tableau **après** la mise en ligne (les voitures déjà en réparation n'affichent rien).
 - Signature enregistrée sous forme de dessin vectoriel ; nom, e-mail et signature du client jamais visibles pour les profils technicien / headliner, jamais dans la synchronisation du véhicule, jamais dans l'Excel ; le journal d'audit ne garde qu'une référence.
