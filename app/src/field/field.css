@@ -135,3 +135,12 @@
 .bk-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--sub);}
 .fld.embed svg{max-width:560px;margin-left:auto;margin-right:auto;display:block;}
 .v3 .vd-body .fld.embed,.v3 .exp-body .fld.embed{max-width:860px;}
+
+.rcpt .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
+.rcpt .pill{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:13px;padding:4px 4px 4px 10px;word-break:break-all;}
+.rcpt .pill button{all:unset;cursor:pointer;min-width:32px;min-height:32px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;}
+.rcpt-src{display:block;font-weight:500;font-size:11px;opacity:.75;}
+.rcpt input{width:100%;box-sizing:border-box;min-height:44px;font-size:16px;}
+.rcpt input.rcpt-bad{border:2px solid var(--red,#c0392b);}
+.rcpt-err{color:var(--red,#c0392b);font-size:12px;margin-top:4px;}
+.linkbtn{all:unset;cursor:pointer;color:var(--navy,#1D4FB8);text-decoration:underline;font-size:13px;margin-top:8px;min-height:32px;}

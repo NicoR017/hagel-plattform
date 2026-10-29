@@ -20,29 +20,48 @@ const clean = (e: string) => e.trim().toLowerCase();
  * the station. De-duplicated, lower-case. (The insurers selected on a station only PRE-FILL its list in the admin screen: see `stationRecipientPreview`.)
  */
 export function recipientsFor(src: RecipientSources, type: ReportType): string[] {
-  const out = new Set<string>();
-  for (const e of src.carrosserieEmails) if (e.trim()) out.add(clean(e));
+  return recipientsWithSource(src, type).map((r) => r.email);
+}
+
+export interface RecipientDefault { email: string; source: "bodyshop" | "insurer"; name?: string }
+
+/** Same list as `recipientsFor`, each address with where it comes from (an address in both lists counts as the carrosserie's). */
+export function recipientsWithSource(src: RecipientSources, type: ReportType, names: { bodyshop?: string; insurer?: string } = {}): RecipientDefault[] {
+  const out = new Map<string, RecipientDefault>();
+  const put = (e: string, source: RecipientDefault["source"]) => { const k = clean(e); if (!out.has(k)) out.set(k, { email: k, source, ...(names[source] ? { name: names[source] } : {}) }); };
+  for (const e of src.carrosserieEmails) if (e.trim()) put(e, "bodyshop");
   const i = src.insurer;
   if (type !== "termin" && i && i.sendReports && (i.reportsToSend === "both" || i.reportsToSend === type)) {
     const excluded = new Set((src.excludedInsurerEmails ?? []).map(clean));
     const manual = new Set(src.carrosserieEmails.map(clean));
-    for (const e of i.reportEmails) if (e.trim() && (!excluded.has(clean(e)) || manual.has(clean(e)))) out.add(clean(e));
+    for (const e of i.reportEmails) if (e.trim() && (!excluded.has(clean(e)) || manual.has(clean(e)))) put(e, "insurer");
   }
-  return [...out];
+  return [...out.values()];
 }
 
-export async function recipientsOfVehicle(db: Pick<Db, "select">, v: Pick<typeof vehicles.$inferSelect, "orgId" | "clientStationId" | "insurerId">, type: ReportType): Promise<string[]> {
-  let carrosserieEmails: string[] = [], excludedInsurerEmails: string[] = [];
+async function sourcesOfVehicle(db: Pick<Db, "select">, v: Pick<typeof vehicles.$inferSelect, "orgId" | "clientStationId" | "insurerId">) {
+  let carrosserieEmails: string[] = [], excludedInsurerEmails: string[] = [], bodyshop: string | undefined, insurerName: string | undefined;
   if (v.clientStationId) {
     const [s] = await db.select().from(stations).where(and(eq(stations.id, v.clientStationId), eq(stations.orgId, v.orgId)));
-    if (s && s.type === "carrosserie") { carrosserieEmails = s.reportEmails; excludedInsurerEmails = s.excludedInsurerEmails; }
+    if (s && s.type === "carrosserie") { carrosserieEmails = s.reportEmails; excludedInsurerEmails = s.excludedInsurerEmails; bodyshop = s.name; }
   }
   let insurer: RecipientSources["insurer"] = null;
   if (v.insurerId) {
     const [i] = await db.select().from(insurers).where(and(eq(insurers.id, v.insurerId), eq(insurers.orgId, v.orgId)));
-    if (i) insurer = { sendReports: i.sendReports, reportsToSend: i.reportsToSend, reportEmails: i.reportEmails };
+    if (i) { insurer = { sendReports: i.sendReports, reportsToSend: i.reportsToSend, reportEmails: i.reportEmails }; insurerName = i.name; }
   }
-  return recipientsFor({ carrosserieEmails, insurer, excludedInsurerEmails }, type);
+  return { src: { carrosserieEmails, insurer, excludedInsurerEmails } as RecipientSources, names: { bodyshop, insurer: insurerName } };
+}
+
+export async function recipientsOfVehicle(db: Pick<Db, "select">, v: Pick<typeof vehicles.$inferSelect, "orgId" | "clientStationId" | "insurerId">, type: ReportType): Promise<string[]> {
+  const { src } = await sourcesOfVehicle(db, v);
+  return recipientsFor(src, type);
+}
+
+/** The default recipients of a vehicle with their source (for the editable list of the send dialog). */
+export async function recipientDefaultsOfVehicle(db: Pick<Db, "select">, v: Pick<typeof vehicles.$inferSelect, "orgId" | "clientStationId" | "insurerId">, type: ReportType): Promise<RecipientDefault[]> {
+  const { src, names } = await sourcesOfVehicle(db, v);
+  return recipientsWithSource(src, type, names);
 }
 
 /** Recipients of the carrosserie where the repair happens (its own list; the customer carrosserie's if the current station has none). */

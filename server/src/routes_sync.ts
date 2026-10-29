@@ -13,7 +13,7 @@ import { can, type Principal } from "./permissions";
 import { photos, reportSends, users, vehicleAssignments, vehicles } from "./schema";
 import type { Mailer } from "./email";
 import { reportMail } from "./mails";
-import { recipientsOfVehicle } from "./reports";
+import { recipientDefaultsOfVehicle } from "./reports";
 import { replyToInfo } from "./reply_to";
 import { audit } from "./audit";
 import type { Storage } from "./storage";
@@ -148,7 +148,8 @@ export function syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, v
     const as = await db.select().from(vehicleAssignments).where(eq(vehicleAssignments.vehicleId, v.id));
     if (!can(c.get("principal"), reportPerm(type), refOf(v, as.map((a) => a.userId)))) throw new HttpError(403, "forbidden");
     const reply = await replyToInfo(db, c.get("principal").id, v.orgId);
-    return c.json({ recipients: await recipientsOfVehicle(db, v, type as "kva" | "reparation"), replyTo: reply.address ?? null, replyToSource: reply.source });
+    const defaults = await recipientDefaultsOfVehicle(db, v, type as "kva" | "reparation");
+    return c.json({ recipients: defaults.map((d) => d.email), defaults, replyTo: reply.address ?? null, replyToSource: reply.source });
   });
 
   /** History of what was sent for a vehicle. */
