@@ -112,7 +112,9 @@ const bookingInput = z.object({
 
 /** Box in which the customer draws the signature (the points of a stroke are in this coordinate system, origin top-left). */
 export const SIGNATURE_W = 600, SIGNATURE_H = 200;
-const strokeSchema = z.array(z.tuple([z.number().min(-20).max(SIGNATURE_W + 20), z.number().min(-20).max(SIGNATURE_H + 20)])).min(1).max(2000);
+/** A finger can leave the box while drawing (pointer capture), so points slightly outside are normal; the limit only stops absurd values. Signatures already queued on phones may have such points. */
+export const SIGNATURE_SLACK = 1000;
+const strokeSchema = z.array(z.tuple([z.number().min(-SIGNATURE_SLACK).max(SIGNATURE_W + SIGNATURE_SLACK), z.number().min(-SIGNATURE_SLACK).max(SIGNATURE_H + SIGNATURE_SLACK)])).min(1).max(2000);
 export const signatureSchema = z.array(strokeSchema).min(1).max(60).refine((s) => s.reduce((n, st) => n + st.length, 0) <= 6000, "too many points");
 /** A signed receipt of the car being left (drop_off) or taken back (pick_up). The id is made on the phone: a replayed operation is applied once. */
 export const handoverInput = z.object({

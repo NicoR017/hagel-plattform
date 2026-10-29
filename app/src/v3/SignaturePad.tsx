@@ -36,7 +36,8 @@ export function SignaturePad({ value, onChange, label }: { value: Strokes; onCha
 
   const at = (e: React.PointerEvent): [number, number] => {
     const r = cv.current!.getBoundingClientRect();
-    return [Math.round(((e.clientX - r.left) / r.width) * SIGNATURE_W * 10) / 10, Math.round(((e.clientY - r.top) / r.height) * SIGNATURE_H * 10) / 10];
+    const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v)); // a finger that leaves the box stays on its edge
+    return [clamp(Math.round(((e.clientX - r.left) / r.width) * SIGNATURE_W * 10) / 10, SIGNATURE_W), clamp(Math.round(((e.clientY - r.top) / r.height) * SIGNATURE_H * 10) / 10, SIGNATURE_H)];
   };
   const total = () => strokes.current.reduce((n, s) => n + s.length, 0);
   const down = (e: React.PointerEvent) => {
