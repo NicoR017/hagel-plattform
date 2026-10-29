@@ -126,12 +126,12 @@ export async function deletePhoto(c: MutCtx, photoId: string) {
  * Queue a report for e-mailing by the server. The PDF is built on the phone (works offline), stored locally and uploaded as soon as the
  * server has accepted the request; the server then sends it to the recipients it computes itself (carrosserie always, insurer by its rules).
  */
-export async function sendReport(c: MutCtx, o: { vehicleId: string; type: "kva" | "reparation"; lang: "de" | "es"; pdf: Uint8Array; fileName: string }): Promise<string> {
+export async function sendReport(c: MutCtx, o: { vehicleId: string; type: "kva" | "reparation"; lang: "de" | "es"; pdf: Uint8Array; fileName: string; recipients?: string[] }): Promise<string> {
   const id = uuid4();
   const key = `report:${id}`;
   await c.db.blobs.put({ key, blob: new Blob([o.pdf as BlobPart], { type: "application/pdf" }), type: "application/pdf", size: o.pdf.length, name: o.fileName });
   await c.db.uploads.put({ key, kind: "report", refId: id, vehicleId: o.vehicleId, orgId: c.orgId, tries: 0, nextTry: 0 });
-  await push(c, op(c, "report.send", { vehicleId: o.vehicleId, report: { id, type: o.type, lang: o.lang } }));
+  await push(c, op(c, "report.send", { vehicleId: o.vehicleId, report: { id, type: o.type, lang: o.lang, ...(o.recipients?.length ? { recipients: o.recipients } : {}) } }));
   return id;
 }
 

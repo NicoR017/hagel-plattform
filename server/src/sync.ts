@@ -425,11 +425,16 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
         if (ex.vehicleId !== row.id || ex.sentBy !== u.id) throw new Reject("not_allowed");
         return { status: "ok", orgId: row.orgId, seq: row.seq };
       }
-      const recipients = await recipientsOfVehicle(tx, row, op.report.type);
+      const defaultRecipients = await recipientsOfVehicle(tx, row, op.report.type);
+      // the list edited in the send dialog replaces the computed one; an op without it (old app, queued offline) keeps the old behaviour
+      const edited = op.report.recipients ? [...new Set(op.report.recipients.map((e) => e.trim().toLowerCase()))] : null;
+      if (edited && edited.length > 10) throw new Reject("report_no_recipients");
+      const recipients = edited ?? defaultRecipients;
       if (!recipients.length) throw new Reject("report_no_recipients");
+      const customized = !!edited && (edited.length !== defaultRecipients.length || edited.some((e) => !defaultRecipients.includes(e)));
       const replyTo = await replyToFor(tx, u.id, row.orgId); // the contact address of the organisation or the sender's own e-mail (see reply_to.ts)
       await tx.insert(reportSends).values({ id: op.report.id, orgId: row.orgId, vehicleId: row.id, type: op.report.type, lang: op.report.lang, recipients, status: "awaiting_file", sentBy: u.id, replyTo: replyTo ?? null });
-      await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "report", entityId: op.report.id, after: { vehicleId: row.id, type: op.report.type, recipients } });
+      await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "report", entityId: op.report.id, after: { vehicleId: row.id, type: op.report.type, recipients, defaultRecipients, customized } });
       return { status: "ok", orgId: row.orgId, seq: row.seq };
     }
 

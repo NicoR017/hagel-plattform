@@ -171,7 +171,7 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("booking.create"), vehicleId: uuidStr, booking: bookingInput }),
   z.object({ ...base, type: z.literal("booking.move"), bookingId: uuidStr, date: ymd, time: hhmm }),
   z.object({ ...base, type: z.literal("booking.cancel"), bookingId: uuidStr }),
-  z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]) }).strict() }),
+  z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]), recipients: z.array(z.string().trim().toLowerCase().email().max(200)).min(1).max(10).optional() }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
 
