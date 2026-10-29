@@ -343,11 +343,11 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
 
 // ------------------------------------------------------------------ export of the finished / returned cars
 
-export interface FinishedExportRow { id: string; plate: string; model: string; insurer: string; bodyshop: string; station: string; end: string; total: number; technician: number; headliner: number; referrer: number; pdr: number }
+export interface FinishedExportRow { id: string; plate: string; model: string; insurer: string; bodyshop: string; station: string; end: string; total: number; repair: number; referrer: number; pdr: number }
 
 /**
  * The cars that are "fertig" or "rendu" right now and became finished in [from, to] (date of the first "fertig", else "rendu" entry in the status
- * history), with the agreed net price and its split: technician, headliner (de-/re-mounting), referring body shop (commission) and the rest for
+ * history), with the agreed net price, the PDR repair price of the assessment (panels only), the referring body shop (commission) and the rest for
  * PDR Team. Only cars where `u` may see prices, the internal split and export to Excel; nothing else is ever returned.
  */
 export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f: DashboardFilters): Promise<{ from: string | null; to: string | null; rows: FinishedExportRow[] }> {
@@ -387,7 +387,7 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
       insurer: r.insurerId ? insName.get(r.insurerId) ?? "" : "",
       bodyshop: (r.clientStationId ? stName.get(r.clientStationId) : "") || String(header.kunde ?? ""),
       station: r.stationId ? stName.get(r.stationId) ?? "" : "", end,
-      total: round2(calc.netto), technician: round2(sh.techEur), headliner: round2(sh.demTechEur), referrer: round2(sh.werkEur), pdr: round2(sh.rest),
+      total: round2(calc.netto), repair: round2(calc.repairEur), referrer: round2(sh.werkEur), pdr: round2(sh.rest),
     });
   }
   out.sort((a, b) => a.station.localeCompare(b.station, "de") || a.end.localeCompare(b.end) || a.plate.localeCompare(b.plate));

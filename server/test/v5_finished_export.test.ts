@@ -43,11 +43,12 @@ describe("finished export", () => {
     const x = rows.find((y) => y.id === finishedA);
     expect(x).toMatchObject({ model: "Seat Leon", station: "Nave Test A" });
     expect(x.total).toBeGreaterThan(0);
-    expect(x.technician).toBeGreaterThan(0);
-    expect(x.headliner).toBeGreaterThan(0);
+    // the PDR repair price of the assessment is a part of the agreed price; the technician's and headliner's shares are no longer exported
+    expect(x.repair).toBeGreaterThan(0);
+    expect(x.repair).toBeLessThanOrEqual(x.total + 0.01);
+    expect(x.technician).toBeUndefined();
+    expect(x.headliner).toBeUndefined();
     expect(x.referrer).toBeGreaterThanOrEqual(0);
-    // the four shares add up to the price (no glass on this car)
-    expect(Math.abs(x.technician + x.headliner + x.referrer + x.pdr - x.total)).toBeLessThan(0.05);
     expect(typeof x.bodyshop).toBe("string");
   });
   it("one station at a time", async () => {
