@@ -4,7 +4,9 @@
 #
 # Secrets (sync: false) are typed by you in the Render dashboard, never committed:
 #   APP_URL            https://<the staging web service>.onrender.com (known after the first creation, then edit and redeploy)
-#   EMAIL_API_KEY      NOT set in staging (MAIL_MODE=off sends nothing)
+#   EMAIL_API_KEY      NOT set in staging (MAIL_MODE=off sends nothing; Resend stays the fallback provider)
+#   GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET, EMAIL_FROM   Microsoft Graph sender (api only), set with
+#                      infra/scripts/render_set_mail.ps1; all three GRAPH_* together or none (none = Resend/console as before)
 #   AZURE_STORAGE_SAS  NOT set in staging (no import from Colibri/Azure)
 #   S3_*               NOT set in staging (files stay in memory: photos of the copied data are not shown)
 databases:
@@ -32,6 +34,14 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: APP_URL
+        sync: false
+      - key: GRAPH_TENANT_ID
+        sync: false
+      - key: GRAPH_CLIENT_ID
+        sync: false
+      - key: GRAPH_CLIENT_SECRET
+        sync: false
+      - key: EMAIL_FROM
         sync: false
       - key: DATABASE_URL
         fromDatabase:

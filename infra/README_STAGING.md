@@ -24,9 +24,14 @@ Les téléphones : staging et production ont des adresses différentes, donc des
 | `APP_ENV` | api, worker | `production` ou `staging` (défaut : `production` si `NODE_ENV=production`) |
 | `MAIL_MODE` | api | `live` \| `redirect` \| `off`. Non défini : `live`, sauf en staging où c'est `off`. `staging` + `live` = le serveur refuse de démarrer. |
 | `MAIL_REDIRECT_TO` | api | obligatoire avec `MAIL_MODE=redirect` (ex. `nicolas.rasteiro@pdr-team.de`) |
+| `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` | api | expéditeur Microsoft Graph. **Les trois ensemble ou aucun** (sinon le serveur refuse de démarrer). Posés par `infra/scripts/render_set_mail.ps1`, jamais dans le dépôt. |
+| `EMAIL_FROM` | api | boîte partagée expéditrice (`noreplay-spain@pdr-team.com`) ; obligatoire avec `GRAPH_*` |
+| `EMAIL_API_KEY` | api | Resend (ancien fournisseur, repli) |
 | `UI_V3_DEFAULT` | api | `true` (défaut) ou `false` : nouvelle interface par défaut ; l'ancienne reste ouverte avec `?ui=legacy` |
 
 Staging, jeu minimal : `APP_ENV=staging`, `MAIL_MODE=off`, `SESSION_SECRET` (nouveau, ≥ 32 car.), `APP_URL`, `DATABASE_URL` (référence au Postgres **staging**), `SEED_SUPERADMIN_EMAIL`. **Ne pas copier** `EMAIL_API_KEY`, `AZURE_STORAGE_SAS`, `S3_*` de la production.
+
+**Fournisseur d'e-mails (choisi par les variables seules, sans changement de code)** : `GRAPH_*` définis → Microsoft Graph ; sinon `EMAIL_API_KEY` → Resend (comportement historique) ; sinon console. Le mode `MAIL_MODE` s'applique par-dessus dans tous les cas. Le démarrage logge `provider=… from=… MAIL_MODE=…` (jamais de secret). Staging avec Graph : `infra/scripts/render_set_mail.ps1 -Api <srv-id staging>` (force `MAIL_MODE=redirect`), puis redéployer ; détails et retour arrière dans `docs/EMAIL_GRAPH.md`. Envoi de test : `POST /api/admin/mail-test` (super-admin) ou `npm run mail:test -w @hagel/server -- --to <adresse> --attach none|small|large`.
 
 ## 3. Données de test
 
