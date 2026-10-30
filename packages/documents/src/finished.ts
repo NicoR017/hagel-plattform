@@ -29,7 +29,6 @@ const LABELS = {
   es: { all: "Todas", title: "Vehículos terminados y entregados", period: "Periodo", sum: "Total", net: "sin IVA", gross: "con IVA" },
 } as const;
 
-const STATUT: Record<string, L4> = { fertig: ["Fertig", "Finished", "Terminé", "Terminado"], rendu: ["Zurückgegeben", "Returned", "Rendu", "Entregado"] };
 const MODE: Record<string, L4> = { pct: ["%", "%", "%", "%"], staffel: ["Staffel", "Scale", "Barème", "Escala"] };
 
 type Kind = "t" | "d" | "i" | "n" | "pct" | "m" | "m1";
@@ -45,9 +44,7 @@ const GROUPS: L4[] = [
 ];
 const c = (group: number, label: L4, kind: Kind, get: Col["get"]): Col => ({ group, label, kind, get });
 const COLS: Col[] = [
-  c(0, ["Fahrzeug-ID", "Vehicle ID", "ID véhicule", "ID vehículo"], "t", (r) => r.id),
   c(0, ["Station", "Station", "Station", "Estación"], "t", (r) => r.station),
-  c(0, ["Status", "Status", "Statut", "Estado"], "t", (r, l) => (STATUT[r.statut]?.[LI[l]] ?? r.statut)),
   c(0, ["Reparaturbeginn", "Repair start", "Date d'entrée en réparation", "Inicio de reparación"], "d", (r) => r.repairStart),
   c(0, ["Fertig am", "Finished on", "Date de fin", "Fecha de fin"], "d", (r) => r.end),
   c(0, ["Rückgabe am", "Returned on", "Date de restitution", "Fecha de entrega"], "d", (r) => r.returned),
@@ -55,10 +52,6 @@ const COLS: Col[] = [
   c(1, ["FIN", "VIN", "VIN", "VIN"], "t", (r) => r.vin),
   c(1, ["Marke", "Make", "Marque", "Marca"], "t", (r) => r.make),
   c(1, ["Modell", "Model", "Modèle", "Modelo"], "t", (r) => r.model),
-  c(1, ["Leistungsdatum", "Service date", "Date de prestation", "Fecha de prestación"], "d", (r) => r.serviceDate || null),
-  c(1, ["Anzahl Dellen", "Dents", "Nb de bosses", "Nº de abolladuras"], "i", (r) => r.dents),
-  c(1, ["Anzahl Bollos", "Bollos", "Nb de bollos", "Nº de bollos"], "i", (r) => r.bollos),
-  c(1, ["Matrix-Kategorie", "Matrix category", "Catégorie matrice", "Categoría matriz"], "t", (r) => r.cat),
   c(2, ["Versicherung", "Insurance company", "Assurance", "Aseguradora"], "t", (r) => r.insurer),
   c(2, ["Schadennummer", "Claim number", "N° de sinistre", "N.º de siniestro"], "t", (r) => r.claim),
   c(3, ["Name", "Name", "Nom", "Nombre"], "t", (r) => r.bodyshop),
