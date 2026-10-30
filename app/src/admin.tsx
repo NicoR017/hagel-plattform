@@ -7,6 +7,7 @@ import { PERMISSIONS, ROLE_REPAIR_STEPS, SCOPES, SYSTEM_ROLES, type Lang } from 
 import { api, getOrg } from "./api";
 import { fmtDateTime, t, tOr, type Key } from "./i18n";
 import { confirmDialog } from "./field/ui";
+import { EMAIL_RE } from "./recipients";
 
 const scopeLabel = (s: string) => t(("scope" + s.charAt(0).toUpperCase() + s.slice(1)) as Key);
 /** Default roles are shown translated; a role an admin renamed or created keeps its own name. */
@@ -335,7 +336,6 @@ export function RolesPage() {
 }
 
 // ---------------- Sites ----------------
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * The report recipients of a carrosserie: manual addresses (chips, added one by one) plus the automatic ones of the insurers selected for the

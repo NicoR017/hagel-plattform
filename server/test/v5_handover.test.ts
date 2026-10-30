@@ -60,6 +60,14 @@ describe("which cars have a drop-off to sign", () => {
 });
 
 describe("drop-off signature", () => {
+  it("a stroke that left the drawing box (finger dragged outside, y down to -56) is accepted; absurd values are not", async () => {
+    const id = await carInBoard();
+    const outside = [[[249, 68], [172.5, -50.7], [118.1, -56.3], [305.5, 126.7]]];
+    expect((await one(assessor, handover(id, "drop_off", { signature: outside }))).status).toBe("ok");
+    const id2 = await carInBoard();
+    const res = await push(c, assessor, [handover(id2, "drop_off", { signature: [[[0, 5000]]] })]);
+    expect(res.status === 400 || (res.body.results?.[0]?.status ?? "x") !== "ok").toBe(true);
+  });
   it("is stored with the vehicle; only a summary (time) travels with the vehicle, never the name, e-mail or drawing", async () => {
     const id = await carInBoard();
     const h = handover(id, "drop_off", { customerEmail: EMAIL });
