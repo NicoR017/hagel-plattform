@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../../fixtures/golden_cases_v20.json";
 import {
-  appendScanPdf, buildFinishedWorkbook, type FinishedRow, finishedFileName, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport, generateHandoverReceipt,
+  appendScanPdf, buildFinishedCsv, type FinishedRow, finishedFileName, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport, generateHandoverReceipt,
   h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
   type DocPhoto, type DocVehicle, type HandoverDoc, type Letterhead,
 } from "../src";
@@ -410,26 +410,29 @@ describe("finished vehicles workbook", () => {
     basis: total - 20, werkMode: "pct", werkPct: 10, referrer: total * 0.1, techName: "Pdr Tech", techPct: 50, technician: total * 0.3, demTechName: "Head Liner", demTechPct: 20, headliner: 20, pdr: total * 0.5 - 20, shareCheck: 0,
   });
   const data = { from: "2026-10-05", to: "2026-10-11", rows: [row("A-1", "Nave Madrid", 1000), row("B-2", "Nave Madrid", 500), row("C-3", "Nave Talavera", 200)] };
-  const open = (b: Uint8Array) => unzipSync(b);
-  it("one row per car, net and gross columns, totals; one sheet per station when there are several", () => {
-    const f = open(buildFinishedWorkbook(data, "en"));
-    const names = [...strFromU8(f["xl/workbook.xml"]).matchAll(/<sheet name="([^"]*)"/g)].map((m) => m[1]);
-    expect(names).toEqual(["All", "Nave Madrid", "Nave Talavera"]);
-    const s = strFromU8(f["xl/worksheets/sheet1.xml"]);
-    for (const w of ["Registration", "VIN", "Total net", "Total gross", "Parts price net", "Parts price gross", "Hourly rate net", "PDR Team share gross", "A-1", "B-2", "C-3", "Leon &amp; Co", "Allianz", "SIN-1", "Chapauto", "Pdr Tech", "10.10.2026", "05.10.2026 – 11.10.2026"]) expect(s).toContain(w);
-    expect(s).toContain("<v>1700</v>"); // sum of the net totals
-    expect(s).toContain("<v>2057</v>"); // sum of the gross totals (21 %)
-    expect(strFromU8(f["xl/worksheets/sheet2.xml"])).not.toContain("C-3");
-    expect(strFromU8(f["xl/worksheets/sheet3.xml"])).toContain("C-3");
+  const lines = (csv: string) => csv.replace(/^\uFEFF/, "").trim().split("\r\n");
+  it("English CSV: a header, one line per car, net and gross columns, no totals line", () => {
+    const csv = buildFinishedCsv(data);
+    expect(csv.charCodeAt(0)).toBe(0xFEFF);
+    const [head, ...body] = lines(csv);
+    const cols = head.split(",");
+    expect(body).toHaveLength(3);
+    for (const w of ["Vehicle - Registration", "Vehicle - VIN", "Invoice detail - Total net", "Invoice detail - Total gross", "Invoice detail - Parts price net", "Invoice detail - Hourly rate net", "Internal split - PDR Team share gross"]) expect(head).toContain(w);
+    for (const gone of ["Vehicle ID", "Status", "Service date", "Dents", "Bollos", "Matrix category"]) expect(head).not.toMatch(new RegExp(`- ${gone}(,|$)`));
+    expect(new Set(cols).size).toBe(cols.length);
+    const first = body[0].split(",");
+    expect(first).toHaveLength(cols.length);
+    expect(first[cols.indexOf("Invoice detail - Total net")]).toBe("1000");
+    expect(first[cols.indexOf("Invoice detail - Total gross")]).toBe("1210"); // 21 % VAT
+    expect(first[cols.indexOf("Invoice detail - Parts price net")]).toBe(""); // reserved, empty
+    expect(first[cols.indexOf("File - Finished on")]).toBe("2026-10-10");
   });
-  it("one station: one sheet; file name; the other languages", () => {
-    const one = open(buildFinishedWorkbook({ ...data, rows: data.rows.slice(0, 2) }, "de"));
-    expect(Object.keys(one).filter((k) => k.startsWith("xl/worksheets/")).length).toBe(1);
-    expect(strFromU8(one["xl/worksheets/sheet1.xml"])).toContain("Kennzeichen");
-    expect(strFromU8(open(buildFinishedWorkbook(data, "fr"))["xl/worksheets/sheet1.xml"])).toContain("Immatriculation");
-    expect(strFromU8(open(buildFinishedWorkbook(data, "es"))["xl/worksheets/sheet1.xml"])).toContain("Matrícula");
-    expect(finishedFileName("2026-10-05", "2026-10-11", "en")).toBe("Finished_vehicles_2026-10-05_2026-10-11.xlsx");
-    expect(finishedFileName(null, null)).toBe("Fertige_Fahrzeuge_alle_alle.xlsx");
+  it("quotes commas and quotes; file name", () => {
+    const csv = buildFinishedCsv({ ...data, rows: [{ ...row("A-1", "Nave, Madrid", 100), model: 'Leon "FR"' }] });
+    expect(csv).toContain('"Nave, Madrid"');
+    expect(csv).toContain('"Leon ""FR"""');
+    expect(finishedFileName("2026-10-05", "2026-10-11")).toBe("Finished_vehicles_2026-10-05_2026-10-11.csv");
+    expect(finishedFileName(null, null)).toBe("Finished_vehicles_all_all.csv");
   });
 });
 
