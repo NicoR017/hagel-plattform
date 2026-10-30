@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { computeShares, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../../fixtures/golden_cases_v20.json";
 import {
-  appendScanPdf, buildFinishedWorkbook, finishedFileName, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport, generateHandoverReceipt,
+  appendScanPdf, buildFinishedWorkbook, type FinishedRow, finishedFileName, buildTechnicianWorkbook, buildXlsx, dentBreak, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, docText, eur, esFormula, esLines, fmtDateL, generateKvaPdf, generateRepairPhotoReport, generateHandoverReceipt,
   h1, hA, kvaFileName, kvaPlainText, mailTexts, num, winAnsi, xlsxColumnHeaders, xlsxFileName,
   type DocPhoto, type DocVehicle, type HandoverDoc, type Letterhead,
 } from "../src";
@@ -400,16 +400,25 @@ describe("technician worksheet workbook", () => {
 });
 
 describe("finished vehicles workbook", () => {
-  const row = (plate: string, station: string, total: number) => ({ plate, model: "Seat Leon & Co", insurer: "Allianz", bodyshop: "Chapauto", station, end: "2026-10-10", total, technician: total * 0.3, headliner: 20, referrer: total * 0.1, pdr: total * 0.5 - 20 });
+  const row = (plate: string, station: string, total: number): FinishedRow => ({
+    id: `id-${plate}`, station, statut: "fertig", repairStart: "2026-10-06", end: "2026-10-10", returned: null,
+    plate, vin: "WVWZZZ1KZAW123456", make: "Seat", model: "Leon & Co", serviceDate: "2026-10-01", dents: 12, bollos: 12, cat: "C2",
+    insurer: "Allianz", claim: "SIN-1", bodyshop: "Chapauto", clientCif: "B123", clientAddress: "Calle 1", clientContact: "Ana", clientPhone: "600",
+    repairShop: "", repairShopCif: "", repairShopAddress: "", vat: 0.21, rate: 69,
+    pdrH: 10, pdrBase: total - 120, kleberH: 0, kleber: 0, ptpH: 0, ptp: 0, ptpPanels: 0, aluH: 0, alu: 0, replaceH: 0, replace: 0, replacePanels: 0, replaceList: "Antenne", partsPrice: null,
+    other: 0, dem: 100, glass: 20, totalH: 10, total, check: 0,
+    basis: total - 20, werkMode: "pct", werkPct: 10, referrer: total * 0.1, techName: "Pdr Tech", techPct: 50, technician: total * 0.3, demTechName: "Head Liner", demTechPct: 20, headliner: 20, pdr: total * 0.5 - 20, shareCheck: 0,
+  });
   const data = { from: "2026-10-05", to: "2026-10-11", rows: [row("A-1", "Nave Madrid", 1000), row("B-2", "Nave Madrid", 500), row("C-3", "Nave Talavera", 200)] };
   const open = (b: Uint8Array) => unzipSync(b);
-  it("the nine columns, one row per car, totals; one sheet per station when there are several", () => {
+  it("one row per car, net and gross columns, totals; one sheet per station when there are several", () => {
     const f = open(buildFinishedWorkbook(data, "en"));
     const names = [...strFromU8(f["xl/workbook.xml"]).matchAll(/<sheet name="([^"]*)"/g)].map((m) => m[1]);
     expect(names).toEqual(["All", "Nave Madrid", "Nave Talavera"]);
     const s = strFromU8(f["xl/worksheets/sheet1.xml"]);
-    for (const w of ["Vehicle registration number", "Vehicle make and model", "Insurance company", "Bodyshop", "Total price agreed after assessment", "Technician&apos;s share".replace("&apos;", "'"), "Headliner&apos;s share".replace("&apos;", "'"), "Referring bodyshop&apos;s share".replace("&apos;", "'"), "Remaining amount for PDR Team", "A-1", "B-2", "C-3", "Seat Leon &amp; Co", "Allianz", "Chapauto", "10.10.2026", "05.10.2026 – 11.10.2026"]) expect(s).toContain(w);
-    expect(s).toContain("<v>1700</v>"); // sum of the agreed prices
+    for (const w of ["Registration", "VIN", "Total net", "Total gross", "Parts price net", "Parts price gross", "Hourly rate net", "PDR Team share gross", "A-1", "B-2", "C-3", "Leon &amp; Co", "Allianz", "SIN-1", "Chapauto", "Pdr Tech", "10.10.2026", "05.10.2026 – 11.10.2026"]) expect(s).toContain(w);
+    expect(s).toContain("<v>1700</v>"); // sum of the net totals
+    expect(s).toContain("<v>2057</v>"); // sum of the gross totals (21 %)
     expect(strFromU8(f["xl/worksheets/sheet2.xml"])).not.toContain("C-3");
     expect(strFromU8(f["xl/worksheets/sheet3.xml"])).toContain("C-3");
   });

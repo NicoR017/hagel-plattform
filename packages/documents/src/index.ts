@@ -7,7 +7,7 @@ export {
 export type { EsLine } from "./text";
 export { generateTechnicianWorksheets, generateKvaPdf, appendScanPdf, generateRepairPhotoReport, generateHandoverReceipt, generateInsurerReport, winAnsi, wrapText } from "./pdf";
 export { buildXlsx, xlsxFileName, xlsxColumnHeaders } from "./xlsx";
-export { buildFinishedWorkbook, finishedFileName, type FinishedExportData, type FinishedRow } from "./finished";
+export { buildFinishedWorkbook, finishedFileName, gross, type FinishedExportData, type FinishedRow } from "./finished";
 export { buildTechnicianWorkbook, techWorkbookFileName, techPdfFileName, type TechSheetData, type TechLang } from "./techsheet";
 export {
   INSURER_REPORT_LABELS, insurerReportFileName, reportDate, reportInt, reportMoney, reportPercent,

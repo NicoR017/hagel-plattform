@@ -343,7 +343,30 @@ export async function buildTechSheets(db: Db, u: Principal, orgId: string, f: Da
 
 // ------------------------------------------------------------------ export of the finished / returned cars
 
-export interface FinishedExportRow { id: string; plate: string; model: string; insurer: string; bodyshop: string; station: string; end: string; total: number; technician: number; headliner: number; referrer: number; pdr: number }
+/**
+ * One row per car, one column per piece of information. Amounts are net (HT); the gross (TTC) amounts are derived with `vat` by the workbook.
+ * `partsPrice` is reserved (no price per part is captured yet): always null for now.
+ */
+export interface FinishedExportRow {
+  id: string; station: string; statut: string; repairStart: string | null; end: string; returned: string | null;
+  plate: string; vin: string; make: string; model: string; serviceDate: string; dents: number; bollos: number | null; cat: string;
+  insurer: string; claim: string;
+  /** the customer body shop (sends the car, earns the commission) */
+  bodyshop: string; clientCif: string; clientAddress: string; clientContact: string; clientPhone: string;
+  /** the body shop where the car was repaired ("At Bodyshop"), empty when it never went there */
+  repairShop: string; repairShopCif: string; repairShopAddress: string;
+  vat: number; rate: number;
+  pdrH: number; pdrBase: number; kleberH: number; kleber: number; ptpH: number; ptp: number; ptpPanels: number;
+  aluH: number; alu: number; replaceH: number; replace: number; replacePanels: number; replaceList: string; partsPrice: number | null;
+  /** AW (German) engine only: finish, set-up, handles, cavity and big-dent amounts, which have no column of their own */
+  other: number; dem: number; glass: number; totalH: number; total: number;
+  /** total − sum of the invoice lines: must be 0 */
+  check: number;
+  basis: number; werkMode: string; werkPct: number; referrer: number;
+  techName: string; techPct: number; technician: number; demTechName: string; demTechPct: number; headliner: number; pdr: number;
+  /** basis − sum of the internal shares: must be 0 (same thing as `pdr` being the remainder) */
+  shareCheck: number;
+}
 
 /**
  * The cars that are "fertig" or "rendu" right now and became finished in [from, to] (date of the first "fertig", else "rendu" entry in the status
@@ -369,8 +392,12 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
   const history = ids.length ? await db.select().from(vehicleStatusHistory).where(inArray(vehicleStatusHistory.vehicleId, ids)).orderBy(asc(vehicleStatusHistory.at)) : [];
   const histBy = new Map<string, typeof history>();
   for (const h of history) histBy.set(h.vehicleId, [...(histBy.get(h.vehicleId) ?? []), h]);
-  const stName = new Map((await db.select().from(stations).where(eq(stations.orgId, orgId))).map((s) => [s.id, s.name]));
+  const stById = new Map((await db.select().from(stations).where(eq(stations.orgId, orgId))).map((s) => [s.id, s]));
+  const stName = new Map([...stById].map(([k, s]) => [k, s.name]));
   const insName = new Map((await db.select().from(insurers).where(eq(insurers.orgId, orgId))).map((i) => [i.id, i.name]));
+  const userIds = [...new Set(rows.flatMap((r) => assignees.get(r.id) ?? []))];
+  const people = userIds.length ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, userIds)) : [];
+  const personName = (id: string) => people.find((p) => p.id === id)?.name || people.find((p) => p.id === id)?.email || "";
 
   const out: FinishedExportRow[] = [];
   for (const r of rows) {
@@ -382,12 +409,51 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
     const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     const sh = computeShares(flat as never, calc);
     const header = r.header as Record<string, unknown>;
+    const str = (k: string) => (header[k] == null ? "" : String(header[k]));
+    const client = r.clientStationId ? stById.get(r.clientStationId) : undefined;
+    const shop = r.bodyshopId ? stById.get(r.bodyshopId) : undefined;
+    const rate = calc.es ? calc.es.rate : Number(header.stundensatz) || 0;
+    // invoice lines (hours × rate); the matrix car has them from the adjustments, the AW car has its own components
+    let pdrH = 0, pdrBase = 0, kleberH = 0, kleber = 0, ptpH = 0, ptp = 0, aluH = 0, alu = 0, replaceH = 0, replace = 0, other = 0;
+    const nErn = calc.es ? calc.panels.filter((p) => p.method === "erneuern").length : 0;
+    const nPtp = calc.es ? calc.panels.filter((p) => p.method === "ptp").length : 0;
+    if (calc.es) {
+      const es = calc.es;
+      pdrH = es.H.h; pdrBase = es.matrixEur;
+      if (es.bollos > 0) { // no bollos: the hours are 0 whatever the adjustments say
+        const adj = es.adj;
+        replaceH = adj.slice(0, nErn).reduce((a, x) => a + x.h, 0);
+        kleberH = adj.filter((x) => x.kleber).reduce((a, x) => a + x.h, 0);
+        ptpH = adj.filter((x) => x.ptp).reduce((a, x) => a + x.h, 0);
+        aluH = adj.filter((x) => !x.kleber && !x.ptp).slice(nErn).reduce((a, x) => a + x.h, 0);
+      } else { pdrH = 0; pdrBase = 0; }
+      kleber = kleberH * es.rate; ptp = ptpH * es.rate; alu = aluH * es.rate; replace = replaceH * es.rate;
+    } else {
+      pdrH = calc.repairAW; pdrBase = calc.repairEur; kleber = calc.kleberMat;
+      other = calc.awNetto - calc.repairEur + calc.hohlMat + calc.bigEur;
+    }
+    const lines = pdrBase + kleber + ptp + alu + replace + other + calc.demEur + calc.glassEur;
+    const parts = Array.isArray(header.partsToReplace) ? (header.partsToReplace as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+    const firstAssignee = (assignees.get(r.id) ?? []).map(personName).find(Boolean) ?? "";
     out.push({
-      id: r.id, plate: String(header.kennzeichen ?? ""), model: String(header.modell ?? ""),
-      insurer: r.insurerId ? insName.get(r.insurerId) ?? "" : "",
-      bodyshop: (r.clientStationId ? stName.get(r.clientStationId) : "") || String(header.kunde ?? ""),
-      station: r.stationId ? stName.get(r.stationId) ?? "" : "", end,
-      total: round2(calc.netto), technician: round2(sh.techEur), headliner: round2(sh.demTechEur), referrer: round2(sh.werkEur), pdr: round2(sh.rest),
+      id: r.id, station: r.stationId ? stName.get(r.stationId) ?? "" : "", statut: r.statut,
+      repairStart: h.find((x) => x.statut === "reparatur") ? berlinDate(h.find((x) => x.statut === "reparatur")!.at) : null, end,
+      returned: h.find((x) => x.statut === "rendu") ? berlinDate(h.find((x) => x.statut === "rendu")!.at) : null,
+      plate: str("kennzeichen"), vin: str("fin"), make: str("marke"), model: str("modell"), serviceDate: str("leistungsdatum"),
+      dents: calc.dents, bollos: calc.es ? calc.es.bollos : null, cat: calc.es ? calc.es.cat.cat : "",
+      insurer: r.insurerId ? insName.get(r.insurerId) ?? "" : "", claim: str("claimNumber"),
+      bodyshop: client?.name || str("kunde"), clientCif: client?.cif ?? "", clientAddress: client?.address ?? "", clientContact: client?.contactName ?? "", clientPhone: client?.contactPhone ?? "",
+      repairShop: shop?.name ?? "", repairShopCif: shop?.cif ?? "", repairShopAddress: shop?.address ?? "",
+      vat: calc.vat, rate: round2(rate),
+      pdrH: round2(pdrH), pdrBase: round2(pdrBase), kleberH: round2(kleberH), kleber: round2(kleber), ptpH: round2(ptpH), ptp: round2(ptp), ptpPanels: nPtp,
+      aluH: round2(aluH), alu: round2(alu), replaceH: round2(replaceH), replace: round2(replace), replacePanels: nErn,
+      replaceList: parts.join("; "), partsPrice: null,
+      other: round2(other), dem: round2(calc.demEur), glass: round2(calc.glassEur), totalH: round2(calc.totalAW), total: round2(calc.netto),
+      check: round2(calc.netto - lines),
+      basis: round2(sh.basis), werkMode: sh.werkMode, werkPct: round2(sh.werkPct), referrer: round2(sh.werkEur),
+      techName: (sh.techName || firstAssignee).trim(), techPct: sh.techPct, technician: round2(sh.techEur),
+      demTechName: sh.demTechName.trim(), demTechPct: sh.demTechPct, headliner: round2(sh.demTechEur), pdr: round2(sh.rest),
+      shareCheck: round2(sh.basis - sh.werkEur - sh.techEur - sh.demTechEur - sh.rest),
     });
   }
   out.sort((a, b) => a.station.localeCompare(b.station, "de") || a.end.localeCompare(b.end) || a.plate.localeCompare(b.plate));
