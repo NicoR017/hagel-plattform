@@ -5,7 +5,6 @@ import { BackupImport } from "../field/BackupImport";
 import { SettingsDialog } from "../field/Dialogs";
 import { go, hrefOf, parentRoute, type Route } from "../field/route";
 import { useField } from "../field/store";
-import { setUiMode } from "../field/uiMode";
 import { GlobalSearch } from "./GlobalSearch";
 
 export interface Crumb { label: string; to?: Route }
@@ -93,7 +92,6 @@ export function Shell3({ user, orgs, org, onOrg, route, crumbs, vehicleStationId
               <hr />
               {f.can("dashboard.voir") && <a role="menuitem" href={hrefOf({ page: "dashboard" })} onClick={() => setMenu(false)}>📊 {t("v3Dashboard")}</a>}
               <button role="menuitem" onClick={() => { setMenu(false); setDlg("settings"); }}>⚙ {t("v3Settings")}</button>
-              {!fieldView && <button role="menuitem" onClick={() => { setMenu(false); setUiMode("legacy"); }}>↩ {t("v3OldView")}</button>}
               <hr />
               <button role="menuitem" onClick={async () => { try { await api("POST", "/me/logout"); } catch { /* already gone */ } setAuth(null); location.replace("/"); }}>⏻ {t("v3Logout")}</button>
             </div>

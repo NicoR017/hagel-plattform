@@ -25,7 +25,8 @@ function SyncBadge() {
   return <span className={"syncbadge " + cls} aria-live="polite">{label}</span>;
 }
 
-export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: React.ReactNode }) {
+/** Flat vehicle list. Used for the dashboard KPI drill-down (`#/?f=dash`). */
+export function List({ embedded }: { embedded?: boolean } = {}) {
   const f = useField();
   const all = useVehicles();
   const [filter, setFilter] = useState<string>("all");
@@ -97,19 +98,20 @@ export function List({ userName, orgSwitch }: { userName: string; orgSwitch?: Re
   };
 
   return (
-    <div className="fld">
-      <div className="hdr">
-        <div className="top">
-          <SyncBadge />
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {f.can("dashboard.voir") && <a className="iconbtn" href="#/dashboard" style={{ textDecoration: "none" }} aria-label={t("dashboard")}>📊</a>}
-            <a className="iconbtn" href="#/admin" style={{ textDecoration: "none" }} aria-label={t("admin")}>👥</a>
-            <button className="iconbtn" onClick={() => setDlg("settings")} aria-label={t("settings")}>⚙</button>
+    <div className={embedded ? "fld wide" : "fld"}>
+      {!embedded && (
+        <div className="hdr">
+          <div className="top">
+            <SyncBadge />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {f.can("dashboard.voir") && <a className="iconbtn" href="#/dashboard" style={{ textDecoration: "none" }} aria-label={t("dashboard")}>📊</a>}
+              <a className="iconbtn" href="#/admin" style={{ textDecoration: "none" }} aria-label={t("admin")}>👥</a>
+              <button className="iconbtn" onClick={() => setDlg("settings")} aria-label={t("settings")}>⚙</button>
+            </div>
           </div>
+          <h1>{t("listTitle")}</h1>
         </div>
-        <h1>{t("listTitle")}</h1>
-        <div className="sub">{userName}{orgSwitch ? <span style={{ marginLeft: 8 }}>{orgSwitch}</span> : null}</div>
-      </div>
+      )}
       <div className="sheet" style={sel ? { paddingBottom: 130 } : undefined}>
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6 }}>
           <button className={"chip" + (filter === "all" ? " on" : "")} onClick={() => setFilter("all")}>{t("all")} ({all.length})</button>

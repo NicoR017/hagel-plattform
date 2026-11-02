@@ -29,8 +29,6 @@ services:
         value: staging
       - key: MAIL_MODE
         value: "off"
-      - key: UI_V3_DEFAULT
-        value: "true"
       - key: SESSION_SECRET
         generateValue: true
       - key: APP_URL

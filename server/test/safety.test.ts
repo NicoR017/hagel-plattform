@@ -11,10 +11,9 @@ import { users, vehicles } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 describe("config: APP_ENV and MAIL_MODE", () => {
-  it("production / unset keeps today's behaviour (live mail, new UI default)", () => {
+  it("production / unset keeps today's behaviour (live mail)", () => {
     expect(loadConfig({}).mailMode).toBe("live");
-    expect(loadConfig({ NODE_ENV: "production", SESSION_SECRET: "x".repeat(40) })).toMatchObject({ appEnv: "production", mailMode: "live", uiV3Default: true });
-    expect(loadConfig({ UI_V3_DEFAULT: "false" }).uiV3Default).toBe(false);
+    expect(loadConfig({ NODE_ENV: "production", SESSION_SECRET: "x".repeat(40) })).toMatchObject({ appEnv: "production", mailMode: "live" });
   });
   it("staging without MAIL_MODE is silent (off), never live", () => {
     expect(loadConfig({ APP_ENV: "staging" })).toMatchObject({ appEnv: "staging", mailMode: "off" });
@@ -66,7 +65,7 @@ describe("old op shapes and the public config", () => {
   it("GET /config is public and carries no secret", async () => {
     const r = await call(c, "GET", "/config");
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ appEnv: "development", uiV3Default: true });
+    expect(r.body).toEqual({ appEnv: "development" });
   });
 
   it("every op type of the first release still parses with its original shape (contract fixtures)", () => {

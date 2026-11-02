@@ -13,8 +13,6 @@ import { isPlace } from "./places";
 import { Picker, type PickItem } from "./Picker";
 import { TechPicker } from "./TechPicker";
 import { snapshotVehicles, undoMove, undoStatus } from "./undo";
-import { resolveUi, setUiMode, useUiMode } from "./uiMode";
-import { useAppConfig } from "../env";
 import type { Key } from "../i18n";
 import { REFUSE_REASONS, STATUSES } from "@hagel/shared";
 
@@ -185,13 +183,8 @@ export function SettingsDialog({ onClose, onBackup }: { onClose: () => void; onB
   const canSettings = f.can("parametres.gerer");
   const s = f.refs?.settings;
   const [rateDE, setRateDE] = useState(s?.rateDE ?? 83), [rateES, setRateES] = useState(s?.rateES ?? 69), [teiler, setTeiler] = useState<10 | 12>((s?.defaultTeiler as 10 | 12) ?? 10);
-  const cfg = useAppConfig();
-  const ui = useUiMode(cfg?.uiV3Default);
   return (
     <Dialog title={t("settings")} onClose={onClose}>
-      <Field label={t("v3View")}>
-        <Seg value={ui} options={[{ value: "v3" as const, label: t("v3ViewNew") }, { value: "legacy" as const, label: t("v3ViewOld") }]} onChange={(m) => setUiMode(m)} />
-      </Field>
       <Field label={t("language")}>
         <Seg value={getLang()} options={LANG_LIST.map((l) => ({ value: l, label: l.toUpperCase() }))} onChange={(l) => { setLang(l); void api("PUT", "/me/language", { language: l }).catch(() => undefined); }} />
       </Field>

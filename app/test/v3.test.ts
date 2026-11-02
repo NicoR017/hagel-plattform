@@ -1,7 +1,6 @@
-// UI v3: routes (old links keep working), "Zurück" one level up, which vehicles each mode shows, the legacy switch.
+// UI routes (bookmarks keep working), "Zurück" one level up, which vehicles each mode shows.
 import { describe, expect, it } from "vitest";
 import { hrefOf, parentRoute, parseRoute, type Route } from "../src/field/route";
-import { resolveUi, setUiMode } from "../src/field/uiMode";
 import { MODE_STATUSES, inMode, matchesChip, stationCounts } from "../src/v3/modes";
 
 const S = "11111111-1111-4111-8111-111111111111", V = "22222222-2222-4222-8222-222222222222";
@@ -83,18 +82,5 @@ describe("modes", () => {
     expect(stationCounts(list, S)).toEqual({ kalk: 2, rep: 2, wait: 1, present: 6 }); // a refused car is neither to assess nor present
     expect(stationCounts(list, "other")).toEqual({ kalk: 1, rep: 0, wait: 0, present: 1 });
     expect(stationCounts([], S)).toEqual({ kalk: 0, rep: 0, wait: 0, present: 0 });
-  });
-});
-
-describe("legacy switch", () => {
-  it("without a stored choice the server default decides; absent server answer = new interface", () => {
-    setUiMode(null);
-    expect(resolveUi(undefined)).toBe("v3");
-    expect(resolveUi(true)).toBe("v3");
-    expect(resolveUi(false)).toBe("legacy");
-  });
-  it("storage that is unavailable never breaks it", () => {
-    expect(() => setUiMode("legacy")).not.toThrow();
-    expect(resolveUi(true)).toBe("v3"); // (node: no localStorage) falls back to the default
   });
 });

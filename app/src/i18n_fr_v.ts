@@ -19,8 +19,8 @@ export const frV: Record<string, string> = {
   v3RepNote: "Le tableau de réparation (Kanban) arrive dans la prochaine version. D'ici là : liste de tous les véhicules en réparation.",
   v3ExportExcel: "Exporter en Excel", v3BulkColibri: "Importer des rapports Colibri (PDF)", v3Delete: "Supprimer le véhicule",
   v3Undo: "Annuler", v3Undone: "Annulé",
-  v3Breadcrumbs: "Fil d'Ariane", v3Settings: "Paramètres", v3Dashboard: "Tableau de bord", v3Admin: "Administration", v3OldView: "Utiliser l'ancienne vue", v3NewView: "Utiliser la nouvelle vue",
-  v3View: "Vue", v3ViewNew: "Nouvelle", v3ViewOld: "Ancienne", v3SignedInAs: "Connecté en tant que", v3Menu: "Menu", v3Logout: "Se déconnecter", v3BackTo: "Retour à",
+  v3Breadcrumbs: "Fil d'Ariane", v3Settings: "Paramètres", v3Dashboard: "Tableau de bord", v3Admin: "Administration",
+  v3SignedInAs: "Connecté en tant que", v3Menu: "Menu", v3Logout: "Se déconnecter", v3BackTo: "Retour à",
   v3Hold: "En attente",
   // v4
   v4BadgeTermin: "RDV", v4Prev: "Photo précédente", v4Next: "Suivant", v4Add: "Ajouter", v4Send: "Envoyer", v4Done: "Terminé", v4ToList: "Vers la liste",

@@ -85,7 +85,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   });
 
   /** Public: which environment this is (banner) and whether the new UI is the default. No secrets. */
-  app.get("/config", (c) => c.json({ appEnv: cfg.appEnv, uiV3Default: cfg.uiV3Default }));
+  app.get("/config", (c) => c.json({ appEnv: cfg.appEnv }));
 
   // ---------- auth (public) ----------
   const auth = new Hono<Env>();

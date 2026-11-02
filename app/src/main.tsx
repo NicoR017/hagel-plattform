@@ -5,10 +5,8 @@ import { App } from "./App";
 import { t } from "./i18n";
 import { toast } from "./field/toast";
 import { readyToReload } from "./field/updateGate";
-import { captureUiParam } from "./field/uiMode";
 import "./style.css";
 
-captureUiParam(); // ?ui=legacy / ?ui=v3 is remembered on this device
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
 
 /**

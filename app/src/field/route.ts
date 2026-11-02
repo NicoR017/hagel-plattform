@@ -15,14 +15,14 @@ export const MODES: Mode[] = ["kalk", "rep", "all"];
 export interface Ctx { stationId: string; mode: Mode }
 
 export type Route =
-  /** home: the stations (new UI) or the old flat list (legacy UI, or when a dashboard filter is active) */
+  /** home: station picker, or dashboard drill-down when dash is set */
   | { page: "list"; dash?: boolean; stationId?: undefined; mode?: undefined }
-  /** list of one station in one mode (new UI) */
+  /** list of one station in one mode */
   | { page: "list"; stationId: string; mode: Mode; dash?: undefined }
   /** station: choose Kalkulation / Reparatur / Alle Fahrzeuge */
   | { page: "mode"; stationId: string }
   | { page: "dashboard" }
-  /** every Colibri scan of the organisation without an assessment yet (new UI) */
+  /** every Colibri scan of the organisation without an assessment yet */
   | { page: "scans" }
   /** global vehicle search: results */
   | { page: "search"; q: string }

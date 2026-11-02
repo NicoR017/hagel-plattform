@@ -18,8 +18,8 @@ export const deV3 = {
   v3RepNote: "Das Reparatur-Board (Kanban) folgt in der nächsten Version. Bis dahin: Liste mit allen Fahrzeugen in Reparatur.",
   v3ExportExcel: "Als Excel exportieren", v3BulkColibri: "Colibri-Berichte importieren (PDF)", v3Delete: "Fahrzeug löschen",
   v3Undo: "Rückgängig", v3Undone: "Rückgängig gemacht",
-  v3Breadcrumbs: "Brotkrumen", v3Settings: "Einstellungen", v3Dashboard: "Dashboard", v3Admin: "Verwaltung", v3OldView: "Alte Ansicht verwenden", v3NewView: "Neue Ansicht verwenden",
-  v3View: "Ansicht", v3ViewNew: "Neu", v3ViewOld: "Alt", v3SignedInAs: "Angemeldet als", v3Menu: "Menü", v3Logout: "Abmelden", v3BackTo: "Zurück zu",
+  v3Breadcrumbs: "Brotkrumen", v3Settings: "Einstellungen", v3Dashboard: "Dashboard", v3Admin: "Verwaltung",
+  v3SignedInAs: "Angemeldet als", v3Menu: "Menü", v3Logout: "Abmelden", v3BackTo: "Zurück zu",
   v3Hold: "Wartet",
 } as const;
 
@@ -42,7 +42,7 @@ export const enV3: Record<keyof typeof deV3, string> = {
   v3RepNote: "The repair board (Kanban) comes with the next version. Until then: a list of all vehicles in repair.",
   v3ExportExcel: "Export as Excel", v3BulkColibri: "Import Colibri reports (PDF)", v3Delete: "Delete vehicle",
   v3Undo: "Undo", v3Undone: "Undone",
-  v3Breadcrumbs: "Breadcrumbs", v3Settings: "Settings", v3Dashboard: "Dashboard", v3Admin: "Administration", v3OldView: "Use the old view", v3NewView: "Use the new view",
-  v3View: "View", v3ViewNew: "New", v3ViewOld: "Old", v3SignedInAs: "Signed in as", v3Menu: "Menu", v3Logout: "Sign out", v3BackTo: "Back to",
+  v3Breadcrumbs: "Breadcrumbs", v3Settings: "Settings", v3Dashboard: "Dashboard", v3Admin: "Administration",
+  v3SignedInAs: "Signed in as", v3Menu: "Menu", v3Logout: "Sign out", v3BackTo: "Back to",
   v3Hold: "On hold",
 };
