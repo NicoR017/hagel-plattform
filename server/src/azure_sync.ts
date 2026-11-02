@@ -1,6 +1,8 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AzureSource, TableRow } from "./azure";
 import { colStr } from "./azure";
+import type { CatalogScan, ScanCatalog } from "./domains/scans";
+import { azureCatalog } from "./domains/scans";
 import type { Db } from "./db";
 import { assignmentAt, localDay, tzOfOrgCountry, type AssignmentRow } from "./colibri_rules";
 import {
@@ -9,15 +11,28 @@ import {
 } from "./schema";
 
 export const normalizeName = (s: unknown) => String(s ?? "").normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
-const truthy = (v: unknown) => v === true || /^(true|1|yes)$/i.test(String(v ?? ""));
 const OVERLAP_MS = 10 * 60_000;
 
 export interface SyncStats { tenants: number; businessCustomers: number; insurances: number; links: number; scansSeen: number; scansNew: number; scansFailed: number; linked: number; renamed: number }
 
 type Row = typeof colibriScans.$inferInsert;
+
+function rowFromCatalogScan(s: CatalogScan): Row {
+  return {
+    partitionKey: s.partitionKey, rowKey: s.rowKey, tenant: s.tenant, location: s.location, colibriNumber: s.colibriNumber,
+    businessCustomer: s.businessCustomer, claimNumber: s.claimNumber, scanDateTime: s.scanDateTime,
+    plate: s.plate, vin: s.vin, brand: s.brand, model: s.model, buildYear: s.buildYear,
+    country: s.country, language: s.language, calculationMethod: s.calculationMethod,
+    dentsTotal: s.dentsTotal, scanFailed: s.scanFailed, errorMessage: s.errorMessage, urlPdf: s.urlPdf, raw: s.raw as never,
+  };
+}
+
+/** @deprecated Prefer ScanCatalog; kept for tests that feed raw Azure table rows. */
 export function scanFromRow(r: TableRow): Row {
   const dt = colStr(r, "ScanDateTime");
   const dents = colStr(r, "DentsTotalNumber");
+  const truthy = (v: unknown) => v === true || /^(true|1|yes)$/i.test(String(v ?? ""));
+  const pruneRaw = (row: TableRow) => Object.fromEntries(Object.entries(row).filter(([, v]) => typeof v !== "string" || v.length < 500));
   return {
     partitionKey: r.PartitionKey, rowKey: r.RowKey, tenant: colStr(r, "Tenant"), location: colStr(r, "Location"), colibriNumber: colStr(r, "ColibriNumber"),
     businessCustomer: colStr(r, "BusinessCustomer"), claimNumber: colStr(r, "ClaimNumber"), scanDateTime: dt && !Number.isNaN(Date.parse(dt)) ? new Date(dt) : null,
@@ -27,8 +42,6 @@ export function scanFromRow(r: TableRow): Row {
     errorMessage: colStr(r, "ErrorMessage"), urlPdf: colStr(r, "urlPdf", "UrlPdf"), raw: pruneRaw(r) as never,
   };
 }
-/** Keep the raw row for diagnostics, without gigantic fields. */
-const pruneRaw = (r: TableRow) => Object.fromEntries(Object.entries(r).filter(([, v]) => typeof v !== "string" || v.length < 500));
 
 /**
  * One run of the Azure -> database mirror (worker every few minutes, or "sync now" in the admin).
@@ -46,47 +59,44 @@ export async function reopenScansOfDeletedVehicles(db: Pick<Db, "execute">): Pro
   return r.rows.length;
 }
 
-export async function syncAzure(db: Db, az: AzureSource, o: { now?: () => Date; initialDays?: number } = {}): Promise<SyncStats> {
+/** Accepts ScanCatalog, or AzureSource (wrapped automatically for existing call sites / tests). */
+export async function syncAzure(db: Db, source: ScanCatalog | AzureSource, o: { now?: () => Date; initialDays?: number } = {}): Promise<SyncStats> {
+  const catalog: ScanCatalog = "listTenants" in source ? source : azureCatalog(source);
   const now = o.now ?? (() => new Date());
   await reopenScansOfDeletedVehicles(db).catch(() => undefined); // never blocks the mirror
   const [run] = await db.insert(azureSyncRuns).values({ startedAt: now() }).returning();
   const stats: SyncStats = { tenants: 0, businessCustomers: 0, insurances: 0, links: 0, scansSeen: 0, scansNew: 0, scansFailed: 0, linked: 0, renamed: 0 };
   try {
-    for await (const r of az.queryTable("Tenants")) {
-      const name = r.RowKey || r.PartitionKey;
-      if (!name) continue;
-      await db.insert(azureTenants).values({ name }).onConflictDoUpdate({ target: azureTenants.name, set: { seenAt: now() } });
+    for await (const t of catalog.listTenants()) {
+      await db.insert(azureTenants).values({ name: t.name }).onConflictDoUpdate({ target: azureTenants.name, set: { seenAt: now() } });
       stats.tenants++;
     }
-    for await (const r of az.queryTable("BusinessCustomers")) {
-      const name = colStr(r, "BusinessCustomer", "Name");
-      await db.insert(azureBusinessCustomers).values({ id: r.RowKey, name, partitionKey: r.PartitionKey }).onConflictDoUpdate({ target: azureBusinessCustomers.id, set: { name, partitionKey: r.PartitionKey, seenAt: now() } });
+    for await (const b of catalog.listBusinessCustomers()) {
+      await db.insert(azureBusinessCustomers).values({ id: b.id, name: b.name, partitionKey: b.partitionKey }).onConflictDoUpdate({ target: azureBusinessCustomers.id, set: { name: b.name, partitionKey: b.partitionKey, seenAt: now() } });
       stats.businessCustomers++;
     }
-    for await (const r of az.queryTable("Insurance")) {
-      const name = colStr(r, "Insurance", "Name");
-      await db.insert(azureInsurances).values({ id: r.RowKey, name, partitionKey: r.PartitionKey }).onConflictDoUpdate({ target: azureInsurances.id, set: { name, partitionKey: r.PartitionKey, seenAt: now() } });
+    for await (const i of catalog.listInsurances()) {
+      await db.insert(azureInsurances).values({ id: i.id, name: i.name, partitionKey: i.partitionKey }).onConflictDoUpdate({ target: azureInsurances.id, set: { name: i.name, partitionKey: i.partitionKey, seenAt: now() } });
       stats.insurances++;
     }
-    for await (const r of az.queryTable("BusinessCustomersInsurance")) {
-      const v = { id: r.RowKey, name: colStr(r, "BusinessCustomerInsurance", "Name"), businessCustomerId: colStr(r, "BusinessCustomerId"), insuranceId: colStr(r, "InsuranceId"), partitionKey: r.PartitionKey };
+    for await (const l of catalog.listCustomerInsuranceLinks()) {
+      const v = { id: l.id, name: l.name, businessCustomerId: l.businessCustomerId, insuranceId: l.insuranceId, partitionKey: l.partitionKey };
       await db.insert(azureBcInsuranceLinks).values(v).onConflictDoUpdate({ target: azureBcInsuranceLinks.id, set: { ...v, seenAt: now() } });
       stats.links++;
     }
 
-    // scans: incremental by the table's own Timestamp
     const [st] = await db.select().from(azureSyncState).where(eq(azureSyncState.key, "scans_cursor"));
     const since = st ? new Date(Date.parse((st.value as { at: string }).at) - OVERLAP_MS) : new Date(now().getTime() - (o.initialDays ?? 30) * 86400_000);
     let newest = st ? Date.parse((st.value as { at: string }).at) : 0;
-    for await (const r of az.queryTable("AllScanResults", { filter: `Timestamp ge datetime'${since.toISOString()}'` })) {
+    for await (const scan of catalog.listScansSince(since)) {
       stats.scansSeen++;
-      const row = scanFromRow(r);
-      const ts = Date.parse(String(r.Timestamp ?? ""));
+      const row = rowFromCatalogScan(scan);
+      const ts = scan.timestamp?.getTime() ?? NaN;
       if (!Number.isNaN(ts) && ts > newest) newest = ts;
       if (row.scanFailed) stats.scansFailed++;
       const ex = await db.select({ s: colibriScans.importStatus }).from(colibriScans).where(and(eq(colibriScans.partitionKey, row.partitionKey), eq(colibriScans.rowKey, row.rowKey)));
       if (!ex.length) stats.scansNew++;
-      // never touch our own import state when the Azure row is re-read
+      // never touch our own import state when the source row is re-read
       const { partitionKey: _p, rowKey: _r, ...upd } = row;
       await db.insert(colibriScans).values(row).onConflictDoUpdate({ target: [colibriScans.partitionKey, colibriScans.rowKey], set: { ...upd, updatedAt: now() } });
     }

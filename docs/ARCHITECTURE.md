@@ -34,6 +34,13 @@ app/src/
 3. Domains may import `shared/` and other domains sparingly; `shared/` never imports `domains/`.
 4. Prefer short functions (one job each) when touching a file.
 
-## Backend (later)
+## Backend
 
-Same domain names under `server/src/domains/` when we reach that feature. Azure / external scan data will sit behind a `ScanCatalog` port in `domains/scans/`.
+```
+server/src/domains/scans/
+  catalog.ts       # ScanCatalog port (no Azure names)
+  azureCatalog.ts  # Azure Tables + blobs adapter
+  blobs.ts         # PDF / picture blob helpers
+```
+
+`syncAzure` and `importScans` talk to `ScanCatalog`. To use another source later, add an adapter that implements the same port.

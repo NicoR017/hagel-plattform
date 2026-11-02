@@ -4,6 +4,8 @@ import { isPlaceType } from "@hagel/shared";
 import { applyColibri, colibriPages, parseColibri, scanCheck, titleCase } from "@hagel/colibri";
 import { audit } from "./audit";
 import type { AzureSource } from "./azure";
+import type { ScanCatalog } from "./domains/scans";
+import { azureCatalog, parsePhotoName, photoStems, positionLabel, POSITIONS } from "./domains/scans";
 import { loadMappingContext, mapScan, tenantsOfOrg, type ScanMapping } from "./azure_sync";
 import { methodForInsurer } from "./methods";
 import type { Db } from "./db";
@@ -13,53 +15,10 @@ import { colibriScans, companies, photos, stations, vehicleStatusHistory, vehicl
 import type { Storage } from "./storage";
 import { colibriKey, loadOrgSettings, nextSeq, photoKey } from "./sync";
 
-export const SCANS_CONTAINER = "allscans";
-export const PICTURES_CONTAINER = "scan-color-pictures";
+export {
+  parsePhotoName, pdfBlobName, photoStems, positionLabel, PICTURES_CONTAINER, SCANS_CONTAINER,
+} from "./domains/scans";
 
-const POSITIONS = ["FRONT_UPPER_RIGHT", "FRONT_BOTTOM_RIGHT", "RIGHT", "BACK_UPPER_RIGHT", "BACK_BOTTOM_RIGHT", "BACK_UPPER_LEFT", "BACK_BOTTOM_LEFT", "LEFT", "FRONT_UPPER_LEFT", "FRONT_BOTTOM_LEFT", "FRONT", "TOP_FRONT", "TOP_BACK", "EXTRA_LEFT", "EXTRA_RIGHT"];
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** Blob name `<PartitionKey>_Overview_Pictures_<Position>-<n>` (the position may be the enum name or its number; any file extension). */
-export function parsePhotoName(partitionKey: string, blobName: string, stems: string[] = []): { position: string; index: number } | null {
-  const prefixes = [partitionKey, ...stems].map(escapeRe).join("|");
-  const m = new RegExp(`^(?:${prefixes})_Overview_Pictures_([A-Za-z]+(?:_[A-Za-z]+)*|\\d+)(?:[-_](\\d+))?(?:\\.[A-Za-z0-9]+)?$`).exec(blobName);
-  if (!m) return null;
-  const raw = m[1];
-  const position = /^\d+$/.test(raw) ? POSITIONS[Number(raw)] ?? `UNKNOWN_${raw}` : raw.toUpperCase();
-  return { position, index: m[2] != null ? Number(m[2]) : 0 };
-}
-
-/** Stored labels stay German (the documents translate them for Spanish). */
-export function positionLabel(position: string): string {
-  if (position === "EXTRA_LEFT" || position === "LEFT") return "Seite links";
-  if (position === "EXTRA_RIGHT" || position === "RIGHT") return "Seite rechts";
-  if (position.startsWith("FRONT")) return "Vorderansicht";
-  if (position.startsWith("BACK")) return "Heckansicht";
-  if (position.startsWith("TOP")) return "Dach";
-  return "Sonstiges";
-}
-
-/** The blob name of the report PDF from the `urlPdf` column (a full URL or just the name). */
-export function pdfBlobName(urlPdf: string, partitionKey: string): string[] {
-  const out: string[] = [];
-  if (urlPdf) {
-    try {
-      const u = new URL(urlPdf);
-      const parts = decodeURIComponent(u.pathname).replace(/^\//, "").split("/");
-      out.push(parts[0] === SCANS_CONTAINER ? parts.slice(1).join("/") : parts.join("/"));
-    } catch { out.push(urlPdf.replace(new RegExp(`^/?${SCANS_CONTAINER}/`), "")); }
-  }
-  out.push(`${partitionKey}.pdf`);
-  return [...new Set(out.filter(Boolean))];
-}
-
-/** Possible blob-name prefixes of the photos: the PDF name without extension, and the PartitionKey (yyyyMMddHHmm) written as yyyyMMdd-HHmm. */
-export function photoStems(urlPdf: string, partitionKey: string): string[] {
-  const out = pdfBlobName(urlPdf, partitionKey).map((n) => (n.split("/").pop() ?? n).replace(/\.pdf$/i, ""));
-  const m = /^(\d{8})(\d{4})/.exec(partitionKey);
-  if (m) out.push(`${m[1]}-${m[2]}`);
-  return [...new Set(out.filter(Boolean))];
-}
 
 export type ImportStatus = "imported" | "already" | "not_found" | "not_allowed" | "unmapped" | "pdf_missing" | "pdf_unreadable" | "error";
 export interface ImportResult {
@@ -67,9 +26,23 @@ export interface ImportResult {
   check?: { imported: number; total: number | null; azureTotal: number | null; ok: boolean; unknown: string[] }; photos?: number; photoErrors?: number;
 }
 
-export interface ImportDeps { db: Db; az: AzureSource; storage: Storage; hub: Hub; now?: () => Date }
+export interface ImportDeps {
+  db: Db;
+  storage: Storage;
+  hub: Hub;
+  now?: () => Date;
+  /** Prefer catalog; `az` is wrapped automatically for existing call sites. */
+  catalog?: ScanCatalog;
+  az?: AzureSource | null;
+}
 
 const todayIso = (d: Date) => d.toISOString().slice(0, 10);
+
+function catalogOf(d: ImportDeps): ScanCatalog {
+  if (d.catalog) return d.catalog;
+  if (d.az) return azureCatalog(d.az);
+  throw new Error("import needs a ScanCatalog or AzureSource");
+}
 
 /**
  * Imports scans as vehicles: PDF -> /packages/colibri (the v20 algorithm) -> vehicle (status "besichtigung", site, customer, insurer,
@@ -78,13 +51,14 @@ const todayIso = (d: Date) => d.toISOString().slice(0, 10);
  */
 export async function importScans(d: ImportDeps, u: Principal, keys: { partitionKey: string; rowKey: string }[], callerOrgId: string, stationOverride: string | null = null): Promise<ImportResult[]> {
   const out: ImportResult[] = [];
+  const catalog = catalogOf(d);
   const ctx = await loadMappingContext(d.db);
   const myTenants = await tenantsOfOrg(d.db, callerOrgId);
-  for (const k of keys) out.push(await importOne(d, u, k, ctx, myTenants, callerOrgId, stationOverride));
+  for (const k of keys) out.push(await importOne({ ...d, catalog }, u, k, ctx, myTenants, callerOrgId, stationOverride));
   return out;
 }
 
-async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string; rowKey: string }, ctx: Awaited<ReturnType<typeof loadMappingContext>>, myTenants: string[], callerOrgId: string, stationOverride: string | null): Promise<ImportResult> {
+async function importOne(d: ImportDeps & { catalog: ScanCatalog }, u: Principal, k: { partitionKey: string; rowKey: string }, ctx: Awaited<ReturnType<typeof loadMappingContext>>, myTenants: string[], callerOrgId: string, stationOverride: string | null): Promise<ImportResult> {
   const base = { partitionKey: k.partitionKey, rowKey: k.rowKey };
   const now = d.now?.() ?? new Date();
   const [scan] = await d.db.select().from(colibriScans).where(and(eq(colibriScans.partitionKey, k.partitionKey), eq(colibriScans.rowKey, k.rowKey)));
@@ -123,8 +97,7 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
   const stored: string[] = [];
   try {
     // 1. the report PDF
-    let pdf: Uint8Array | null = null;
-    for (const name of pdfBlobName(scan.urlPdf, scan.partitionKey)) { pdf = await d.az.getBlob(SCANS_CONTAINER, name); if (pdf) break; }
+    const pdf = await d.catalog.getScanPdf(scan);
     if (!pdf) { await release(); return { ...base, status: "pdf_missing" }; }
     const parsed = parseColibri(await colibriPages(pdf));
     if (!parsed.found) { await release(); return { ...base, status: "pdf_unreadable" }; }
@@ -164,13 +137,12 @@ async function importOne(d: ImportDeps, u: Principal, k: { partitionKey: string;
     let photoErrors = 0;
     // real blob names start with the PDF's stem (`20261019-1627_<plate>`), the PartitionKey is the same time without the dash (`202610191627`)
     const stems = photoStems(scan.urlPdf, scan.partitionKey);
-    const names = new Set<string>();
-    for (const prefix of [scan.partitionKey, ...stems.map((s) => s.split("_")[0])]) for (const n of await d.az.listBlobs(PICTURES_CONTAINER, prefix)) names.add(n);
+    const names = await d.catalog.listScanPictureNames(scan, stems);
     for (const name of names) {
       const pn = parsePhotoName(scan.partitionKey, name, stems);
       if (!pn) continue;
       try {
-        const raw = await d.az.getBlob(PICTURES_CONTAINER, name);
+        const raw = await d.catalog.getScanPicture(name);
         if (!raw) { photoErrors++; continue; }
         const jpg = await sharp(raw).rotate().resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 60 }).toBuffer();
         prepared.push({ ...pn, label: positionLabel(pn.position), bytes: new Uint8Array(jpg) });
