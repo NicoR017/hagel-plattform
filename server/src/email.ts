@@ -1,4 +1,5 @@
 import type { Config } from "./config";
+import { buildMime } from "./mime";
 
 export interface MailAttachment { filename: string; content: Uint8Array; contentType: string }
 export interface Mail {
@@ -53,12 +54,16 @@ export interface GraphOptions {
   /** EMAIL_FROM: `address` or `Name <address>`; the mailbox that sends is the address */
   from: string;
   fetch?: typeof fetch; sleep?: (ms: number) => Promise<void>; now?: () => number;
+  /** largest total attachment size accepted (default: the JSON limit); above MAIL_INLINE_LIMIT the MIME form is used */
+  maxBytes?: number;
 }
 
-/** Above this total attachment size sendMail (~4 MB of JSON) is too small: a draft + upload sessions are used instead. */
-const GRAPH_INLINE_LIMIT = 3 * 1024 * 1024;
-/** upload session chunks must be multiples of 320 KiB */
-const GRAPH_CHUNK = 320 * 1024 * 9;
+/**
+ * Graph `sendMail` takes about 4 MB of JSON and attachments travel as base64 (+33 %), so the raw total must stay well under 3 MB.
+ * Bigger ones would need a draft (Mail.ReadWrite), which the app deliberately does not have: see mail_attachments.ts.
+ */
+export const MAIL_INLINE_LIMIT = 2.5 * 1024 * 1024;
+const GRAPH_INLINE_LIMIT = MAIL_INLINE_LIMIT;
 const GRAPH_MAX_TRIES = 3;
 
 /** Splits `Name <a@b.c>` (or a bare address) into name and address. */
@@ -143,45 +148,23 @@ export class GraphMailer implements Mailer {
     const base = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(this.from.address)}`;
     const json = { "Content-Type": "application/json" };
     const atts = m.attachments ?? [];
-    if (atts.reduce((n, a) => n + a.content.byteLength, 0) <= GRAPH_INLINE_LIMIT) {
-      const msg = { ...this.message(m), ...(atts.length ? { attachments: atts.map((a) => this.fileAttachment(a)) } : {}) };
-      await this.call("sendMail", `${base}/sendMail`, { method: "POST", headers: json, body: JSON.stringify({ message: msg, saveToSentItems: true }) }, [202]);
+    // Only sendMail (Mail.Send). AttachmentFitMailer keeps mails under the limit; this is the last guard, with a clear error.
+    const size = atts.reduce((n, a) => n + a.content.byteLength, 0);
+    const max = this.o.maxBytes ?? GRAPH_INLINE_LIMIT;
+    if (size > max) throw new Error(`Graph attachments too large (${size} bytes, max ${max}): shrink or send a link`);
+    if (size > GRAPH_INLINE_LIMIT) {
+      // too big for the JSON form: the same operation takes a whole MIME message (base64 in the body, Content-Type text/plain)
+      await this.call("sendMail", `${base}/sendMail`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: Buffer.from(buildMime(this.from, m)).toString("base64") }, [202]);
       return;
     }
-    // big attachments: draft, attach (upload session above 3 MB), send
-    const draft = (await (await this.call("createDraft", `${base}/messages`, { method: "POST", headers: json, body: JSON.stringify(this.message(m)) }, [201])).json()) as { id: string };
-    const id = encodeURIComponent(draft.id);
-    try {
-      for (const a of atts) {
-        if (a.content.byteLength <= GRAPH_INLINE_LIMIT) {
-          await this.call("addAttachment", `${base}/messages/${id}/attachments`, { method: "POST", headers: json, body: JSON.stringify(this.fileAttachment(a)) }, [201]);
-          continue;
-        }
-        const total = a.content.byteLength;
-        const s = (await (await this.call("uploadSession", `${base}/messages/${id}/attachments/createUploadSession`, {
-          method: "POST", headers: json, body: JSON.stringify({ AttachmentItem: { attachmentType: "file", name: a.filename, size: total, contentType: a.contentType } }),
-        }, [200, 201])).json()) as { uploadUrl: string };
-        for (let start = 0; start < total; start += GRAPH_CHUNK) {
-          const chunk = a.content.subarray(start, Math.min(start + GRAPH_CHUNK, total));
-          // the upload URL is pre-authorised: no bearer token
-          await this.call("uploadChunk", s.uploadUrl, {
-            method: "PUT", auth: false, body: chunk,
-            headers: { "Content-Type": "application/octet-stream", "Content-Length": String(chunk.byteLength), "Content-Range": `bytes ${start}-${start + chunk.byteLength - 1}/${total}` },
-          }, [200, 201, 204]);
-        }
-      }
-      await this.call("sendDraft", `${base}/messages/${id}/send`, { method: "POST" }, [202]);
-    } catch (e) {
-      // do not leave a half-built draft in the shared mailbox
-      await this.call("deleteDraft", `${base}/messages/${id}`, { method: "DELETE" }, [204]).catch(() => undefined);
-      throw e;
-    }
+    const msg = { ...this.message(m), ...(atts.length ? { attachments: atts.map((a) => this.fileAttachment(a)) } : {}) };
+    await this.call("sendMail", `${base}/sendMail`, { method: "POST", headers: json, body: JSON.stringify({ message: msg, saveToSentItems: true }) }, [202]);
   }
 }
 
 /** The provider is chosen by the environment only: GRAPH_* -> Graph, else EMAIL_API_KEY -> Resend, else console. */
-export function makeBaseMailer(cfg: Pick<Config, "emailProvider" | "emailApiKey" | "emailFrom" | "graphTenantId" | "graphClientId" | "graphClientSecret">): Mailer {
-  if (cfg.emailProvider === "graph") return new GraphMailer({ tenantId: cfg.graphTenantId!, clientId: cfg.graphClientId!, clientSecret: cfg.graphClientSecret!, from: cfg.emailFrom });
+export function makeBaseMailer(cfg: Pick<Config, "emailProvider" | "emailApiKey" | "emailFrom" | "graphTenantId" | "graphClientId" | "graphClientSecret" | "mailMaxAttachmentBytes">): Mailer {
+  if (cfg.emailProvider === "graph") return new GraphMailer({ tenantId: cfg.graphTenantId!, clientId: cfg.graphClientId!, clientSecret: cfg.graphClientSecret!, from: cfg.emailFrom, maxBytes: cfg.mailMaxAttachmentBytes });
   if (cfg.emailProvider === "resend") return new ResendMailer(cfg.emailApiKey!, cfg.emailFrom);
   return new ConsoleMailer();
 }
