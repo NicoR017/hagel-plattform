@@ -36,7 +36,10 @@ Jamais dans le dépôt. Soit `infra/scripts/render_set_mail.ps1` (lit `$env:GRAP
 ## Limites techniques
 **Permission : `Mail.Send` seul, rien d'autre** (pas de `Mail.ReadWrite`). L'application n'utilise que `POST /users/{boîte}/sendMail`, jamais de brouillon.
 
-`sendMail` accepte ~4 Mo de JSON, et les pièces jointes partent en base64 (+33 %) : le total des pièces jointes est donc plafonné à **2,5 Mo** (`MAIL_INLINE_LIMIT`). Un mail plus lourd est traité avant l'envoi, sans que les appelants changent (`AttachmentFitMailer`, `server/src/mail_attachments.ts`) :
+**Trois paliers de taille (total des pièces jointes)**, sans que les appelants changent :
+- **≤ 2,5 Mo** : `sendMail` en JSON (limite de ~4 Mo de requête, base64 +33 %).
+- **de 2,5 Mo à `MAIL_MAX_ATTACHMENT_MB`** (défaut 2,5 = désactivé ; de 2,5 à 25) : le même `sendMail`, mais avec un message **MIME complet** (`Content-Type: text/plain`, corps en base64, `server/src/mime.ts`). Même permission `Mail.Send`, pièces jointes jointes au mail, qualité intacte. *À valider sur staging : la limite de taille réelle de Graph pour ce mode et le traitement de `Bcc` dans l'en-tête MIME ; tant que ce n'est pas validé, laisser la valeur par défaut en prod.*
+- **au-delà** : traité avant l'envoi (`AttachmentFitMailer`, `server/src/mail_attachments.ts`) :
 1. **Compression** : les photos JPEG incluses dans les PDF sont ré-encodées (1600 px q75, puis 1200 / 900 / 700 px), la mise en page, les textes et les signatures restent identiques. Le premier palier qui passe sous 2,5 Mo est utilisé. Le PDF complet reste intact dans le stockage de l'application.
 2. **Lien signé** si la compression ne suffit pas (ou si le PDF est illisible) : la pièce jointe est copiée en privé (`mail-links/…`) et remplacée dans le texte par un lien `…/api/files/<jeton>` valable **14 jours** (jeton signé HMAC, sans connexion ; au-delà, le fichier est supprimé à la première visite). Quiconque a le lien peut télécharger le fichier jusqu'à l'expiration : ne pas le transférer.
 3. `GraphMailer` refuse en dernier recours tout envoi au-dessus de la limite avec une erreur claire (aucun appel Graph).

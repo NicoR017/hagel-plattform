@@ -21,7 +21,7 @@ const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
 const storage = storageFromEnv();
 // Graph only takes small attachments with Mail.Send: shrink the photos in the PDFs, else send a signed link (Resend is left as it was)
-const baseMailer = cfg.emailProvider === "graph" ? new AttachmentFitMailer(makeBaseMailer(cfg), { storage, appUrl: cfg.appUrl, secret: cfg.sessionSecret }) : makeBaseMailer(cfg);
+const baseMailer = cfg.emailProvider === "graph" ? new AttachmentFitMailer(makeBaseMailer(cfg), { storage, appUrl: cfg.appUrl, secret: cfg.sessionSecret, limit: cfg.mailMaxAttachmentBytes }) : makeBaseMailer(cfg);
 const mailer = new ModeMailer(baseMailer, cfg.mailMode, cfg.mailRedirectTo);
 console.log(`env=${cfg.appEnv} mail: provider=${cfg.emailProvider} from=${parseFrom(cfg.emailFrom).address} MAIL_MODE=${cfg.mailMode}${cfg.mailRedirectTo ? " -> " + cfg.mailRedirectTo : ""}`);
 if (process.env.SEED_SUPERADMIN_EMAIL) await seed(h.db, { superadminEmail: process.env.SEED_SUPERADMIN_EMAIL, testSites: process.env.SEED_TEST_SITES === "1", storage });

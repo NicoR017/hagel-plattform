@@ -1,4 +1,5 @@
 import type { Config } from "./config";
+import { buildMime } from "./mime";
 
 export interface MailAttachment { filename: string; content: Uint8Array; contentType: string }
 export interface Mail {
@@ -53,6 +54,8 @@ export interface GraphOptions {
   /** EMAIL_FROM: `address` or `Name <address>`; the mailbox that sends is the address */
   from: string;
   fetch?: typeof fetch; sleep?: (ms: number) => Promise<void>; now?: () => number;
+  /** largest total attachment size accepted (default: the JSON limit); above MAIL_INLINE_LIMIT the MIME form is used */
+  maxBytes?: number;
 }
 
 /**
@@ -145,17 +148,23 @@ export class GraphMailer implements Mailer {
     const base = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(this.from.address)}`;
     const json = { "Content-Type": "application/json" };
     const atts = m.attachments ?? [];
-    // Only plain sendMail (Mail.Send). AttachmentFitMailer keeps mails under the limit; this is the last guard, with a clear error.
+    // Only sendMail (Mail.Send). AttachmentFitMailer keeps mails under the limit; this is the last guard, with a clear error.
     const size = atts.reduce((n, a) => n + a.content.byteLength, 0);
-    if (size > GRAPH_INLINE_LIMIT) throw new Error(`Graph attachments too large (${size} bytes, max ${GRAPH_INLINE_LIMIT}): shrink or send a link`);
+    const max = this.o.maxBytes ?? GRAPH_INLINE_LIMIT;
+    if (size > max) throw new Error(`Graph attachments too large (${size} bytes, max ${max}): shrink or send a link`);
+    if (size > GRAPH_INLINE_LIMIT) {
+      // too big for the JSON form: the same operation takes a whole MIME message (base64 in the body, Content-Type text/plain)
+      await this.call("sendMail", `${base}/sendMail`, { method: "POST", headers: { "Content-Type": "text/plain" }, body: Buffer.from(buildMime(this.from, m)).toString("base64") }, [202]);
+      return;
+    }
     const msg = { ...this.message(m), ...(atts.length ? { attachments: atts.map((a) => this.fileAttachment(a)) } : {}) };
     await this.call("sendMail", `${base}/sendMail`, { method: "POST", headers: json, body: JSON.stringify({ message: msg, saveToSentItems: true }) }, [202]);
   }
 }
 
 /** The provider is chosen by the environment only: GRAPH_* -> Graph, else EMAIL_API_KEY -> Resend, else console. */
-export function makeBaseMailer(cfg: Pick<Config, "emailProvider" | "emailApiKey" | "emailFrom" | "graphTenantId" | "graphClientId" | "graphClientSecret">): Mailer {
-  if (cfg.emailProvider === "graph") return new GraphMailer({ tenantId: cfg.graphTenantId!, clientId: cfg.graphClientId!, clientSecret: cfg.graphClientSecret!, from: cfg.emailFrom });
+export function makeBaseMailer(cfg: Pick<Config, "emailProvider" | "emailApiKey" | "emailFrom" | "graphTenantId" | "graphClientId" | "graphClientSecret" | "mailMaxAttachmentBytes">): Mailer {
+  if (cfg.emailProvider === "graph") return new GraphMailer({ tenantId: cfg.graphTenantId!, clientId: cfg.graphClientId!, clientSecret: cfg.graphClientSecret!, from: cfg.emailFrom, maxBytes: cfg.mailMaxAttachmentBytes });
   if (cfg.emailProvider === "resend") return new ResendMailer(cfg.emailApiKey!, cfg.emailFrom);
   return new ConsoleMailer();
 }
