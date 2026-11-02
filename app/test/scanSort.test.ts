@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sortScans } from "../src/v3/scanSort";
+import { sortScans } from "../src/domains/scans/scanSort";
 
 const mk = (pk: string, plate: string, bc: string, at: string | null) => ({ partitionKey: pk, scanDateTime: at, plate, businessCustomer: bc });
 const L = [

@@ -1,6 +1,6 @@
 // R3: a new app version is only installed when nothing is in flight.
 import { describe, expect, it } from "vitest";
-import { mayReload } from "../src/field/updateGate";
+import { mayReload } from "../src/shared/updateGate";
 
 const base = { pending: 0, online: true, overlayOpen: false, hash: "#/" };
 describe("when the page may reload into a new version", () => {

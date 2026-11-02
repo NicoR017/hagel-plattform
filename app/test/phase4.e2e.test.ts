@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LocalDb, type Refs } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
-import { createVehicle, sendReport, setHeader, type MutCtx } from "../src/sync/mutations";
-import { letterheadFor, toDoc } from "../src/field/docs";
+import { LocalDb, type Refs } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
+import { createVehicle, sendReport, setHeader, type MutCtx } from "../src/shared/sync/mutations";
+import { letterheadFor, toDoc } from "../src/shared/docs";
 import { isNotNull } from "drizzle-orm";
 import { technicians } from "../../server/src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
@@ -153,7 +153,7 @@ describe("sending a report (offline capable)", () => {
     await sync(pa);
     const id = await createVehicle(pa.ctx, { stationId: A, clientStationId: CARRO });
     await sync(pa);
-    const { assignVehicle } = await import("../src/sync/mutations");
+    const { assignVehicle } = await import("../src/shared/sync/mutations");
     const techId = (await call(c, "GET", "/admin/users", { token: c.superToken, org: c.orgES })).body.find((u: any) => u.email === "tech@example.test").id;
     await assignVehicle(pa.ctx, id, "pdr", [techId]);
     await sync(pa); await sync(pt);

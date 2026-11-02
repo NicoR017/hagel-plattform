@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api, getAuth, getOrg, setAuth, setOrg } from "./api";
-import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./i18n";
-import { Admin3 } from "./v3/Admin3";
-import { Shell3 } from "./v3/Shell3";
-import { FieldProvider, useField } from "./field/store";
-import { List } from "./field/List";
-import { Dashboard } from "./field/Dashboard";
-import { Toasts } from "./field/toast";
-import { useRoute, type Route } from "./field/route";
-import { V3Routes } from "./v3/Routes3";
+import { LANG_LIST, getLang, hasStoredLang, isLangValue, setLang, t, useLang } from "./shared/i18n";
+import { AdminApp } from "./domains/admin/AdminApp";
+import { AppShell } from "./domains/shell/AppShell";
+import { FieldProvider, useField } from "./shared/store";
+import { List } from "./domains/vehicles/List";
+import { Dashboard } from "./domains/reports/Dashboard";
+import { Toasts } from "./shared/toast";
+import { useRoute, type Route } from "./shared/route";
+import { AppRoutes as DomainRoutes } from "./domains/shell/Routes";
 import { EnvBanner } from "./env";
-import "./field/field.css";
+import "./shared/field.css";
 
 interface Me {
   user: { id: string; email: string; name: string; language: string; isSuperadmin: boolean };
@@ -217,24 +217,24 @@ function AppRoutes({ me, org, onOrg }: { me: Me; org: string; onOrg: (id: string
 
   if (route.page === "dashboard") {
     return (
-      <Shell3 {...shell} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("dashboard") }]}>
+      <AppShell {...shell} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("dashboard") }]}>
         <Dashboard embedded />
-      </Shell3>
+      </AppShell>
     );
   }
 
   if (route.page === "admin") {
-    return <Admin3 me={me} org={org} onOrg={onOrg} route={route} />;
+    return <AdminApp me={me} org={org} onOrg={onOrg} route={route} />;
   }
 
   // Dashboard KPI click: filtered vehicle list (same data, current shell)
   if (route.page === "list" && route.dash) {
     return (
-      <Shell3 {...shell} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("filterActive") }]}>
+      <AppShell {...shell} crumbs={[{ label: t("v3Stations"), to: { page: "list" } }, { label: t("filterActive") }]}>
         <List embedded />
-      </Shell3>
+      </AppShell>
     );
   }
 
-  return <V3Routes me={me} org={org} onOrg={onOrg} route={route} />;
+  return <DomainRoutes me={me} org={org} onOrg={onOrg} route={route} />;
 }

@@ -1,7 +1,7 @@
 // UI routes (bookmarks keep working), "Zurück" one level up, which vehicles each mode shows.
 import { describe, expect, it } from "vitest";
-import { hrefOf, parentRoute, parseRoute, type Route } from "../src/field/route";
-import { MODE_STATUSES, inMode, matchesChip, stationCounts } from "../src/v3/modes";
+import { hrefOf, parentRoute, parseRoute, type Route } from "../src/shared/route";
+import { MODE_STATUSES, inMode, matchesChip, stationCounts } from "../src/domains/shell/modes";
 
 const S = "11111111-1111-4111-8111-111111111111", V = "22222222-2222-4222-8222-222222222222";
 

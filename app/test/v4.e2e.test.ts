@@ -3,13 +3,13 @@ import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { ES_MATRIX_DEFAULT } from "@hagel/calc";
-import { LocalDb } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
+import { LocalDb } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
 import {
   addComment, addPhoto, addTodo, cancelBooking, createBooking, createVehicle, moveBooking, setCheck, setHeader, setParts, setPanel, setRepairStage, tagPhoto, toggleTodo, type MutCtx,
-} from "../src/sync/mutations";
-import { calcWith, defaultMethodFor, methodDefOf } from "../src/field/calc";
-import { todayIn } from "../src/field/calendar";
+} from "../src/shared/sync/mutations";
+import { calcWith, defaultMethodFor, methodDefOf } from "../src/shared/calc";
+import { todayIn } from "../src/shared/calendar";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { repairBookings, repairTodos, vehicles } from "../../server/src/schema";
 

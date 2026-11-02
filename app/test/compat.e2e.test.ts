@@ -1,9 +1,9 @@
 // Rollout safety on the phone side: pending offline ops survive a server that does not know a newer op type yet, and arrive afterwards.
 import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LocalDb } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
-import { createVehicle, setHeader, setPanel, setStatus, type MutCtx } from "../src/sync/mutations";
+import { LocalDb } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
+import { createVehicle, setHeader, setPanel, setStatus, type MutCtx } from "../src/shared/sync/mutations";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
 let c: Ctx, A: string, token: string;

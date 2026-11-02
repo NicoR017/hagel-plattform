@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { t } from "./i18n";
+import { t } from "./shared/i18n";
 
 export interface AppConfig { appEnv: "production" | "staging" | "development" }
 const KEY = "hagel.config";

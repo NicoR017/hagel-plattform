@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { LocalDb, refsKey } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
-import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/sync/mutations";
+import { LocalDb, refsKey } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
+import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { users, vehicleAssignments } from "../../server/src/schema";
 

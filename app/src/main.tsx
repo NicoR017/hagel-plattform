@@ -2,9 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
-import { t } from "./i18n";
-import { toast } from "./field/toast";
-import { readyToReload } from "./field/updateGate";
+import { t } from "./shared/i18n";
+import { toast } from "./shared/toast";
+import { readyToReload } from "./shared/updateGate";
 import "./style.css";
 
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

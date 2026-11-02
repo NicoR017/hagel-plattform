@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ERROR_MESSAGES, LANGS, PERMISSIONS, SYSTEM_ROLES, errorMessage, pickLang } from "@hagel/shared";
-import { dictionaries, getLang, setLang, t, tOr } from "../src/i18n";
+import { dictionaries, getLang, setLang, t, tOr } from "../src/shared/i18n";
 
 describe("UI dictionaries", () => {
   const de = Object.keys(dictionaries.de).sort();
