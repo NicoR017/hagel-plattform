@@ -10,6 +10,8 @@ export interface Config {
   graphClientSecret: string | null;
   /** graph if GRAPH_* are set, else resend if EMAIL_API_KEY is set, else console */
   emailProvider: EmailProvider;
+  /** largest total attachment size sent as attachments (MAIL_MAX_ATTACHMENT_MB, Graph only); more is shrunk, else linked */
+  mailMaxAttachmentBytes: number;
   port: number;
   accessTtlSec: number;
   refreshTtlDays: number;
@@ -44,13 +46,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (graphSet > 0 && graphSet < 3) throw new Error("GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET must be set together");
   if (graphSet === 3 && !env.EMAIL_FROM?.trim()) throw new Error("GRAPH_* needs EMAIL_FROM (the shared mailbox address)");
   const emailProvider: EmailProvider = graphSet === 3 ? "graph" : env.EMAIL_API_KEY ? "resend" : "console";
+  const maxMb = env.MAIL_MAX_ATTACHMENT_MB?.trim() ? Number(env.MAIL_MAX_ATTACHMENT_MB) : 2.5;
+  if (!Number.isFinite(maxMb) || maxMb < 2.5 || maxMb > 25) throw new Error("MAIL_MAX_ATTACHMENT_MB must be a number from 2.5 to 25");
   return {
     databaseUrl: env.DATABASE_URL ?? null,
     appUrl: (env.APP_URL ?? "http://localhost:3000").replace(/\/$/, ""),
     sessionSecret: secret || "dev-only-secret-dev-only-secret-dev-only",
     emailApiKey: env.EMAIL_API_KEY ?? null,
     emailFrom: env.EMAIL_FROM?.trim() || "PDR Hagel <noreply@pdr-team.de>",
-    graphTenantId: graph[0], graphClientId: graph[1], graphClientSecret: graph[2], emailProvider,
+    graphTenantId: graph[0], graphClientId: graph[1], graphClientSecret: graph[2], emailProvider, mailMaxAttachmentBytes: Math.round(maxMb * 1024 * 1024),
     port: Number(env.PORT ?? 3000),
     accessTtlSec: 15 * 60,
     refreshTtlDays: 90,

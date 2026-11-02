@@ -1,4 +1,4 @@
-// npm run mail:test -- --to you@example.com [--attach none|small|large] [--reply-to a@b.c]
+// npm run mail:test -- --to you@example.com [--attach none|small|large|xlarge] [--reply-to a@b.c]
 // Same test as POST /api/admin/mail-test, with the environment of the shell (GRAPH_*, EMAIL_*, MAIL_MODE...). Not written to the audit log (no database).
 import { loadConfig } from "../config";
 import { ModeMailer, makeBaseMailer } from "../email";
@@ -9,7 +9,7 @@ const cfg = loadConfig();
 const to = arg("to") ?? cfg.mailRedirectTo;
 const kind = (arg("attach") ?? "none") as TestAttachment;
 if (!to) { console.error("--to <address> is required"); process.exit(2); }
-if (!["none", "small", "large"].includes(kind)) { console.error("--attach must be none, small or large"); process.exit(2); }
+if (!["none", "small", "large", "xlarge"].includes(kind)) { console.error("--attach must be none, small, large or xlarge"); process.exit(2); }
 
 const mailer = new ModeMailer(makeBaseMailer(cfg), cfg.mailMode, cfg.mailRedirectTo);
 console.log(`provider=${cfg.emailProvider} MAIL_MODE=${cfg.mailMode} to=${to} attach=${kind}`);

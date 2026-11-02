@@ -57,7 +57,7 @@ export function adminRoutes({ db, cfg, mailer, hub, storage, needAuth, needOrg, 
   admin.use("*", needAuth);
 
   // test mail through the configured mailer (so MAIL_MODE applies); always addressed to the calling super-admin
-  admin.post("/mail-test", requireSuper, zValidator("json", z.object({ withAttachment: z.enum(["none", "small", "large"]).default("none"), replyTo: z.string().trim().toLowerCase().email().max(200).optional() }), validationHook), async (c) => {
+  admin.post("/mail-test", requireSuper, zValidator("json", z.object({ withAttachment: z.enum(["none", "small", "large", "xlarge"]).default("none"), replyTo: z.string().trim().toLowerCase().email().max(200).optional() }), validationHook), async (c) => {
     const b = c.req.valid("json"), p = c.get("principal");
     const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, p.id));
     const r = await runMailTest(mailer, cfg.emailProvider, { to: u.email, withAttachment: b.withAttachment, replyTo: b.replyTo });

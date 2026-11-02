@@ -12,6 +12,7 @@ import {
 import type { Config } from "./config";
 import type { Db } from "./db";
 import type { Mailer } from "./email";
+import { readLink } from "./mail_attachments";
 import type { Env } from "./env";
 import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg } from "./permissions";
@@ -105,6 +106,15 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
     return c.json(await refreshSession(db, cfg, c.req.valid("json").refresh_token));
   });
   app.route("/auth", auth);
+
+  // Signed, expiring download of an attachment that was too large to e-mail (see mail_attachments.ts). The token is the only credential.
+  app.get("/files/:token", rateLimit(L.refresh, 15 * 60_000, ip), async (c) => {
+    const f = await readLink(storage, cfg.sessionSecret, c.req.param("token"));
+    if (!f) return c.text("Not found", 404, { "Cache-Control": "no-store" });
+    return new Response(f.bytes as BodyInit, {
+      headers: { "Content-Type": f.contentType, "Content-Disposition": `attachment; filename="${f.filename}"`, "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" },
+    });
+  });
 
   // ---------- authenticated ----------
   const needAuth: MiddlewareHandler<Env> = async (c, next) => {
