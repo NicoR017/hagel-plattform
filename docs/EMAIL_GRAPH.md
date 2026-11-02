@@ -24,7 +24,7 @@ Jamais dans le dépôt. Soit `infra/scripts/render_set_mail.ps1` (lit `$env:GRAP
 - Production : `.\infra\scripts\render_set_mail.ps1 -Api <srv-id api prod> -Production`, uniquement le soir (≥ 20:00 Madrid) et avec l'accord de Nicolas.
 
 ## 3. Tester
-- `POST /api/admin/mail-test` (super-admin, authentifié) avec `{"withAttachment":"none|small|large","replyTo":"…"}` : envoie à l'adresse du super-admin appelant, via le mailer configuré (donc staging → `MAIL_REDIRECT_TO`) ; répond `{provider, ms, ok, error?}` ; une ligne d'audit `mail_test` par envoi. `large` ≈ 5 Mo (un PDF sans photos : teste le repli par lien signé ; le mail reçu doit contenir un lien, pas de pièce jointe).
+- `POST /api/admin/mail-test` (super-admin, authentifié) avec `{"withAttachment":"none|small|large","replyTo":"…"}` : envoie à l'adresse du super-admin appelant, via le mailer configuré (donc staging → `MAIL_REDIRECT_TO`) ; répond `{provider, ms, ok, error?}` ; une ligne d'audit `mail_test` par envoi. `xlarge` ≈ 9,5 Mo ; `large` ≈ 5 Mo (un PDF sans photos : teste le repli par lien signé ; le mail reçu doit contenir un lien, pas de pièce jointe).
 - En local : `npm run mail:test -w @hagel/server -- --to <adresse> --attach large` avec les variables du shell (pas d'audit, pas de base).
 
 ## 4. Bascule et retour arrière
