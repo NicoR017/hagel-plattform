@@ -24,7 +24,7 @@ Jamais dans le dépôt. Soit `infra/scripts/render_set_mail.ps1` (lit `$env:GRAP
 - Production : `.\infra\scripts\render_set_mail.ps1 -Api <srv-id api prod> -Production`, uniquement le soir (≥ 20:00 Madrid) et avec l'accord de Nicolas.
 
 ## 3. Tester
-- `POST /api/admin/mail-test` (super-admin, authentifié) avec `{"withAttachment":"none|small|large","replyTo":"…"}` : envoie à l'adresse du super-admin appelant, via le mailer configuré (donc staging → `MAIL_REDIRECT_TO`) ; répond `{provider, ms, ok, error?}` ; une ligne d'audit `mail_test` par envoi. `large` ≈ 5 Mo (teste le brouillon + session d'upload).
+- `POST /api/admin/mail-test` (super-admin, authentifié) avec `{"withAttachment":"none|small|large","replyTo":"…"}` : envoie à l'adresse du super-admin appelant, via le mailer configuré (donc staging → `MAIL_REDIRECT_TO`) ; répond `{provider, ms, ok, error?}` ; une ligne d'audit `mail_test` par envoi. `large` ≈ 5 Mo (un PDF sans photos : teste le repli par lien signé ; le mail reçu doit contenir un lien, pas de pièce jointe).
 - En local : `npm run mail:test -w @hagel/server -- --to <adresse> --attach large` avec les variables du shell (pas d'audit, pas de base).
 
 ## 4. Bascule et retour arrière
@@ -34,4 +34,11 @@ Jamais dans le dépôt. Soit `infra/scripts/render_set_mail.ps1` (lit `$env:GRAP
 - Ne pas retirer `EMAIL_API_KEY` de la prod tant que Graph n'a pas tourné plusieurs jours sans erreur.
 
 ## Limites techniques
-`sendMail` accepte ~4 Mo de JSON (~3 Mo de pièces jointes). Au-delà, l'api crée un brouillon, ajoute les pièces (session d'upload par morceaux de 2,8 Mo pour celles > 3 Mo), puis envoie ; en cas d'échec le brouillon est supprimé. Erreurs 429/503 : 3 essais en respectant `Retry-After` ; 401 : nouveau jeton une fois. Les messages d'erreur ne contiennent que le statut HTTP et le code Graph (ni secret, ni jeton, ni contenu).
+**Permission : `Mail.Send` seul, rien d'autre** (pas de `Mail.ReadWrite`). L'application n'utilise que `POST /users/{boîte}/sendMail`, jamais de brouillon.
+
+`sendMail` accepte ~4 Mo de JSON, et les pièces jointes partent en base64 (+33 %) : le total des pièces jointes est donc plafonné à **2,5 Mo** (`MAIL_INLINE_LIMIT`). Un mail plus lourd est traité avant l'envoi, sans que les appelants changent (`AttachmentFitMailer`, `server/src/mail_attachments.ts`) :
+1. **Compression** : les photos JPEG incluses dans les PDF sont ré-encodées (1600 px q75, puis 1200 / 900 / 700 px), la mise en page, les textes et les signatures restent identiques. Le premier palier qui passe sous 2,5 Mo est utilisé. Le PDF complet reste intact dans le stockage de l'application.
+2. **Lien signé** si la compression ne suffit pas (ou si le PDF est illisible) : la pièce jointe est copiée en privé (`mail-links/…`) et remplacée dans le texte par un lien `…/api/files/<jeton>` valable **14 jours** (jeton signé HMAC, sans connexion ; au-delà, le fichier est supprimé à la première visite). Quiconque a le lien peut télécharger le fichier jusqu'à l'expiration : ne pas le transférer.
+3. `GraphMailer` refuse en dernier recours tout envoi au-dessus de la limite avec une erreur claire (aucun appel Graph).
+
+Erreurs 429/503 : 3 essais en respectant `Retry-After` ; 401 : nouveau jeton une fois. Les messages d'erreur ne contiennent que le statut HTTP et le code Graph (ni secret, ni jeton, ni contenu). Resend n'est pas concerné (comportement inchangé).

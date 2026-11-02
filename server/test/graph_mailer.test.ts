@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { GraphMailer, ModeMailer, ResendMailer, ConsoleMailer, makeBaseMailer, parseFrom } from "../src/email";
+import { GraphMailer, MAIL_INLINE_LIMIT, ModeMailer, ResendMailer, ConsoleMailer, makeBaseMailer, parseFrom } from "../src/email";
 import { loadConfig } from "../src/config";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";
 
@@ -92,40 +92,17 @@ describe("GraphMailer sendMail body", () => {
 });
 
 describe("GraphMailer large attachments", () => {
-  it("> 3 MB: draft, small attachment inline, big one by upload session in 320 KiB multiples, then send", async () => {
-    const big = new Uint8Array(5 * 1024 * 1024).fill(7), small = new Uint8Array(1000).fill(1);
-    const m = mock([
-      (r) => (r.url.endsWith("/messages") && r.method === "POST" ? json(201, { id: "AAMk=/x" }) : undefined),
-      (r) => (r.url.endsWith("/attachments") ? json(201, {}) : undefined),
-      (r) => (r.url.endsWith("/createUploadSession") ? json(200, { uploadUrl: "https://upload.test/session1" }) : undefined),
-      (r) => (r.url === "https://upload.test/session1" ? json(200, {}) : undefined),
-    ]);
-    await make(m).send({ ...mail, attachments: [{ filename: "s.txt", contentType: "text/plain", content: small }, { filename: "big.pdf", contentType: "application/pdf", content: big }] });
-    const calls = m.reqs.filter((r) => !r.url.includes("/token")).map((r) => `${r.method} ${r.url.replace("https://graph.microsoft.com/v1.0/users/noreplay-spain%40pdr-team.com", "")}`);
-    const puts = m.reqs.filter((r) => r.method === "PUT");
-    expect(calls.filter((c) => !c.startsWith("PUT"))).toEqual([
-      "POST /messages", "POST /messages/AAMk%3D%2Fx/attachments", "POST /messages/AAMk%3D%2Fx/attachments/createUploadSession", "POST /messages/AAMk%3D%2Fx/send",
-    ]);
-    expect(m.reqs.some((r) => r.url.endsWith("/sendMail"))).toBe(false);
-    expect(JSON.parse(m.reqs.find((r) => r.url.endsWith("/createUploadSession"))!.body)).toEqual({ AttachmentItem: { attachmentType: "file", name: "big.pdf", size: big.length, contentType: "application/pdf" } });
-    const total = big.length, chunk = 320 * 1024 * 9;
-    expect(puts.length).toBe(Math.ceil(total / chunk));
-    puts.forEach((p, i) => {
-      const start = i * chunk, end = Math.min(start + chunk, total) - 1;
-      expect(p.headers["Content-Range"]).toBe(`bytes ${start}-${end}/${total}`);
-      expect(p.headers.Authorization).toBeUndefined();
-      if (i < puts.length - 1) expect((end - start + 1) % (320 * 1024)).toBe(0);
-    });
+  it("never needs a draft: over the limit it refuses with a clear error and calls nothing", async () => {
+    const m = mock();
+    const big = new Uint8Array(MAIL_INLINE_LIMIT + 1);
+    await expect(make(m).send({ ...mail, attachments: [{ filename: "b.pdf", contentType: "application/pdf", content: big }] })).rejects.toThrow("Graph attachments too large");
+    expect(m.reqs.filter((r) => !r.url.includes("/token"))).toHaveLength(0);
   });
-  it("deletes the draft when the upload fails", async () => {
-    const m = mock([
-      (r) => (r.url.endsWith("/messages") && r.method === "POST" ? json(201, { id: "D1" }) : undefined),
-      (r) => (r.url.endsWith("/createUploadSession") ? json(403, { error: { code: "ErrorAccessDenied" } }) : undefined),
-      (r) => (r.method === "DELETE" ? new Response(null, { status: 204 }) : undefined),
-    ]);
-    const big = new Uint8Array(4 * 1024 * 1024);
-    await expect(make(m).send({ ...mail, attachments: [{ filename: "b.pdf", contentType: "application/pdf", content: big }] })).rejects.toThrow("403 ErrorAccessDenied");
-    expect(m.reqs.some((r) => r.method === "DELETE" && r.url.endsWith("/messages/D1"))).toBe(true);
+  it("just under the limit goes through plain sendMail (Mail.Send only, no /messages calls)", async () => {
+    const m = mock();
+    await make(m).send({ ...mail, attachments: [{ filename: "b.pdf", contentType: "application/pdf", content: new Uint8Array(MAIL_INLINE_LIMIT) }] });
+    expect(m.reqs.filter((r) => !r.url.includes("/token")).map((r) => r.url.split("/").pop())).toEqual(["sendMail"]);
+    expect(Buffer.byteLength(m.sends()[0].body)).toBeLessThan(4 * 1024 * 1024);
   });
 });
 
