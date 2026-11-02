@@ -9,8 +9,7 @@ import { go, useRoute } from "../../shared/route";
 import { Occ } from "../../shared/occupancy";
 import { readDashFilter } from "../../shared/dashFilter";
 import { shareOrDownload, toDoc } from "../../shared/docs";
-import { AssignDialog, MoveDialog, SettingsDialog, SharesDialog, StatusDialog, statusLabel } from "../../shared/Dialogs";
-import { BackupImport } from "../../shared/BackupImport";
+import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, statusLabel } from "../../shared/Dialogs";
 import { ScansDialog } from "../scans/Scans";
 import { useField, useVehicles } from "../../shared/store";
 import { toast } from "../../shared/toast";
@@ -36,7 +35,7 @@ export function List({ embedded }: { embedded?: boolean } = {}) {
   const [customer, setCustomer] = useState("");
   const [insurer, setInsurer] = useState("");
   const [sel, setSel] = useState<Set<string> | null>(null);
-  const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "settings" | "backup" | "scans">(null);
+  const [dlg, setDlg] = useState<null | "status" | "move" | "shares" | "assign" | "scans">(null);
   const [busy, setBusy] = useState("");
   const bulkRef = useRef<HTMLInputElement>(null);
 
@@ -106,7 +105,6 @@ export function List({ embedded }: { embedded?: boolean } = {}) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {f.can("dashboard.voir") && <a className="iconbtn" href="#/dashboard" style={{ textDecoration: "none" }} aria-label={t("dashboard")}>📊</a>}
               <a className="iconbtn" href="#/admin" style={{ textDecoration: "none" }} aria-label={t("admin")}>👥</a>
-              <button className="iconbtn" onClick={() => setDlg("settings")} aria-label={t("settings")}>⚙</button>
             </div>
           </div>
           <h1>{t("listTitle")}</h1>
@@ -235,8 +233,6 @@ export function List({ embedded }: { embedded?: boolean } = {}) {
       {dlg === "move" && <MoveDialog ids={ids} from={selected[0]?.stationId} onClose={() => setDlg(null)} onDone={() => setSel(null)} />}
       {dlg === "shares" && <SharesDialog ids={ids} onClose={() => setDlg(null)} onDone={() => setSel(null)} />}
       {dlg === "assign" && <AssignDialog ids={ids} vehicles={all} onClose={() => setDlg(null)} onDone={() => setSel(null)} />}
-      {dlg === "settings" && <SettingsDialog onClose={() => setDlg(null)} onBackup={() => setDlg("backup")} />}
-      {dlg === "backup" && <BackupImport onClose={() => setDlg(null)} />}
       {dlg === "scans" && <ScansDialog onClose={() => setDlg(null)} />}
     </div>
   );
