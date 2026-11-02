@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, setAuth } from "../../api";
 import { LANG_LIST, setLang, t, useLang } from "../../shared/i18n";
-import { BackupImport } from "../../shared/BackupImport";
-import { SettingsDialog } from "../../shared/Dialogs";
 import { go, hrefOf, parentRoute, type Route } from "../../shared/route";
 import { useField } from "../../shared/store";
 import { GlobalSearch } from "./GlobalSearch";
@@ -23,7 +21,6 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
   const f = useField();
   const lang = useLang();
   const [menu, setMenu] = useState(false);
-  const [dlg, setDlg] = useState<null | "settings" | "backup">(null);
   const box = useRef<HTMLDivElement>(null);
   const parent = parentRoute(route, vehicleStationId);
   const pending = f.status.pendingOps + f.status.pendingUploads;
@@ -91,7 +88,6 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
               </div>
               <hr />
               {f.can("dashboard.voir") && <a role="menuitem" href={hrefOf({ page: "dashboard" })} onClick={() => setMenu(false)}>📊 {t("v3Dashboard")}</a>}
-              <button role="menuitem" onClick={() => { setMenu(false); setDlg("settings"); }}>⚙ {t("v3Settings")}</button>
               <hr />
               <button role="menuitem" onClick={async () => { try { await api("POST", "/me/logout"); } catch { /* already gone */ } setAuth(null); location.replace("/"); }}>⏻ {t("v3Logout")}</button>
             </div>
@@ -99,8 +95,6 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
         </div>
       </header>
       {children}
-      {dlg === "settings" && <SettingsDialog onClose={() => setDlg(null)} onBackup={() => setDlg("backup")} />}
-      {dlg === "backup" && <BackupImport onClose={() => setDlg(null)} />}
     </div>
   );
 }

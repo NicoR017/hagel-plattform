@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import type { LocalVehicle } from "./sync/db";
 import { assignVehicle, moveVehicle, setShares, setStatus } from "./sync/mutations";
-import { LANG_LIST, getLang, setLang, t, tOr } from "./i18n";
-import { api } from "../api";
-import { buildOldFormatBackup } from "./sync/exportBackup";
-import { shareOrDownload } from "./docs";
-import { Dialog, Field, NumInput, Seg } from "./ui";
-import { useField, useIssues, useVehicle } from "./store";
+import { t, tOr } from "./i18n";
+import { Dialog, Field, NumInput } from "./ui";
+import { useField, useVehicle } from "./store";
 import { toast } from "./toast";
 import { Occ } from "./occupancy";
 import { isPlace } from "./places";
@@ -172,49 +169,6 @@ export function AssignDialog({ ids, vehicles, onClose, onDone }: { ids: string[]
         toast(t("assigned"));
         onDone?.(); onClose();
       }}>{t("apply")}</button>
-    </Dialog>
-  );
-}
-
-/** Settings for the person on this phone: language, organisation defaults for admins, what is waiting to be synced. */
-export function SettingsDialog({ onClose, onBackup }: { onClose: () => void; onBackup: () => void }) {
-  const f = useField();
-  const issues = useIssues();
-  const canSettings = f.can("parametres.gerer");
-  const s = f.refs?.settings;
-  const [rateDE, setRateDE] = useState(s?.rateDE ?? 83), [rateES, setRateES] = useState(s?.rateES ?? 69), [teiler, setTeiler] = useState<10 | 12>((s?.defaultTeiler as 10 | 12) ?? 10);
-  return (
-    <Dialog title={t("settings")} onClose={onClose}>
-      <Field label={t("language")}>
-        <Seg value={getLang()} options={LANG_LIST.map((l) => ({ value: l, label: l.toUpperCase() }))} onChange={(l) => { setLang(l); void api("PUT", "/me/language", { language: l }).catch(() => undefined); }} />
-      </Field>
-      {canSettings && (
-        <>
-          <Field label={t("rateDE")}><NumInput value={rateDE} onChange={setRateDE} max={1000} /></Field>
-          <Field label={t("rateES")}><NumInput value={rateES} onChange={setRateES} max={1000} /></Field>
-          <Field label={t("teiler")}><Seg value={teiler} options={[{ value: 10, label: "10" }, { value: 12, label: "12" }]} onChange={setTeiler} /></Field>
-          <button className="pbtn sec" onClick={async () => {
-            try { await api("PUT", "/admin/settings", { rateDE, rateES, defaultTeiler: teiler }); toast(t("saved")); void f.engine.syncNow(f.orgId); } catch (e) { toast((e as Error).message); }
-          }}>{t("save")}</button>
-        </>
-      )}
-      <button className="pbtn sec" onClick={() => { onClose(); onBackup(); }}>{t("importOldBackup")}</button>
-      <button className="pbtn sec" onClick={async () => {
-        const r = await buildOldFormatBackup(f.db, f.orgId, f.refs, false);
-        await shareOrDownload(new Blob([r.json], { type: "application/json" }), `Hagel-Sicherung_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}.json`, "application/json");
-        toast(`${r.vehicles} ${t("vehiclesWord")} · ${r.photos} ${t("photosWord")}`);
-      }}>💾 {t("exportBackup")}</button>
-      <div className="muted" style={{ fontSize: 12, marginTop: 14 }}>
-        {t("syncStatus")}: {f.status.online ? t("online") : t("offline")} · {f.status.pendingOps + f.status.pendingUploads} {t("pending")}
-        {f.status.lastSyncAt ? ` · ${new Date(f.status.lastSyncAt).toLocaleTimeString()}` : ""}
-      </div>
-      {!!issues.length && (
-        <div className="notice err" style={{ marginTop: 10 }}>
-          <b>{t("issues")}</b>
-          {issues.slice(0, 6).map((i) => <div key={i.id}>{i.opType}: {i.message || i.code}</div>)}
-          <button className="chip" style={{ marginTop: 8 }} onClick={() => void f.db.issues.where("orgId").equals(f.orgId).modify({ seen: true })}>{t("dismiss")}</button>
-        </div>
-      )}
     </Dialog>
   );
 }
