@@ -22,7 +22,7 @@ app/src/
     repair/               # board, detail, handover, signature
     citas/                # PDR Citas calendar & start
     scans/                # Colibri scans, devices, import UI
-    admin/                # users, roles, stations, methods, Azure admin
+    admin/                # one file per admin page (+ shared.tsx widgets)
     reports/              # dashboard, insurer reports, send report
     shell/                # AppShell chrome, AppRoutes, search
 ```
