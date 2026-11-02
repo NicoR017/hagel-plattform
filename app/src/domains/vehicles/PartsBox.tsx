@@ -11,12 +11,12 @@ const QUICK = {
 } as const;
 
 /** "Zu ersetzende Teile": labels entered one by one, plus quick picks; printed on the KVA, no price. */
-export function PartsBox({ v }: { v: LocalVehicle }) {
+export function PartsBox({ v, readOnly }: { v: LocalVehicle; readOnly?: boolean }) {
   const f = useField();
   const [draft, setDraft] = useState("");
   const parts: string[] = Array.isArray((v as Record<string, unknown>).partsToReplace) ? ((v as Record<string, unknown>).partsToReplace as string[]) : [];
   const land: "DE" | "ES" = (v as Record<string, unknown>).land === "ES" ? "ES" : "DE";
-  const edit = f.can("vehicules.modifier");
+  const edit = f.can("vehicules.modifier") && !readOnly;
   const has = (p: string) => parts.some((x) => x.toLowerCase() === p.toLowerCase());
   const save = (next: string[]) => { if (edit) void setParts(f.mut, v.id, next); };
   const add = (p: string) => { const s = p.trim(); if (s && !has(s) && parts.length < 40) save([...parts, s.slice(0, 80)]); };

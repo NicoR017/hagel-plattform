@@ -12,7 +12,7 @@ import { countKinds, fieldPanels } from "../expertise/fieldLogic";
 import { Chip, KIND } from "./kinds";
 
 /** `coloured`: the schema is coloured by what is done to each panel, like the technician sees it (green PDR, orange push to paint, red replace), with the legend and the counts */
-export function Erfassung({ v, coloured }: { v: LocalVehicle; coloured?: boolean }) {
+export function Erfassung({ v, coloured, readOnly }: { v: LocalVehicle; coloured?: boolean; readOnly?: boolean }) {
   const f = useField();
   const [panel, setPanelKey] = useState<string | null>(null);
   const [glass, setGlass] = useState<"ws" | "rs" | null>(null);
@@ -21,7 +21,7 @@ export function Erfassung({ v, coloured }: { v: LocalVehicle; coloured?: boolean
   const vs = vehicleSettings(cv, f.calc);
   const prices = f.can("prix.voir"), split = f.can("repartition_interne.voir");
   const e = c.es;
-  const editable = f.can("vehicules.modifier");
+  const editable = f.can("vehicules.modifier") && !readOnly;
   const a = split ? computeShares(v as never, c) : null;
   const pmap = (v.panels ?? {}) as Record<string, Panel>;
   const kinds = coloured ? fieldPanels({ panels: pmap }) : [];
@@ -69,7 +69,7 @@ export function Erfassung({ v, coloured }: { v: LocalVehicle; coloured?: boolean
           </div>
         </div>
       ))}
-      <PartsBox v={v} />
+      <PartsBox v={v} readOnly={readOnly} />
       {panel && (
         <PanelDialog panelKey={panel} panel={pmap[panel]} land={cv.land === "ES" ? "ES" : "DE"} teiler={vs.teiler} rate={vs.stundensatz} canPrice={prices}
           onSave={(p) => void setPanel(f.mut, v.id, panel, p as Record<string, unknown> | null)} onClose={() => setPanelKey(null)} />
