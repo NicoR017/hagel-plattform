@@ -23,7 +23,8 @@
 .v3 .hd .menu button,.v3 .hd .menu a{all:unset;cursor:pointer;display:block;padding:12px 14px;border-radius:8px;min-height:44px;box-sizing:border-box;font-size:14px;}
 .v3 .hd .menu button:hover,.v3 .hd .menu a:hover{background:#F2F4F7;}
 .v3 .hd .menu hr{border:none;border-top:1px solid var(--line);margin:4px 0;width:100%;}
-.v3 .syncpill{display:flex;align-items:center;gap:6px;font-size:12px;color:#C9D3E3;}
+.v3 .syncpill{display:flex;align-items:center;gap:6px;font-size:12px;color:#C9D3E3;background:transparent;border:0;padding:6px 4px;min-height:32px;font-family:inherit;cursor:pointer;}
+.v3 .syncpill:hover{color:#fff;text-decoration:underline;}
 .v3 .syncpill i{width:8px;height:8px;border-radius:50%;background:#5FD39A;display:inline-block;}
 .v3 .syncpill.pend i{background:#E7B94B;}
 .v3 .syncpill.off i{background:#E05A4A;}

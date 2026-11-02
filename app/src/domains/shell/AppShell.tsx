@@ -3,6 +3,7 @@ import { api, setAuth } from "../../api";
 import { LANG_LIST, setLang, t, useLang } from "../../shared/i18n";
 import { go, hrefOf, parentRoute, type Route } from "../../shared/route";
 import { useField } from "../../shared/store";
+import { SyncDiagnostics } from "../../shared/SyncDiagnostics";
 import { GlobalSearch } from "./GlobalSearch";
 
 export interface Crumb { label: string; to?: Route }
@@ -21,6 +22,7 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
   const f = useField();
   const lang = useLang();
   const [menu, setMenu] = useState(false);
+  const [syncDlg, setSyncDlg] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const parent = parentRoute(route, vehicleStationId);
   const pending = f.status.pendingOps + f.status.pendingUploads;
@@ -61,7 +63,7 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
           ))}
         </nav>
         <div className="right" ref={box}>
-          <span className={"syncpill " + syncCls} aria-live="polite"><i />{syncText}</span>
+          <button className={"syncpill " + syncCls} aria-live="polite" title={t("v10SyncTitle")} onClick={() => setSyncDlg(true)}><i />{syncText}</button>
           {orgs.length > 1 && (
             <select className="tool" style={{ color: "#14233B", background: "#fff" }} value={org} onChange={(e) => onOrg(e.target.value)} aria-label={t("org")}>
               {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -95,6 +97,7 @@ export function AppShell({ user, orgs, org, onOrg, route, crumbs, vehicleStation
         </div>
       </header>
       {children}
+      {syncDlg && <SyncDiagnostics onClose={() => setSyncDlg(false)} />}
     </div>
   );
 }

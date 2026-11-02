@@ -13,6 +13,7 @@ import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, statusLabel } fro
 import { ScansDialog } from "../scans/Scans";
 import { useField, useVehicles } from "../../shared/store";
 import { toast } from "../../shared/toast";
+import { SyncDiagnostics } from "../../shared/SyncDiagnostics";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -21,7 +22,13 @@ function SyncBadge() {
   const n = status.pendingOps + status.pendingUploads;
   const cls = !status.online ? "off" : n || status.syncing ? "pend" : "ok";
   const label = !status.online ? t("offline") : n ? `${n} ${t("pending")}` : status.syncing ? t("syncing") : t("synced");
-  return <span className={"syncbadge " + cls} aria-live="polite">{label}</span>;
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={"syncbadge " + cls} style={{ border: "none", cursor: "pointer" }} aria-live="polite" title={t("v10SyncTitle")} onClick={() => setOpen(true)}>{label}</button>
+      {open && <SyncDiagnostics onClose={() => setOpen(false)} />}
+    </>
+  );
 }
 
 /** Flat vehicle list. Used for the dashboard KPI drill-down (`#/?f=dash`). */

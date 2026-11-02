@@ -24,6 +24,7 @@ export interface EngineDeps {
 }
 
 const BATCH = 50;
+export interface SyncEvent { at: number; level: "info" | "warn" | "error"; msg: string }
 type Listener = (s: SyncStatus) => void;
 
 export class SyncEngine {
@@ -39,12 +40,22 @@ export class SyncEngine {
   /** called with a human-relevant notice (vehicle no longer accessible, op rejected, …) */
   onNotice?: (n: { kind: "gone" | "rejected" | "warning"; vehicleId?: string; code?: string; message?: string }) => void;
   onData?: () => void;
+  /** last events (failed sends, rejections, network errors) for the sync diagnostics; memory only */
+  private events: SyncEvent[] = [];
 
   constructor(d: EngineDeps) { this.db = d.db; this.http = d.http; this.now = d.now ?? Date.now; }
 
   get status() { return this.st; }
   subscribe(l: Listener) { this.listeners.add(l); l(this.st); return () => { this.listeners.delete(l); }; }
   private set(p: Partial<SyncStatus>) { this.st = { ...this.st, ...p }; this.listeners.forEach((l) => l(this.st)); }
+
+  get log(): readonly SyncEvent[] { return this.events; }
+  private logEvent(level: SyncEvent["level"], msg: string) { this.events = [...this.events.slice(-99), { at: this.now(), level, msg }]; }
+  /** remember why these queued ops are still here (shown in the sync diagnostics) */
+  private async markFailed(rows: OutboxRow[], msg: string) {
+    this.logEvent("error", `${rows[0]?.op.type ?? "push"} (${rows.length}): ${msg}`);
+    for (const r of rows) if (r.id != null) await this.db.outbox.update(r.id, { tries: (r.tries ?? 0) + 1, lastError: msg, lastTryAt: this.now() });
+  }
 
   async refreshCounts() {
     this.set({ pendingOps: await this.db.outbox.count(), pendingUploads: await this.db.uploads.count() });
@@ -116,15 +127,16 @@ export class SyncEngine {
       rows.forEach((r) => this.inflight.add(r.id!));
       try {
         res = await this.http("POST", "/sync/push", { ops: rows.map((r) => r.op) });
-      } catch (e) { rows.forEach((r) => this.inflight.delete(r.id!)); this.set({ online: false, lastError: (e as Error).message }); return; }
+      } catch (e) { rows.forEach((r) => this.inflight.delete(r.id!)); this.set({ online: false, lastError: (e as Error).message }); await this.markFailed(rows, `network: ${(e as Error).message}`); return; }
       rows.forEach((r) => this.inflight.delete(r.id!));
-      if (res.status === 401) { this.set({ signedOut: true }); return; }
-      if (res.status >= 500 || res.status === 429) { this.set({ lastError: `HTTP ${res.status}` }); return; }
+      if (res.status === 401) { this.logEvent("warn", "push: signed out (401)"); this.set({ signedOut: true }); return; }
+      if (res.status >= 500 || res.status === 429) { this.set({ lastError: `HTTP ${res.status}` }); await this.markFailed(rows, `HTTP ${res.status}${res.data?.error ? `: ${String(res.data.error)}` : ""}`); return; }
       // the server does not know this op type yet (409), or rejects the whole batch because it is older than the app (400 on a v3 batch): keep it queued
-      if ((res.status === 409 && res.data?.code === "unsupported_op") || (res.status === 400 && isV3Op(rows[0].op.type))) { this.set({ lastError: `HTTP ${res.status}` }); return; }
+      if ((res.status === 409 && res.data?.code === "unsupported_op") || (res.status === 400 && isV3Op(rows[0].op.type))) { this.set({ lastError: `HTTP ${res.status}` }); await this.markFailed(rows, `HTTP ${res.status}${res.data?.code ? ` ${String(res.data.code)}` : ""}: the server does not accept this change yet`); return; }
       if (res.status !== 200) {
         // the whole batch is malformed (400): isolate by dropping the first op so the queue cannot block forever
         const bad = rows[0];
+        this.logEvent("error", `${bad.op.type}: dropped, HTTP ${res.status} ${String(res.data?.error ?? "")}`);
         await this.addIssue(bad.orgId, bad.op.type, "invalid_input", String(res.data?.error ?? res.status), bad.vehicleId);
         await this.dropOpAndDependents(bad);
         continue;
@@ -159,6 +171,7 @@ export class SyncEngine {
       return;
     }
     // rejected: the server refused this change; tell the user and fall back to the server's truth
+    this.logEvent("error", `${row.op.type}: rejected ${r.code ?? "not_allowed"} ${r.message ?? ""}`.trim());
     await this.addIssue(row.orgId, row.op.type, r.code ?? "not_allowed", r.message ?? "", row.vehicleId);
     this.onNotice?.({ kind: "rejected", vehicleId: row.vehicleId, code: r.code, message: r.message });
     if (row.op.type === "photo.add") {
@@ -199,10 +212,10 @@ export class SyncEngine {
       if (epoch) q.set("epoch", epoch);
       let res: Awaited<ReturnType<Http>>;
       try { res = await this.http("GET", `/sync/pull?${q}`, undefined, { org: orgId }); }
-      catch (e) { this.set({ online: false, lastError: (e as Error).message }); return; }
-      if (res.status === 401) { this.set({ signedOut: true }); return; }
+      catch (e) { this.set({ online: false, lastError: (e as Error).message }); this.logEvent("error", `pull: network: ${(e as Error).message}`); return; }
+      if (res.status === 401) { this.logEvent("warn", "pull: signed out (401)"); this.set({ signedOut: true }); return; }
       if (res.status === 403) { await this.wipeOrg(orgId); this.set({ online: true }); return; } // lost every role in this organisation
-      if (res.status !== 200) { this.set({ lastError: `HTTP ${res.status}` }); return; }
+      if (res.status !== 200) { this.set({ lastError: `HTTP ${res.status}` }); this.logEvent("error", `pull: HTTP ${res.status}`); return; }
       this.set({ online: true, lastError: null });
       const p = res.data as PullResponse;
       if (p.reset) { resetting = true; since = 0; }
@@ -300,18 +313,20 @@ export class SyncEngine {
       try {
         const path = u.kind === "photo" ? `/files/photo/${u.refId}` : u.kind === "report" ? `/files/report/${u.refId}` : `/files/colibri/${u.refId}`;
         res = await this.http("PUT", path, undefined, { raw: b.blob, contentType: b.type, headers: u.kind === "report" ? { "x-filename": b.name ?? "" } : undefined });
-      } catch (e) { this.set({ online: false, lastError: (e as Error).message }); return; }
+      } catch (e) { this.set({ online: false, lastError: (e as Error).message }); this.logEvent("error", `upload ${u.kind}: network: ${(e as Error).message}`); await this.db.uploads.update(u.key, { lastError: `network: ${(e as Error).message}`, lastTryAt: this.now() }); return; }
       if (res.status === 200) {
         await this.db.uploads.delete(u.key);
         if (u.kind === "report") await this.db.blobs.delete(u.key); // sent: the PDF is not needed on the phone any more
         if (u.kind === "photo") await this.db.photos.update(u.refId, { hasFile: true });
       } else if (res.status === 401) { this.set({ signedOut: true }); return; }
       else if (res.status === 400 || res.status === 403 || (res.status === 404 && u.kind === "report")) {
+        this.logEvent("error", `upload ${u.kind}: refused HTTP ${res.status}`);
         await this.addIssue(u.orgId, `upload.${u.kind}`, res.status === 403 ? "forbidden" : "file_type", String(res.data?.error ?? ""), u.vehicleId);
         await this.db.uploads.delete(u.key);
       } else {
         const tries = u.tries + 1;
-        await this.db.uploads.update(u.key, { tries, nextTry: this.now() + Math.min(300_000, 2000 * 2 ** tries) });
+        this.logEvent("error", `upload ${u.kind}: HTTP ${res.status}`);
+        await this.db.uploads.update(u.key, { tries, lastError: `HTTP ${res.status}${res.data?.error ? `: ${String(res.data.error)}` : ""}`, lastTryAt: this.now(), nextTry: this.now() + Math.min(300_000, 2000 * 2 ** tries) });
       }
     }
     await this.refreshCounts();

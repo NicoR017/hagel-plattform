@@ -13,9 +13,11 @@ export interface OutboxRow {
   vehicleId: string;
   /** extra info only needed locally, e.g. the organisation of a vehicle being created */
   createdAt: number;
+  /** why it is still queued (last failed attempt), for the sync diagnostics */
+  tries?: number; lastError?: string; lastTryAt?: number;
 }
 export interface BlobRow { key: string; blob: Blob; type: string; size: number; name?: string }
-export interface UploadRow { key: string; kind: "photo" | "scan" | "report"; refId: string; vehicleId: string; orgId: string; tries: number; nextTry: number }
+export interface UploadRow { key: string; kind: "photo" | "scan" | "report"; refId: string; vehicleId: string; orgId: string; tries: number; nextTry: number; lastError?: string; lastTryAt?: number }
 export interface IssueRow { id?: number; orgId: string; at: number; opType: string; code: string; message: string; vehicleId?: string; seen: boolean }
 export interface MetaRow { key: string; value: unknown }
 
