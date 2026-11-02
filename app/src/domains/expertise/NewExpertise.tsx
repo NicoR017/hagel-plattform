@@ -1,5 +1,5 @@
 import { SCAN_SORTS, loadScanSort, saveScanSort, sortScans, type ScanSort } from "../scans/scanSort";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { t } from "../../shared/i18n";
 import { applyColibriToVehicle, readColibriFile } from "../../shared/sync/colibriImport";
@@ -11,6 +11,49 @@ import { ScanInfo, useStationScans, type Scan } from "../scans/ScanList";
 
 interface ImportResult { status: string; vehicleId?: string; message?: string; check?: { ok: boolean } }
 
+/** Scrollable scan list: rows drift slightly against the scroll (parallax) so the stack feels deep. */
+function ParallaxScanList({ scans, stationId, sortBy, busy, onTake }: {
+  scans: Scan[]; stationId: string; sortBy: ScanSort; busy: string; onTake: (s: Scan) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const paint = () => {
+    const el = box.current;
+    if (!el) return;
+    const mid = el.scrollTop + el.clientHeight / 2;
+    el.querySelectorAll<HTMLElement>("[data-parallax]").forEach((row) => {
+      const c = row.offsetTop + row.offsetHeight / 2;
+      const d = (c - mid) / Math.max(el.clientHeight, 1);
+      const y = Math.max(-22, Math.min(22, -d * 18));
+      const s = 1 - Math.min(0.05, Math.abs(d) * 0.05);
+      row.style.transform = `translate3d(0, ${y.toFixed(1)}px, 0) scale(${s.toFixed(3)})`;
+    });
+  };
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let raf = 0;
+    const bump = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(paint); };
+    el.addEventListener("scroll", bump, { passive: true });
+    const ro = new ResizeObserver(bump);
+    ro.observe(el);
+    bump();
+    return () => { el.removeEventListener("scroll", bump); ro.disconnect(); cancelAnimationFrame(raf); };
+  }, [scans, sortBy]);
+
+  return (
+    <div ref={box} className="newxp-scans" role="list">
+      <div className="rows newxp-stack">
+        {sortScans(scans, sortBy).map((s) => (
+          <div key={s.partitionKey + s.rowKey} className="vrow" data-parallax role="listitem" style={{ padding: 12 }}>
+            <ScanInfo s={s} stationId={stationId} />
+            <button className="btn primary" disabled={!!busy || !s.importable} onClick={() => onTake(s)}>{busy === s.partitionKey ? t("preparing") : t("accept")}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Step 0 of the assessment: take over a new scan of this station, import a Colibri PDF by hand, or start without a scan. */
 export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mode }) {
   const f = useField();
@@ -18,12 +61,11 @@ export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mod
   const [allStations, setAllStations] = useState(false); // also the scans mapped to another station: they are loaded into THIS one
   const [busy, setBusy] = useState("");
   const pdf = useRef<HTMLInputElement>(null);
-  const ctx = { stationId, mode };
   const canScan = f.can("colibri.importer");
 
   const { scans, err } = useStationScans(stationId, canScan, allStations);
 
-  const open = (id: string) => { void setPrefs(f.db, { lastStationId: stationId, lastMode: mode }); go({ page: "expertise", id, step: "basis", ctx }); };
+  const open = (id: string) => { void setPrefs(f.db, { lastStationId: stationId, lastMode: mode }); go({ page: "expertise", id, step: "basis", ctx: { stationId, mode } }); };
 
   const take = async (s: Scan) => {
     setBusy(s.partitionKey);
@@ -58,6 +100,17 @@ export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mod
         <p className="sub" style={{ margin: "2px 0 0" }}>{f.stationName(stationId)} · {t("v4Step0")}</p>
       </div>
 
+      {/* PDF / without a scan stay above the list so you never scroll past every scan to reach them */}
+      <section style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {canScan && (
+          <>
+            <button className="btn" disabled={!!busy} onClick={() => pdf.current?.click()}>📄 {busy === "pdf" ? t("preparing") : t("v4ManualPdf")}</button>
+            <input ref={pdf} type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ""; if (fl) void fromPdf(fl); }} />
+          </>
+        )}
+        {f.can("vehicules.creer") && <button className="btn" disabled={!!busy} onClick={() => void without()}>✍ {t("v4NoScan")}</button>}
+      </section>
+
       {canScan && (
         <section className="panel" style={{ padding: 16 }}>
           <h2 style={{ fontSize: 16, marginBottom: 10 }}>☁ {t("v4NewScans")}</h2>
@@ -68,26 +121,11 @@ export function NewExpertise({ stationId, mode }: { stationId: string; mode: Mod
             <select className="sel" style={{ width: "auto", minHeight: 40 }} value={sortBy} onChange={(e) => { const v = e.target.value as ScanSort; setSortBy(v); saveScanSort(v); }}>
               {SCAN_SORTS.map((k) => <option key={k} value={k}>{t(("v6ScanSort_" + k) as never)}</option>)}
             </select></label>
-          <div className="rows">
-            {sortScans(scans ?? [], sortBy).map((s) => (
-              <div key={s.partitionKey + s.rowKey} className="vrow" style={{ padding: 12 }}>
-                <ScanInfo s={s} stationId={stationId} />
-                <button className="btn primary" disabled={!!busy || !s.importable} onClick={() => void take(s)}>{busy === s.partitionKey ? t("preparing") : t("accept")}</button>
-              </div>
-            ))}
-          </div>
+          {!!scans?.length && (
+            <ParallaxScanList scans={scans} stationId={stationId} sortBy={sortBy} busy={busy} onTake={(s) => void take(s)} />
+          )}
         </section>
       )}
-
-      <section style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        {canScan && (
-          <>
-            <button className="btn" disabled={!!busy} onClick={() => pdf.current?.click()}>📄 {busy === "pdf" ? t("preparing") : t("v4ManualPdf")}</button>
-            <input ref={pdf} type="file" accept="application/pdf,.pdf" style={{ display: "none" }} onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ""; if (fl) void fromPdf(fl); }} />
-          </>
-        )}
-        {f.can("vehicules.creer") && <button className="btn" disabled={!!busy} onClick={() => void without()}>✍ {t("v4NoScan")}</button>}
-      </section>
     </main>
   );
 }
