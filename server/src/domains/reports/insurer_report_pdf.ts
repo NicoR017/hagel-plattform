@@ -2,13 +2,13 @@
 import { eq } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { generateInsurerReport, insurerReportFileName, type InsurerReportData, type InsurerReportKpi, type InsurerReportLang, type InsurerReportRow } from "@hagel/documents";
-import type { Db } from "./db";
+import type { Db } from "../../db";
 import { INSURER_KPIS, kpisFromFacts, loadReportFacts, periodsUpTo, type InsurerKpiResult, type Period, type ReportFrequency, type ReportScope } from "./insurer_reports";
-import { loadMethodMap, methodOf } from "./methods";
-import { defaultLetterhead, letterheadOfCompany } from "./repair_report";
-import { insurerReports, insurers, stations } from "./schema";
-import type { Storage } from "./storage";
-import { calcSettings, flatten, loadOrgSettings } from "./sync";
+import { loadMethodMap, methodOf } from "../admin/methods";
+import { defaultLetterhead, letterheadOfCompany } from "../repair/report";
+import { insurerReports, insurers, stations } from "../../schema";
+import type { Storage } from "../../storage";
+import { calcSettings, flatten, loadOrgSettings } from "../vehicles/sync";
 
 type Report = typeof insurerReports.$inferSelect;
 const round2 = (n: number) => Math.round(n * 100) / 100;

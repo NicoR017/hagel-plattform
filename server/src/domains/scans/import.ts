@@ -2,22 +2,23 @@ import { and, eq, lt, or, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { isPlaceType } from "@hagel/shared";
 import { applyColibri, colibriPages, parseColibri, scanCheck, titleCase } from "@hagel/colibri";
-import { audit } from "./audit";
+import { audit } from "../../audit";
 import type { AzureSource } from "./azure";
-import type { ScanCatalog } from "./domains/scans";
-import { azureCatalog, parsePhotoName, photoStems, positionLabel, POSITIONS } from "./domains/scans";
-import { loadMappingContext, mapScan, tenantsOfOrg, type ScanMapping } from "./azure_sync";
-import { methodForInsurer } from "./methods";
-import type { Db } from "./db";
-import type { Hub } from "./hub";
-import { can, canOrg, type Principal } from "./permissions";
-import { colibriScans, companies, photos, stations, vehicleStatusHistory, vehicles } from "./schema";
-import type { Storage } from "./storage";
-import { colibriKey, loadOrgSettings, nextSeq, photoKey } from "./sync";
+import type { ScanCatalog } from "./catalog";
+import { azureCatalog } from "./azureCatalog";
+import { parsePhotoName, pdfBlobName, photoStems, positionLabel, PICTURES_CONTAINER, POSITIONS, SCANS_CONTAINER } from "./blobs";
+import { loadMappingContext, mapScan, tenantsOfOrg, type ScanMapping } from "./mirror";
+import { methodForInsurer } from "../admin/methods";
+import type { Db } from "../../db";
+import type { Hub } from "../../hub";
+import { can, canOrg, type Principal } from "../../permissions";
+import { colibriScans, companies, photos, stations, vehicleStatusHistory, vehicles } from "../../schema";
+import type { Storage } from "../../storage";
+import { colibriKey, loadOrgSettings, nextSeq, photoKey } from "../vehicles/sync";
 
 export {
   parsePhotoName, pdfBlobName, photoStems, positionLabel, PICTURES_CONTAINER, SCANS_CONTAINER,
-} from "./domains/scans";
+};
 
 
 export type ImportStatus = "imported" | "already" | "not_found" | "not_allowed" | "unmapped" | "pdf_missing" | "pdf_unreadable" | "error";

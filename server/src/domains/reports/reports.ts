@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { Db } from "./db";
-import { insurers, stationInsurers, stations, vehicles } from "./schema";
+import type { Db } from "../../db";
+import { insurers, stationInsurers, stations, vehicles } from "../../schema";
 
 /** kva / reparation: reports for the carrosserie and (by its rules) the insurer. termin: repair-calendar e-mails, never to an insurer. */
 export type ReportType = "kva" | "reparation" | "termin";

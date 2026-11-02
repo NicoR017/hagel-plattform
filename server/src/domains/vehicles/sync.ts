@@ -5,20 +5,20 @@ import {
   DEFAULT_ORG_SETTINGS, PERMISSIONS, PRICE_HEADER_FIELDS, REFUSABLE_FROM, isPlaceType, parseRefuseMotif, type ClientPhoto, type ClientStation, type ClientVehicle, type ErrorCode, type Op, type OpResult,
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
-import { audit } from "./audit";
-import { finishHandover } from "./handover";
-import type { Mailer } from "./email";
-import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "./methods";
-import { applyRepairOp, cancelWhenRefused, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor, sendBookingMail, sendRefusalMail } from "./repair";
-import { recipientsOfVehicle } from "./reports";
-import { replyToFor } from "./reply_to";
-import type { Db } from "./db";
-import type { Hub } from "./hub";
-import { can, canOrg, effectivePermissions, fieldProfile, filterFields, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
+import { audit } from "../../audit";
+import { finishHandover } from "../repair/handover";
+import type { Mailer } from "../../email";
+import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "../admin/methods";
+import { applyRepairOp, cancelWhenRefused, fieldMovesOf, isRepairOp, partsToTodos, repairDataFor, sendBookingMail, sendRefusalMail } from "../repair/repair";
+import { recipientsOfVehicle } from "../reports/reports";
+import { replyToFor } from "../reports/reply_to";
+import type { Db } from "../../db";
+import type { Hub } from "../../hub";
+import { can, canOrg, effectivePermissions, fieldProfile, filterFields, roleRepairSteps, type Principal, type VehicleRef } from "../../permissions";
 import {
   colibriScans, calcMethods, calcMethodVersions, insurerMethods, campaignStations, campaigns, companies, insurers, memberships, orgSettings, photos, repairEvents, reportSends, roleAssignments, roles, stationInsurers, stations, syncOps, technicians, users, vehicleAssignments, vehicleHandovers, vehicleMoves, vehicleStatusHistory, vehicles,
-} from "./schema";
-import type { Storage } from "./storage";
+} from "../../schema";
+import type { Storage } from "../../storage";
 
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type VehicleRow = typeof vehicles.$inferSelect;

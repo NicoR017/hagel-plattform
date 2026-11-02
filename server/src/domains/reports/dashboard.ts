@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { computeShares, computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { REPAIR_STAGES, STATUSES, isOffRepairHold } from "@hagel/shared";
-import type { Db } from "./db";
-import { effectivePermissions, type Principal } from "./permissions";
-import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
-import { loadMethodMap, methodOf } from "./methods";
-import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "./sync";
+import type { Db } from "../../db";
+import { effectivePermissions, type Principal } from "../../permissions";
+import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "../../schema";
+import { loadMethodMap, methodOf } from "../admin/methods";
+import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "../vehicles/sync";
 
 export interface DashboardFilters { sites?: string[]; campaign?: string; client?: string; insurer?: string; from?: string; to?: string }
 

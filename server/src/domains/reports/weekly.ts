@@ -5,14 +5,14 @@ import { generateTechnicianWorksheets, techPdfFileName, type TechSheetData } fro
 import { emailSchema } from "@hagel/shared";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { audit } from "./audit";
-import { HttpError } from "./auth";
+import { audit } from "../../audit";
+import { HttpError } from "../auth/auth";
 import { buildTechSheets, type TechSheet } from "./dashboard";
-import type { Db } from "./db";
-import type { Mailer } from "./email";
-import type { Env } from "./env";
-import { effectivePermissions } from "./permissions";
-import { technicians, users } from "./schema";
+import type { Db } from "../../db";
+import type { Mailer } from "../../email";
+import type { Env } from "../../env";
+import { effectivePermissions } from "../../permissions";
+import { technicians, users } from "../../schema";
 
 interface Deps { db: Db; mailer: Mailer; needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env>; validationHook: (r: { success: boolean }, c: Context) => Response | undefined }
 

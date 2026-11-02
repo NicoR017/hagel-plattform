@@ -6,19 +6,19 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { insurerReportFileName, type InsurerReportLang } from "@hagel/documents";
 import { LANGS, emailSchema, isPlaceType } from "@hagel/shared";
-import { audit } from "./audit";
-import { HttpError } from "./auth";
-import { isIsoDate, localDay } from "./colibri_rules";
-import type { Db } from "./db";
-import type { Env } from "./env";
+import { audit } from "../../audit";
+import { HttpError } from "../auth/auth";
+import { isIsoDate, localDay } from "../scans/rules";
+import type { Db } from "../../db";
+import type { Env } from "../../env";
 import { DEFAULT_INSURER_KPIS, INSURER_KPIS, REPORT_FREQUENCIES, computeInsurerKpis, isValidTimeZone, lastCompletePeriod, type ReportFrequency } from "./insurer_reports";
-import { hasOrgPermission } from "./permissions";
-import type { Mailer } from "./email";
+import { hasOrgPermission } from "../../permissions";
+import type { Mailer } from "../../email";
 import { buildInsurerReportPdf } from "./insurer_report_pdf";
 import { nextSends, reportMailFor, reportReplyTo, resendInsurerReport, sendInsurerReportNow, sendInsurerReportTest } from "./insurer_report_send";
 import { unknownVars } from "./insurer_report_text";
-import { companies, insurerReportRuns, insurerReports, insurers, stations, users } from "./schema";
-import type { Storage } from "./storage";
+import { companies, insurerReportRuns, insurerReports, insurers, stations, users } from "../../schema";
+import type { Storage } from "../../storage";
 
 interface Deps {
   db: Db; storage: Storage; mailer: Mailer;

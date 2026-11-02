@@ -1,14 +1,14 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AzureSource, TableRow } from "./azure";
 import { colStr } from "./azure";
-import type { CatalogScan, ScanCatalog } from "./domains/scans";
-import { azureCatalog } from "./domains/scans";
-import type { Db } from "./db";
-import { assignmentAt, localDay, tzOfOrgCountry, type AssignmentRow } from "./colibri_rules";
+import type { CatalogScan, ScanCatalog } from "./catalog";
+import { azureCatalog } from "./azureCatalog";
+import type { Db } from "../../db";
+import { assignmentAt, localDay, tzOfOrgCountry, type AssignmentRow } from "./rules";
 import {
   azureBcInsuranceLinks, azureBusinessCustomers, azureInsurances, azureSyncRuns, azureSyncState, azureTenants, colibriDeviceAssignments, colibriDevices, colibriScans,
   insurers, orgTenants, organizations, stationInsurers, stations,
-} from "./schema";
+} from "../../schema";
 
 export const normalizeName = (s: unknown) => String(s ?? "").normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
 const OVERLAP_MS = 10 * 60_000;

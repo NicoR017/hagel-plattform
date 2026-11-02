@@ -11,7 +11,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { audit } from "../audit";
 import { createDb, type Db } from "../db";
 import { campaignStations, citasLinks, invitations, organizations, repairBookings, roleAssignments, stations, vehicleMoves, vehicles } from "../schema";
-import { nextSeq } from "../sync";
+import { nextSeq } from "../domains/vehicles/sync";
 
 export const TARGET_STATION_NAME = "chapauto";
 export const MOVE_NOTE = "moved to Chapauto – body shops are no longer stations";

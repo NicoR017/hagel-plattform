@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { auditLog, vehicleAssignments, vehicles, users } from "../src/schema";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
-import { berlinDate } from "../src/dashboard";
+import { berlinDate } from "../src/domains/reports/dashboard";
 
 let c: Ctx;
 let A: string, B: string, MINI: string, CARRO: string; // A = hall, B = other hall, CARRO = customer carrosserie

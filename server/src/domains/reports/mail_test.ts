@@ -1,5 +1,5 @@
-import type { Config } from "./config";
-import type { Mailer, Mail } from "./email";
+import type { Config } from "../../config";
+import type { Mailer, Mail } from "../../email";
 
 export type TestAttachment = "none" | "small" | "large";
 const SIZES: Record<Exclude<TestAttachment, "none">, number> = { small: 100 * 1024, large: 5 * 1024 * 1024 };

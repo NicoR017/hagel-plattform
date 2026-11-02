@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import sharp from "sharp";
-import { AzureRest, odataString, sasExpiry } from "../src/azure";
-import { parsePhotoName, pdfBlobName, photoStems, positionLabel } from "../src/azure_import";
-import { mapScan, normalizeName, scanFromRow, syncAzure, type MappingContext } from "../src/azure_sync";
+import { AzureRest, odataString, sasExpiry } from "../src/domains/scans/azure";
+import { parsePhotoName, pdfBlobName, photoStems, positionLabel } from "../src/domains/scans/import";
+import { mapScan, normalizeName, scanFromRow, syncAzure, type MappingContext } from "../src/domains/scans/mirror";
 import { campaignStations, campaigns, colibriScans, photos, stationInsurers, stations, vehicles } from "../src/schema";
 import { call, inviteAndAccept, pull, setup, uuid, type Ctx } from "./helpers";
 
@@ -236,7 +236,7 @@ describe("sync (mirrors, incremental, reconcile)", () => {
 describe("mapping rules (tenant isolation is a hard rule)", () => {
   let ctx: MappingContext;
   beforeAll(async () => {
-    const { loadMappingContext } = await import("../src/azure_sync");
+    const { loadMappingContext } = await import("../src/domains/scans/mirror");
     ctx = await loadMappingContext(c.h.db);
   });
   const row = (o: Record<string, unknown> = {}) => ({ tenant: "TenantA", location: "Nave Madrid", colibriNumber: "C-100", scanDateTime: new Date("2026-10-19T16:27:00Z"), businessCustomer: "Carrosserie Talavera - Allianz", scanFailed: false, ...o }) as never;

@@ -37,10 +37,22 @@ app/src/
 ## Backend
 
 ```
-server/src/domains/scans/
-  catalog.ts       # ScanCatalog port (no Azure names)
-  azureCatalog.ts  # Azure Tables + blobs adapter
-  blobs.ts         # PDF / picture blob helpers
+server/src/
+  app.ts / index.ts / worker.ts   # composition root (wire domains, no business CRUD)
+  schema.ts, db.ts, permissions.ts, storage.ts, …
+
+  domains/
+    auth/        # login, sessions, invitations, principal
+    vehicles/    # sync push/pull, photos, OCR entry
+    expertise/   # (logic lives with vehicles sync today)
+    repair/      # board ops, handover, repair report PDF
+    citas/       # PDR Citas calendar source + routes
+    scans/       # Colibri mirror/import, devices, ScanCatalog
+      catalog.ts / azureCatalog.ts / blobs.ts
+    admin/       # org CRUD, roles, stations, methods, letterheads
+    reports/     # dashboard, insurer reports, mails, weekly
 ```
 
 `syncAzure` and `importScans` talk to `ScanCatalog`. To use another source later, add an adapter that implements the same port.
+
+Bug → open `server/src/domains/<domain>/`. Infrastructure (DB, mail, storage, hub) stays at `server/src/` root.

@@ -7,12 +7,12 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { systemMethodDef, type CalcMethodDef, type EsMatrix } from "@hagel/calc";
 import { insurerMethodsInput, methodInput, methodParamsFor, type ClientMethod, type Permission } from "@hagel/shared";
-import { audit } from "./audit";
-import { HttpError } from "./auth";
-import type { Db } from "./db";
-import type { Env } from "./env";
-import type { Hub } from "./hub";
-import { calcMethodVersions, calcMethods, insurerMethods, insurers, vehicles } from "./schema";
+import { audit } from "../../audit";
+import { HttpError } from "../auth/auth";
+import type { Db } from "../../db";
+import type { Env } from "../../env";
+import type { Hub } from "../../hub";
+import { calcMethodVersions, calcMethods, insurerMethods, insurers, vehicles } from "../../schema";
 
 /** `${methodId}:${version}` -> definition */
 export type MethodMap = Map<string, CalcMethodDef>;

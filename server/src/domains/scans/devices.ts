@@ -3,16 +3,16 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { isPlaceType } from "@hagel/shared";
-import { audit } from "./audit";
-import { HttpError } from "./auth";
-import { loadMappingContext, mapScan, newScansOfTenants, tenantsOfOrg } from "./azure_sync";
-import type { Db } from "./db";
-import type { Env } from "./env";
-import type { Hub } from "./hub";
-import { canOrg, hasOrgPermission, sitesWith } from "./permissions";
-import { colibriDeviceAssignments, colibriDevices, colibriScans, stations, users } from "./schema";
+import { audit } from "../../audit";
+import { HttpError } from "../auth/auth";
+import { loadMappingContext, mapScan, newScansOfTenants, tenantsOfOrg } from "./mirror";
+import type { Db } from "../../db";
+import type { Env } from "../../env";
+import type { Hub } from "../../hub";
+import { canOrg, hasOrgPermission, sitesWith } from "../../permissions";
+import { colibriDeviceAssignments, colibriDevices, colibriScans, stations, users } from "../../schema";
 
-import { addDays, assignmentAt, isIsoDate, localDay, tzOfOrgCountry, type AssignmentRow, type DeviceRow } from "./colibri_rules";
+import { addDays, assignmentAt, isIsoDate, localDay, tzOfOrgCountry, type AssignmentRow, type DeviceRow } from "./rules";
 export { addDays, assignmentAt, isIsoDate, localDay, tzOfOrgCountry, type AssignmentRow, type DeviceRow };
 
 // ------------------------------------------------------------------ moving a scanner

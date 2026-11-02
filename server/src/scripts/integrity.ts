@@ -11,8 +11,8 @@ import { and, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { createDb } from "../db";
 import { organizations, stations, vehicles } from "../schema";
-import { loadMethodMap, methodOf } from "../methods";
-import { calcSettings, flatten, loadOrgSettings } from "../sync";
+import { loadMethodMap, methodOf } from "../domains/admin/methods";
+import { calcSettings, flatten, loadOrgSettings } from "../domains/vehicles/sync";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 

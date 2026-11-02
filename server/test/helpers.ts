@@ -7,9 +7,9 @@ import { MemoryMailer } from "../src/email";
 import { Hub } from "../src/hub";
 import { MemoryStorage } from "../src/storage";
 import { seed } from "../src/seed";
-import { FakeAzure } from "../src/azure_fake";
-import { FakeCitas } from "../src/citas_fake";
-import type { FetchLike } from "../src/ocr";
+import { FakeAzure } from "../src/domains/scans/azure_fake";
+import { FakeCitas } from "../src/domains/citas/fake";
+import type { FetchLike } from "../src/domains/scans/ocr";
 
 export interface Ctx {
   h: DbHandle; app: ReturnType<typeof createApp>; mailer: MemoryMailer; storage: MemoryStorage; hub: Hub;

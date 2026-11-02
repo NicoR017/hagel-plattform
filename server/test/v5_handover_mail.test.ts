@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handoverMail } from "../src/mails";
+import { handoverMail } from "../src/domains/reports/mails";
 
 const info = { plate: "1234-ABC", model: "Renault Clio", stationName: "Taller Sur", customerName: "Ana López", senderName: "Marta" };
 

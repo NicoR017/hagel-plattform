@@ -1,8 +1,8 @@
 // V6, automatic insurer reports: the periods and the figures. One function computes the figures, so the preview, the PDF and the e-mail always agree.
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { Db } from "./db";
-import { addDays, isIsoDate, localDay } from "./colibri_rules";
-import { colibriScans, repairBookings, stations, vehicleStatusHistory, vehicles } from "./schema";
+import type { Db } from "../../db";
+import { addDays, isIsoDate, localDay } from "../scans/rules";
+import { colibriScans, repairBookings, stations, vehicleStatusHistory, vehicles } from "../../schema";
 
 /** the figures a report can show, in their default order */
 export const INSURER_KPIS = ["inspected", "repaired", "backlog", "upcoming", "progress", "refused"] as const;

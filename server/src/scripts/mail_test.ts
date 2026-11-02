@@ -2,7 +2,7 @@
 // Same test as POST /api/admin/mail-test, with the environment of the shell (GRAPH_*, EMAIL_*, MAIL_MODE...). Not written to the audit log (no database).
 import { loadConfig } from "../config";
 import { ModeMailer, makeBaseMailer } from "../email";
-import { runMailTest, type TestAttachment } from "../mail_test";
+import { runMailTest, type TestAttachment } from "../domains/reports/mail_test";
 
 const arg = (n: string) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : undefined; };
 const cfg = loadConfig();

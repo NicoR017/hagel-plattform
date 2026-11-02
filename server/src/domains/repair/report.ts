@@ -6,23 +6,23 @@ import { readFile } from "node:fs/promises";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { generateRepairPhotoReport, type DocPhoto, type DocVehicle, type HandoverDoc, type Letterhead } from "@hagel/documents";
-import { audit } from "./audit";
-import type { Db } from "./db";
-import type { Mailer } from "./email";
-import { reportMail } from "./mails";
-import { loadMethodMap, methodOf } from "./methods";
-import { recipientsOfVehicle } from "./reports";
-import { replyToFor } from "./reply_to";
-import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicleHandovers, vehicles } from "./schema";
-import type { Storage } from "./storage";
-import { calcSettings, flatten, loadOrgSettings } from "./sync";
+import { audit } from "../../audit";
+import type { Db } from "../../db";
+import type { Mailer } from "../../email";
+import { reportMail } from "../reports/mails";
+import { loadMethodMap, methodOf } from "../admin/methods";
+import { recipientsOfVehicle } from "../reports/reports";
+import { replyToFor } from "../reports/reply_to";
+import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicleHandovers, vehicles } from "../../schema";
+import type { Storage } from "../../storage";
+import { calcSettings, flatten, loadOrgSettings } from "../vehicles/sync";
 
 export interface ReportDeps { db: Db; storage: Storage; mailer: Mailer }
 type VehicleRow = typeof vehicles.$inferSelect;
 
 let bundledLogo: Promise<Letterhead["logo"] | undefined> | null = null;
 /** The PDR Team logo shipped with the server (vehicles from before letterheads that never chose "without logo"). */
-const pdrLogo = () => (bundledLogo ??= readFile(fileURLToPath(new URL("../assets/pdr-team-logo.jpg", import.meta.url)))
+const pdrLogo = () => (bundledLogo ??= readFile(fileURLToPath(new URL("../../../assets/pdr-team-logo.jpg", import.meta.url)))
   .then((b) => ({ bytes: new Uint8Array(b), kind: "jpg" as const, width: 1000, height: 276 })).catch(() => undefined));
 
 /** the letterhead of one of the organisation's companies (null when it does not exist or belongs to another organisation) */

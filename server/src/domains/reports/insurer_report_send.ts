@@ -3,18 +3,18 @@
 // period, whatever the number of servers or restarts).
 import { and, eq, isNull } from "drizzle-orm";
 import { insurerReportFileName, type InsurerReportLang } from "@hagel/documents";
-import { audit } from "./audit";
-import { HttpError } from "./auth";
-import { addDays, localDay } from "./colibri_rules";
-import type { Db } from "./db";
-import type { Mailer } from "./email";
+import { audit } from "../../audit";
+import { HttpError } from "../auth/auth";
+import { addDays, localDay } from "../scans/rules";
+import type { Db } from "../../db";
+import type { Mailer } from "../../email";
 import { buildInsurerReportData, buildInsurerReportPdf } from "./insurer_report_pdf";
 import { renderReportMail, templateVars, type RenderedMail } from "./insurer_report_text";
 import { lastCompletePeriod, nextPeriod, type Period, type ReportFrequency } from "./insurer_reports";
-import { defaultLetterhead, letterheadOfCompany } from "./repair_report";
+import { defaultLetterhead, letterheadOfCompany } from "../repair/report";
 import { replyToInfo } from "./reply_to";
-import { insurerReportRuns, insurerReports, users } from "./schema";
-import type { Storage } from "./storage";
+import { insurerReportRuns, insurerReports, users } from "../../schema";
+import type { Storage } from "../../storage";
 
 export interface SendDeps { db: Db; storage: Storage; mailer: Mailer }
 export type ReportRow = typeof insurerReports.$inferSelect;

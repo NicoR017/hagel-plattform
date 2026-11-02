@@ -3,21 +3,21 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { NEXT_AFTER_STEP, PHOTO_REQUIRED_STAGES, ROLE_REPAIR_STEPS, parseRefuseMotif, type ClientRepair, type Op, type RoleRepairStep } from "@hagel/shared";
-import { audit } from "./audit";
-import type { Db } from "./db";
-import type { Mailer } from "./email";
-import { bookingMail, refusalMail } from "./mails";
-import { effectivePermissions, fieldProfile, roleRepairSteps, type Principal, type VehicleRef } from "./permissions";
-import { loadMethodMap, methodOf } from "./methods";
-import { autoRepairReport } from "./repair_report";
-import type { Storage } from "./storage";
-import { recipientsForStation, recipientsOfVehicle } from "./reports";
-import { replyToFor } from "./reply_to";
+import { audit } from "../../audit";
+import type { Db } from "../../db";
+import type { Mailer } from "../../email";
+import { bookingMail, refusalMail } from "../reports/mails";
+import { effectivePermissions, fieldProfile, roleRepairSteps, type Principal, type VehicleRef } from "../../permissions";
+import { loadMethodMap, methodOf } from "../admin/methods";
+import { autoRepairReport } from "./report";
+import type { Storage } from "../../storage";
+import { recipientsForStation, recipientsOfVehicle } from "../reports/reports";
+import { replyToFor } from "../reports/reply_to";
 import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
   vehicleComments, vehicleMoves, vehicleStatusHistory, vehicles,
-} from "./schema";
-import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "./sync";
+} from "../../schema";
+import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
 
 const BOOKABLE = ["arrive", "besichtigung", "attente"] as const;
 

@@ -1,5 +1,5 @@
-import type { AzureSource, TableRow } from "../../azure";
-import { colStr } from "../../azure";
+import type { AzureSource, TableRow } from "./azure";
+import { colStr } from "./azure";
 import { pdfBlobName, PICTURES_CONTAINER, SCANS_CONTAINER } from "./blobs";
 import type {
   CatalogBusinessCustomer,

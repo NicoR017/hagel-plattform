@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { Db } from "./db";
-import { memberships, organizations, roleAssignments, roles, users } from "./schema";
+import type { Db } from "../../db";
+import { memberships, organizations, roleAssignments, roles, users } from "../../schema";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { seedRoles } from "./app";
-import { seedMethods } from "./methods";
-import { seedCompanies } from "./companies_seed";
+import { seedMethods } from "./domains/admin/methods";
+import { seedCompanies } from "./domains/admin/companies_seed";
 import type { Storage } from "./storage";
 import type { Db } from "./db";
 import { memberships, organizations, stations, users } from "./schema";

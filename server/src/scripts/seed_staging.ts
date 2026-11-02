@@ -7,8 +7,8 @@ import { eq } from "drizzle-orm";
 import { createDb, type Db } from "../db";
 import { hashPassword } from "../crypto";
 import { seed } from "../seed";
-import { systemMethodFor } from "../methods";
-import { nextSeq } from "../sync";
+import { systemMethodFor } from "../domains/admin/methods";
+import { nextSeq } from "../domains/vehicles/sync";
 import { insurers, memberships, organizations, roleAssignments, roles, stationInsurers, stations, technicians, users, vehicleAssignments, vehicles, vehicleStatusHistory } from "../schema";
 
 const PEOPLE = [

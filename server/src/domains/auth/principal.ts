@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import type { Scope } from "@hagel/shared";
-import type { Db } from "./db";
-import type { Principal } from "./permissions";
-import { roleAssignments, roles, technicians, users } from "./schema";
+import type { Db } from "../../db";
+import type { Principal } from "../../permissions";
+import { roleAssignments, roles, technicians, users } from "../../schema";
 
 export async function loadPrincipal(db: Db, userId: string): Promise<Principal | null> {
   const [u] = await db.select().from(users).where(eq(users.id, userId));

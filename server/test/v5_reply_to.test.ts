@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { PDF, call, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
-import { replyToInfo } from "../src/reply_to";
+import { replyToInfo } from "../src/domains/reports/reply_to";
 import { reportSends, users } from "../src/schema";
 
 let c: Ctx;

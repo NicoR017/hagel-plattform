@@ -3,15 +3,15 @@ import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { HttpError } from "./auth";
-import type { Db } from "./db";
-import type { Env } from "./env";
-import type { Mailer } from "./email";
-import type { Storage } from "./storage";
-import { sendRepairReport } from "./repair_report";
-import { canOrg, effectivePermissions } from "./permissions";
-import { repairBookings, repairEvents, reportSends, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "./schema";
-import { refOf } from "./sync";
+import { HttpError } from "../auth/auth";
+import type { Db } from "../../db";
+import type { Env } from "../../env";
+import type { Mailer } from "../../email";
+import type { Storage } from "../../storage";
+import { sendRepairReport } from "./report";
+import { canOrg, effectivePermissions } from "../../permissions";
+import { repairBookings, repairEvents, reportSends, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "../../schema";
+import { refOf } from "../vehicles/sync";
 
 interface Deps { db: Db; storage: Storage; mailer: Mailer; needAuth: MiddlewareHandler<Env>; needOrg: MiddlewareHandler<Env> }
 
