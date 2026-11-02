@@ -137,13 +137,14 @@ describe("dashboard", () => {
 
   it("revenue: only with prix.voir; the internal split only with repartition_interne.voir", async () => {
     const sup = (await dash(c.superToken)).body.revenue;
+    // revenue counts the cars repaired (fertig / rendu) in the period, not the assessed ones: only d (rendu) so far
     expect(sup.total).toBeGreaterThan(0);
-    expect(sup.n).toBe(4);
+    expect(sup.n).toBe(1); expect(sup.ids).toEqual([ids.d]);
     expect(sup.bySite.reduce((a: number, x: any) => a + x.net, 0)).toBeCloseTo(sup.total, 1);
     expect(sup.byClient[0].name).not.toBe("—");
     expect(sup.byMonth).toHaveLength(1);
-    expect(sup.byMonth[0].month).toBe("2026-10");
-    expect(sup.split).toMatchObject({ n: 4 });
+    expect(sup.byMonth[0].month).toBe(berlinDate(new Date()).slice(0, 7)); // dated by the day it became rendu
+    expect(sup.split).toMatchObject({ n: 1 });
     expect(sup.split.technicians + sup.split.commissions + sup.split.rest).toBeCloseTo(sup.total, 1);
     // a role with dashboard.voir but without prices
     const noPrice = await call(c, "POST", "/admin/roles", { token: c.superToken, org: c.orgES, body: { name: "Dash only", scope: "station", permissions: ["vehicules.voir", "dashboard.voir"] } });
@@ -157,7 +158,9 @@ describe("dashboard", () => {
 
   it("period filter limits the revenue and the finished counts", async () => {
     expect((await dash(c.superToken, "?from=2027-01-01")).body.revenue.n).toBe(0);
-    expect((await dash(c.superToken, "?from=2026-10-01&to=2026-10-31")).body.revenue.n).toBe(4);
+    const day = berlinDate(new Date());
+    expect((await dash(c.superToken, `?from=${day}&to=${day}`)).body.revenue.n).toBe(1);
+    expect((await dash(c.superToken, "?to=2020-01-01")).body.revenue.n).toBe(0); // repaired today, not before
   });
 });
 

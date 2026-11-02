@@ -65,6 +65,13 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   const histBy = new Map<string, typeof history>();
   for (const h of history) histBy.set(h.vehicleId, [...(histBy.get(h.vehicleId) ?? []), h]);
 
+  // the day a car was repaired: first "fertig" (or "rendu" if handed back directly) in the status history; null while not repaired
+  const repairedDay = (id: string): string | null => {
+    const e = (histBy.get(id) ?? []).find((h) => h.statut === "fertig" || h.statut === "rendu");
+    return e ? berlinDate(e.at) : null;
+  };
+  const repairedInPeriod = (id: string) => { const d = repairedDay(id); return d !== null && inPeriod(d); };
+
   const allStations = await db.select().from(stations).where(eq(stations.orgId, orgId)).orderBy(asc(stations.name));
   const stName = new Map(allStations.map((s) => [s.id, s.name]));
   const today = berlinDayStart(now);
@@ -162,7 +169,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     noRoleOnSite: { n: t.noRoleOnSite.length, ids: t.noRoleOnSite },
   })).sort((a, b) => a.name.localeCompare(b.name));
 
-  // ---- 4. revenue (only vehicles whose prices this user may see)
+  // ---- 4. revenue (only cars repaired in the period, and only vehicles whose prices this user may see)
   const calcs = calcSettings(settings);
   const methods = await loadMethodMap(db, orgId);
   type Agg = { net: number; ids: string[] };
@@ -175,8 +182,9 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
     const ref = refOf(r, assignees.get(r.id) ?? []);
     const eff = effectivePermissions(u, ref);
     if (!eff.has("prix.voir")) continue;
-    const d = dateOf(r);
-    if (!inPeriod(d)) continue;
+    // revenue = cars repaired in the period (not assessed in it), dated by the day they became "fertig"/"rendu"
+    const d = repairedDay(r.id);
+    if (d === null || !inPeriod(d)) continue;
     const flat = flatten(r, assignees.get(r.id) ?? [], null);
     const calc = computeVehicle(flat as unknown as CalcVehicle, calcs, methodOf(methods, r));
     if (!calc.netto) continue;
@@ -207,25 +215,29 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
   };
   type Ids = { n: number; ids: string[] };
   const linkVehicles = rows.filter((r) => inPeriod(dateOf(r)));
+  // the net column counts the cars repaired in the period (like the revenue figures), whatever their assessment date
+  const repairedRows = rows.filter((r) => repairedInPeriod(r.id));
   const mayNet = (r: (typeof rows)[number]) => effectivePermissions(u, refOf(r, assignees.get(r.id) ?? [])).has("prix.voir");
-  const anyNet = linkVehicles.some(mayNet); // without the price permission the key `net` does not exist at all
+  const anyNet = linkVehicles.some(mayNet) || repairedRows.some(mayNet); // without the price permission the key `net` does not exist at all
   const netOf = new Map<string, number>();
   if (anyNet) {
-    for (const r of linkVehicles) {
+    for (const r of repairedRows) {
       if (!mayNet(r)) continue;
       const calc = computeVehicle(flatten(r, assignees.get(r.id) ?? [], null) as unknown as CalcVehicle, calcs, methodOf(methods, r));
       netOf.set(r.id, calc.netto || 0);
     }
   }
   const groupLinks = (keyOf: (r: (typeof rows)[number]) => { clientId: string | null; insurerId: string | null }): LinkRow[] => {
-    const g = new Map<string, { clientId: string | null; insurerId: string | null; rs: typeof rows }>();
-    for (const r of linkVehicles) {
+    const g = new Map<string, { clientId: string | null; insurerId: string | null; rs: typeof rows; repaired: typeof rows }>();
+    const slot = (r: (typeof rows)[number]) => {
       const k = keyOf(r), key = `${k.clientId ?? ""}|${k.insurerId ?? ""}`;
-      if (!g.has(key)) g.set(key, { ...k, rs: [] });
-      g.get(key)!.rs.push(r);
-    }
+      if (!g.has(key)) g.set(key, { ...k, rs: [], repaired: [] });
+      return g.get(key)!;
+    };
+    for (const r of linkVehicles) slot(r).rs.push(r);
+    for (const r of repairedRows) slot(r).repaired.push(r);
     const ids = (xs: typeof rows): Ids => ({ n: xs.length, ids: xs.map((x) => x.id) });
-    return [...g].map(([key, { clientId, insurerId, rs }]) => {
+    return [...g].map(([key, { clientId, insurerId, rs, repaired }]) => {
       const days = rs.flatMap((r) => {
         const back = [...(histBy.get(r.id) ?? [])].reverse().find((h) => h.statut === "rendu");
         return back ? [(back.at.getTime() - r.createdAt.getTime()) / DAY] : [];
@@ -235,7 +247,7 @@ export async function buildDashboard(db: Db, u: Principal, orgId: string, f: Das
         vehicles: ids(rs), waiting: ids(rs.filter((r) => r.statut === "arrive" || r.statut === "besichtigung" || r.statut === "attente")),
         repair: ids(rs.filter((r) => r.statut === "reparatur")), finished: ids(rs.filter((r) => r.statut === "fertig" || r.statut === "rendu")), avgDays: avg(days),
       };
-      if (anyNet) row.net = round2(rs.reduce((a, r) => a + (netOf.get(r.id) ?? 0), 0));
+      if (anyNet) row.net = round2(repaired.reduce((a, r) => a + (netOf.get(r.id) ?? 0), 0));
       return row;
     }).sort((a, b) => b.vehicles.n - a.vehicles.n || (a.clientName + a.insurerName).localeCompare(b.clientName + b.insurerName));
   };
