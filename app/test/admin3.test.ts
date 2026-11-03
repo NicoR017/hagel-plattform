@@ -1,6 +1,6 @@
 // Verwaltung (phase 6): the week picker agrees with the server's week ranges.
 import { describe, expect, it } from "vitest";
-import { isoWeekOf } from "../src/v3/Admin3";
+import { isoWeekOf } from "../src/domains/admin/AdminApp";
 
 describe("calendar week of the weekly report", () => {
   it("ISO weeks, also across the year boundary", () => {

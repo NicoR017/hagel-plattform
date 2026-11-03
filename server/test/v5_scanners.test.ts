@@ -2,9 +2,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { eq, sql } from "drizzle-orm";
-import { mapScan, loadMappingContext, syncAzure } from "../src/azure_sync";
-import { addDays, assignmentAt, isIsoDate, localDay } from "../src/colibri_rules";
-import { assignDevice, unassignDevice } from "../src/colibri_devices";
+import { mapScan, loadMappingContext, syncAzure } from "../src/domains/scans/mirror";
+import { addDays, assignmentAt, isIsoDate, localDay } from "../src/domains/scans/rules";
+import { assignDevice, unassignDevice } from "../src/domains/scans/devices";
 import { auditLog, colibriDeviceAssignments, colibriDevices, roles, stations, vehicles } from "../src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";
 

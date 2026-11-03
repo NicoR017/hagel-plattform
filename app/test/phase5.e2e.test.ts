@@ -2,10 +2,10 @@ import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
-import { LocalDb } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
-import { colibriBadge } from "../src/sync/colibriImport";
-import { syncAzure } from "../../server/src/azure_sync";
+import { LocalDb } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
+import { colibriBadge } from "../src/shared/sync/colibriImport";
+import { syncAzure } from "../../server/src/domains/scans/mirror";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 
 const PDF = new Uint8Array(readFileSync(new URL("../../fixtures/real/colibri_en_9547LPV.pdf", import.meta.url)));

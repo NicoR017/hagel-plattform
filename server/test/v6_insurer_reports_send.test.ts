@@ -3,9 +3,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { MemoryMailer, ModeMailer, ResendMailer } from "../src/email";
-import { MAX_ATTEMPTS, localTime, nextSends, runDueInsurerReports, scheduledDay } from "../src/insurer_report_send";
-import { DEFAULT_TEXTS, periodShort, renderReportMail, renderTemplate, templateVars, unknownVars } from "../src/insurer_report_text";
-import { nextPeriod } from "../src/insurer_reports";
+import { MAX_ATTEMPTS, localTime, nextSends, runDueInsurerReports, scheduledDay } from "../src/domains/reports/insurer_report_send";
+import { DEFAULT_TEXTS, periodShort, renderReportMail, renderTemplate, templateVars, unknownVars } from "../src/domains/reports/insurer_report_text";
+import { nextPeriod } from "../src/domains/reports/insurer_reports";
 import { auditLog, insurerReportRuns, insurerReports, insurers, organizations, vehicleStatusHistory, vehicles } from "../src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";
 

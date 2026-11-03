@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { PERMISSIONS, SYSTEM_ROLES } from "@hagel/shared";
 import { buildReport } from "../src/scripts/integrity";
-import { bookableDay, runDueBookings, todayIn } from "../src/repair";
-import { recipientsFor } from "../src/reports";
+import { bookableDay, runDueBookings, todayIn } from "../src/domains/repair/repair";
+import { recipientsFor } from "../src/domains/reports/reports";
 import { calcMethods, insurerMethods, insurers, photos, repairBookings, repairEvents, reportSends, stations, technicians, users, vehicleStatusHistory, vehicles } from "../src/schema";
 import { JPEG, call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 

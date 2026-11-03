@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { t } from "./i18n";
+import { t } from "./shared/i18n";
 
-export interface AppConfig { appEnv: "production" | "staging" | "development"; uiV3Default: boolean }
+export interface AppConfig { appEnv: "production" | "staging" | "development" }
 const KEY = "hagel.config";
 const read = (): AppConfig | null => { try { return JSON.parse(localStorage.getItem(KEY) ?? "null"); } catch { return null; } };
 

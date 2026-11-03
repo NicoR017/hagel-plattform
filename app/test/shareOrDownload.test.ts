@@ -1,6 +1,6 @@
 // "Download" saves the file on a computer; only a phone or tablet goes through the share sheet.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { shareOrDownload, sharesFiles } from "../src/field/docs";
+import { shareOrDownload, sharesFiles } from "../src/shared/docs";
 
 const UA = {
   windows: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",

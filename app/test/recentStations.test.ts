@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pushRecent } from "../src/sync/mutations";
+import { pushRecent } from "../src/shared/sync/mutations";
 
 describe("the stations used last", () => {
   it("latest first, no duplicates, a bounded list", () => {

@@ -2,11 +2,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { createApp } from "../src/app";
-import { CitasError, CitasRest, dayInZone, insurerKeys, normalizePlate, sameInsurer } from "../src/citas";
+import { CitasError, CitasRest, dayInZone, insurerKeys, normalizePlate, sameInsurer } from "../src/domains/citas/citas";
 import { loadConfig } from "../src/config";
 import { MemoryMailer } from "../src/email";
 import { citasLinks, colibriScans, vehicles } from "../src/schema";
-import { fieldsOf } from "../src/routes_citas";
+import { fieldsOf } from "../src/domains/citas/routes";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";
 
 const PDF = new Uint8Array(readFileSync(new URL("../../fixtures/real/colibri_en_9547LPV.pdf", import.meta.url)));
@@ -45,7 +45,7 @@ beforeAll(async () => {
     CalculationMethod: "GERMANY", DentsTotalNumber: 618, ScanFailed: false, ErrorMessage: "", urlPdf: URL_PDF,
   });
   az.putBlob("allscans", "20261019-1627_9547 LPV.pdf", PDF);
-  const { syncAzure } = await import("../src/azure_sync");
+  const { syncAzure } = await import("../src/domains/scans/mirror");
   await syncAzure(c.h.db, az);
 
   c.citas.addLocation({ id: "loc-1", name: "Nave Madrid", timezone: "Europe/Madrid" });

@@ -22,8 +22,6 @@ export interface Config {
   /** off = nothing is sent (logged only); redirect = every mail goes to `mailRedirectTo`; live = real recipients */
   mailMode: MailMode;
   mailRedirectTo: string | null;
-  /** new UI is the default (users can still open `?ui=legacy`) */
-  uiV3Default: boolean;
   /** PDR Citas (read-only API). Both must be set, otherwise the feature is hidden. The key never leaves the server. */
   citasApiUrl: string | null;
   citasApiKey: string | null;
@@ -63,7 +61,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     inviteTtlHours: 48,
     loginTtlMinutes: 20,
     appEnv, mailMode, mailRedirectTo,
-    uiV3Default: (env.UI_V3_DEFAULT ?? "true") !== "false",
     // the base address of the site; the path of the API is added by the client (pasting the full API address works too)
     citasApiUrl: env.CITAS_API_URL?.trim().replace(/\/+$/, "").replace(/\/api\/v1\/external$/, "") || null,
     citasApiKey: env.CITAS_API_KEY?.trim() || null,

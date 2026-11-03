@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matches } from "../src/admin";
+import { matches } from "../src/domains/admin/admin";
 
 describe("search in the administration lists", () => {
   it("every word must appear somewhere; case and accents do not matter", () => {

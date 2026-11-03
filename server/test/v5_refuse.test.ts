@@ -3,10 +3,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { REFUSE_REASONS, parseRefuseMotif } from "@hagel/shared";
-import { todayIn } from "../src/repair";
-import { refusalMail } from "../src/mails";
+import { todayIn } from "../src/domains/repair/repair";
+import { refusalMail } from "../src/domains/reports/mails";
 import { insurers, repairAppointments, repairBookings, repairEvents, technicians, vehicleStatusHistory, vehicles } from "../src/schema";
-import { berlinDate } from "../src/dashboard";
+import { berlinDate } from "../src/domains/reports/dashboard";
 import { call, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;

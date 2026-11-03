@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { colibriScans, vehicles } from "../src/schema";
-import { reopenScansOfDeletedVehicles } from "../src/azure_sync";
+import { reopenScansOfDeletedVehicles } from "../src/domains/scans/mirror";
 import { call, dentsPanel, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx, A: string, CARRO: string, imported: string, manual: string;

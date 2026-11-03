@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeOfHit, searchVehicles, type SearchVehicle } from "../src/v3/search";
+import { routeOfHit, searchVehicles, type SearchVehicle } from "../src/domains/shell/search";
 
 const names = { station: (id?: string | null) => ({ s1: "PDR Halle Madrid", s2: "Taller Norte" } as Record<string, string>)[id ?? ""] ?? "", insurer: (id?: string | null) => ({ i1: "Mapfre", i2: "AXA" } as Record<string, string>)[id ?? ""] ?? "" };
 const v = (o: Partial<SearchVehicle> & { id: string }): SearchVehicle => ({ statut: "besichtigung", stationId: "s1", ...o });

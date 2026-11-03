@@ -12,10 +12,10 @@ import { AttachmentFitMailer } from "./mail_attachments";
 import { seed } from "./seed";
 import { seedStaging } from "./scripts/seed_staging";
 import { storageFromEnv } from "./storage";
-import { azureFromEnv } from "./azure";
-import { citasFromConfig } from "./citas";
-import { runDueInsurerReports } from "./insurer_report_send";
-import { FakeCitas } from "./citas_fake";
+import { azureFromEnv } from "./domains/scans/azure";
+import { citasFromConfig } from "./domains/citas/citas";
+import { runDueInsurerReports } from "./domains/reports/insurer_report_send";
+import { FakeCitas } from "./domains/citas/fake";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);

@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { auditLog, invitations, memberships, roleAssignments, sessions, technicians, users, vehicleStatusHistory } from "../src/schema";
-import { isoWeekRange } from "../src/weekly";
+import { isoWeekRange } from "../src/domains/reports/weekly";
 import { call, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx, A: string, CARRO: string, chef: string, assessor: string;

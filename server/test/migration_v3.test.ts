@@ -9,10 +9,10 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { ES_MATRIX_DEFAULT, computeVehicle, r2, type CalcVehicle } from "@hagel/calc";
 import golden from "../../fixtures/golden_cases_v20.json";
 import { migrationsFolder } from "../src/db";
-import { loadMethodMap, methodOf } from "../src/methods";
+import { loadMethodMap, methodOf } from "../src/domains/admin/methods";
 import { buildReport } from "../src/scripts/integrity";
 import * as schema from "../src/schema";
-import { calcSettings, flatten, loadOrgSettings } from "../src/sync";
+import { calcSettings, flatten, loadOrgSettings } from "../src/domains/vehicles/sync";
 
 type Case = { case: string; input: CalcVehicle & { id: string }; expected: Record<string, any> };
 const cases = (golden as unknown as { cases: Case[] }).cases;

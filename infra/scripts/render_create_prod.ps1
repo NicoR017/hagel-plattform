@@ -37,7 +37,7 @@ $secret = [Convert]::ToBase64String($bytes)
 function Ev($k, $v) { @{ key = $k; value = [string]$v } }
 $common = @((Ev "APP_ENV" "production"), (Ev "DATABASE_URL" $internal), (Ev "SESSION_SECRET" $secret))
 $azure = @("AZURE_STORAGE_SAS", "AZURE_STORAGE_ACCOUNT", "AZURE_SYNC_MINUTES", "AZURE_INITIAL_DAYS") | Where-Object { $rail[$_] } | ForEach-Object { Ev $_ $rail[$_] }
-$apiEnv = $common + $azure + @((Ev "MAIL_MODE" "redirect"), (Ev "MAIL_REDIRECT_TO" $RedirectTo), (Ev "EMAIL_API_KEY" $rail["EMAIL_API_KEY"]), (Ev "STORAGE_DIR" "/data/files"), (Ev "UI_V3_DEFAULT" "true"), (Ev "SEED_SUPERADMIN_EMAIL" $rail["SEED_SUPERADMIN_EMAIL"]), (Ev "APP_URL" "https://hagel-api.onrender.com"))
+$apiEnv = $common + $azure + @((Ev "MAIL_MODE" "redirect"), (Ev "MAIL_REDIRECT_TO" $RedirectTo), (Ev "EMAIL_API_KEY" $rail["EMAIL_API_KEY"]), (Ev "STORAGE_DIR" "/data/files"), (Ev "SEED_SUPERADMIN_EMAIL" $rail["SEED_SUPERADMIN_EMAIL"]), (Ev "APP_URL" "https://hagel-api.onrender.com"))
 if ($rail["EMAIL_FROM"]) { $apiEnv += Ev "EMAIL_FROM" $rail["EMAIL_FROM"] }
 $workerEnv = $common + $azure + @((Ev "MAIL_MODE" "redirect"), (Ev "MAIL_REDIRECT_TO" $RedirectTo))
 

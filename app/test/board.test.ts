@@ -1,6 +1,6 @@
 // Repair board logic: which cards sit in which column, what "Finish" needs, the badges.
 import { describe, expect, it } from "vitest";
-import { REPAIR_STAGES, arrivedToday, blockerKey, boardOf, moveCheck, neighbour, onBoard, stageOf, todosOpen } from "../src/v3/boardLogic";
+import { REPAIR_STAGES, arrivedToday, blockerKey, boardOf, moveCheck, neighbour, onBoard, stageOf, todosOpen } from "../src/domains/repair/boardLogic";
 
 const S = "station-1";
 const car = (o: Record<string, unknown> = {}) => ({ statut: "reparatur", stationId: S, repairStage: "bereit", ...o }) as never as Parameters<typeof stageOf>[0];

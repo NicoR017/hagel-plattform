@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addRecipients, hasInvalidPiece, type RecipientChip } from "../src/recipients";
+import { addRecipients, hasInvalidPiece, type RecipientChip } from "../src/domains/reports/recipients";
 
 const base: RecipientChip[] = [{ email: "taller@example.test", source: "bodyshop" }, { email: "mutua@example.test", source: "insurer" }];
 const emails = (l: RecipientChip[]) => l.map((x) => x.email);

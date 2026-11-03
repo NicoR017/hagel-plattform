@@ -1,4 +1,4 @@
-import { getLang, t } from "./i18n";
+import { getLang, t } from "./shared/i18n";
 
 const KEY = "hagel.auth";
 export interface Auth { access_token: string; refresh_token: string }
