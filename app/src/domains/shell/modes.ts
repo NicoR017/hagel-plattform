@@ -48,3 +48,29 @@ export const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   rendu: { bg: "#EEF0F3", fg: "#3B4555" },
   refuse: { bg: "#FBE9E7", fg: "#8F1D14" },
 };
+
+/** sub-filter of "On hold": the five reasons of the status dialog, any other free text, no reason */
+export const HOLD_SUBS = ["Teile", "Freigabe", "Termin", "Demontage", "Sonstiges", "other", "none"] as const;
+export type HoldSub = (typeof HOLD_SUBS)[number];
+export const isHoldSub = (x: unknown): x is HoldSub => (HOLD_SUBS as readonly string[]).includes(String(x));
+
+/** which sub-filter choice a vehicle on hold belongs to (reason compared case-insensitively, like everywhere else) */
+export function holdSubOf(v: ModeVehicle): HoldSub | null {
+  if (v.statut !== "attente") return null;
+  const m = String(v.statutMotif ?? "").trim();
+  if (!m) return "none";
+  return HOLD_SUBS.find((r) => r.toLowerCase() === m.toLowerCase() && r !== "other" && r !== "none") ?? "other";
+}
+/** the sub-filter only exists while the "On hold" chip is active; "all" / unknown values mean no sub-filter */
+export const matchesSub = (v: ModeVehicle, chip: string, sub: string) => chip !== "attente" || !isHoldSub(sub) || holdSubOf(v) === sub;
+
+/** damage flag next to the dent count: replaced part (red) beats push to paint (orange) */
+export function damageFlag(v: { panels?: Record<string, unknown> }): "replace" | "ptp" | null {
+  let flag: "replace" | "ptp" | null = null;
+  for (const p of Object.values(v.panels ?? {})) {
+    const m = (p as { method?: string } | null)?.method;
+    if (m === "erneuern") return "replace";
+    if (m === "ptp") flag = "ptp";
+  }
+  return flag;
+}

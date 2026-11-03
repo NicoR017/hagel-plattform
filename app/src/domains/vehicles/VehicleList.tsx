@@ -4,13 +4,14 @@ import { t } from "../../shared/i18n";
 import { colibriBadge } from "../../shared/sync/colibriImport";
 import { setPrefs } from "../../shared/sync/mutations";
 import type { LocalVehicle } from "../../shared/sync/db";
-import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, statusLabel } from "../../shared/Dialogs";
+import { AssignDialog, MoveDialog, SharesDialog, StatusDialog, holdReasonLabel, statusLabel } from "../../shared/Dialogs";
 import { ScansDialog } from "../scans/Scans";
-import { go, type Mode } from "../../shared/route";
+import { go, listHref, parseRoute, type Mode } from "../../shared/route";
 import { useField, useVehicles } from "../../shared/store";
 import { toast } from "../../shared/toast";
 import { bulkColibri, exportVehiclesXlsx, holdLabel, modeTitle } from "./listActions";
-import { MODE_STATUSES, STATUS_STYLE, inMode, matchesChip } from "../shell/modes";
+import { HOLD_SUBS, MODE_STATUSES, STATUS_STYLE, damageFlag, holdSubOf, inMode, isHoldSub, matchesChip, matchesSub } from "../shell/modes";
+import { KIND } from "./kinds";
 import { useNewScans } from "../scans/useScans";
 import { RepairBoard } from "../repair/RepairBoard";
 import { dayLabel, todayIn, tzOfCountry } from "../../shared/calendar";
@@ -26,7 +27,13 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
   const all = useVehicles();
   const scans = useNewScans();
   const st = f.refs?.stations.find((s) => s.id === stationId);
-  const [chip, setChip] = useState("all");
+  // status chip and "On hold" sub-filter live in the URL (#/s/:station/:mode?st=attente&sub=Teile): they survive a refresh
+  const initial = useMemo(() => { const r = parseRoute(location.hash); return r.page === "list" && r.stationId ? r : null; }, []);
+  const [chip, setChipState] = useState(() => (initial?.chip && MODE_STATUSES[mode].includes(initial.chip) ? initial.chip : "all"));
+  const [sub, setSubState] = useState(() => (initial?.chip === "attente" && isHoldSub(initial.sub) && MODE_STATUSES[mode].includes("attente") ? initial.sub! : "all"));
+  const mirror = (c: string, s: string) => history.replaceState(null, "", listHref({ stationId, mode, chip: c, sub: s }));
+  const setChip = (c: string) => { setChipState(c); setSubState("all"); mirror(c, "all"); };
+  const setSub = (s: string) => { setSubState(s); mirror(chip, s); };
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [dlg, setDlg] = useState<Dlg>(null);
@@ -41,8 +48,9 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
   const rows = useMemo(() => here.map((v) => ({ v, c: f.calcOf(v) })), [here, f.calcOf]);
   const sorted = useMemo(() => [...rows].sort((a, b) => String(b.v.createdAt ?? b.v.updatedAt).localeCompare(String(a.v.createdAt ?? a.v.updatedAt))), [rows]);
   const needle = q.trim().toLowerCase();
-  const shown = sorted.filter(({ v }) => matchesChip(v, mode, chip) && `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.modell ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(needle));
+  const shown = sorted.filter(({ v }) => matchesChip(v, mode, chip) && matchesSub(v, chip, sub) && `${v.kennzeichen ?? ""} ${v.fin ?? ""} ${v.modell ?? ""} ${v.kunde ?? ""} ${v.techName ?? ""} ${v.claimNumber ?? ""}`.toLowerCase().includes(needle));
   const chips = ["all", ...MODE_STATUSES[mode]];
+  const holdRows = useMemo(() => here.filter((v) => matchesChip(v, mode, "attente")), [here, mode]);
   const insurerName = (id: unknown) => f.refs?.insurers.find((i) => i.id === id)?.name ?? "";
   const ctx = { stationId, mode };
 
@@ -110,6 +118,17 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
         </div>
       </div>
 
+      {chip === "attente" && (
+        <div role="group" aria-label={t("hsFilter")} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {["all", ...HOLD_SUBS].map((k) => {
+            const n = k === "all" ? holdRows.length : holdRows.filter((v) => holdSubOf(v) === k).length;
+            if ((k === "other" || k === "none") && n === 0 && sub !== k) return null;
+            const label = k === "all" ? t("all") : k === "other" ? t("hsOther") : k === "none" ? t("hsNone") : holdReasonLabel(k);
+            return <button key={k} className={"chip" + (sub === k ? " on" : "")} aria-pressed={sub === k} onClick={() => setSub(k)}>{label} · {n}</button>;
+          })}
+        </div>
+      )}
+
       {selected.length > 0 && (
         <div className="selbar" role="region" aria-label={t("v3Selected")}>
           <b style={{ flex: "1 1 160px" }}>{selected.length} {t("v3Selected")}</b>
@@ -145,7 +164,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
                   {bookingOf(v) && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8" }}>{t("v4BadgeTermin")} {dayLabel(bookingOf(v)!.date, todayIn(tzOfCountry(st?.country ?? "DE")), "de-DE")}</span>}
                 </span>
                 <span className="c" style={{ flex: "0 1 140px", fontSize: 13 }}>
-                  <span>{c.dents} {t("dentsWord")}</span>
+                  <span>{c.dents} {t("dentsWord")}{(() => { const k = damageFlag(v); if (!k) return null; const tip = t(k === "replace" ? "hsTipReplace" : "hsTipPtp"); return <span role="img" title={tip} aria-label={tip} style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", marginLeft: 6, background: KIND[k].stroke }} />; })()}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{c.es ? `${c.es.bollos} Bollos · ${t("cat")} ${c.es.cat.cat} · ${h1(c.es.totH)}` : `${num(c.totalAW)} AW`}</span>
                 </span>
                 {prices && <span style={{ flex: "0 1 110px", textAlign: "right", fontWeight: 600 }}>{c.netto > 0 ? eur(c.netto) : "—"}</span>}
@@ -160,6 +179,10 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
         })}
         {!shown.length && <p className="empty">{f.refs ? t("v3EmptyFilter") : t("loading")}</p>}
       </div>
+      <p className="muted" style={{ fontSize: 12, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <b>{t("hsLegend")}</b>
+        {(["replace", "ptp"] as const).map((k) => <span key={k}><span aria-hidden="true" style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", marginRight: 5, background: KIND[k].stroke }} />{t(k === "replace" ? "hsTipReplace" : "hsTipPtp")}</span>)}
+      </p>
       </>)}
 
       {dlg === "status" && <StatusDialog ids={target} current={target.length === 1 ? all.find((v) => v.id === target[0])?.statut : undefined} onClose={() => setDlg(null)} onDone={() => setSel(new Set())} />}

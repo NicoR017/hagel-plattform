@@ -18,7 +18,7 @@ export type Route =
   /** home: station picker, or dashboard drill-down when dash is set */
   | { page: "list"; dash?: boolean; stationId?: undefined; mode?: undefined }
   /** list of one station in one mode */
-  | { page: "list"; stationId: string; mode: Mode; dash?: undefined }
+  | { page: "list"; stationId: string; mode: Mode; dash?: undefined; chip?: string; sub?: string }
   /** station: choose Kalkulation / Reparatur / Alle Fahrzeuge */
   | { page: "mode"; stationId: string }
   | { page: "dashboard" }
@@ -66,12 +66,23 @@ export function parseRoute(hash: string): Route {
     if (isMode(p[2]) && p[3] === "neu") return { page: "newexp", stationId, mode: p[2] };
     if (isMode(p[2]) && p[3] === "exp" && p[4]) return { page: "expertise", id: p[4], step: stepOf(p[5]), ctx: { stationId, mode: p[2] } };
     if (isMode(p[2]) && p[3] === "v" && p[4]) return { page: "vehicle", id: p[4], tab: tabOf(p[5]), ctx: { stationId, mode: p[2] } };
-    if (isMode(p[2])) return { page: "list", stationId, mode: p[2] };
+    if (isMode(p[2])) {
+      const q = new URLSearchParams(query), chip = q.get("st") ?? undefined, sub = q.get("sub") ?? undefined;
+      return { page: "list", stationId, mode: p[2], ...(chip ? { chip } : {}), ...(chip === "attente" && sub ? { sub } : {}) };
+    }
     return { page: "mode", stationId };
   }
   return { page: "list", dash: new URLSearchParams(query).get("f") === "dash" };
 }
 
+/** list URL with the status chip and the "On hold" sub-filter (#/s/:station/:mode?st=attente&sub=Teile) so they survive a refresh */
+export const listHref = (r: { stationId: string; mode: Mode; chip?: string; sub?: string }) => {
+  const q = new URLSearchParams();
+  if (r.chip && r.chip !== "all") q.set("st", r.chip);
+  if (r.chip === "attente" && r.sub && r.sub !== "all") q.set("sub", r.sub);
+  const qs = q.toString();
+  return `#/s/${r.stationId}/${r.mode}${qs ? "?" + qs : ""}`;
+};
 export const hrefOf = (r: Route): string => {
   switch (r.page) {
     case "vehicle": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/v/${r.id}/${r.tab}` : `#/v/${r.id}/${r.tab}`;
@@ -85,7 +96,7 @@ export const hrefOf = (r: Route): string => {
     case "calendar": return `#/s/${r.stationId}/cal${r.month ? "/" + r.month + (r.date ? "/" + r.date : "") : ""}`;
     case "expertise": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/exp/${r.id}/${r.step}` : `#/expertise/${r.id}/${r.step}`;
     case "mode": return `#/s/${r.stationId}`;
-    case "list": return r.stationId ? `#/s/${r.stationId}/${r.mode}` : r.dash ? "#/?f=dash" : "#/";
+    case "list": return r.stationId ? listHref(r) : r.dash ? "#/?f=dash" : "#/";
   }
 };
 export const go = (r: Route) => {
