@@ -203,7 +203,7 @@ describe("the figures", () => {
     await mk("c3-older-finished-now", { created: "2026-10-01T08:00:00Z", scan: "2026-10-05T09:00:00Z", statut: "fertig", hist: [["fertig", "2026-10-22T10:00:00Z"]] });
     await mk("c4-before-project", { created: "2026-08-15T08:00:00Z", statut: "fertig", hist: [["fertig", "2026-10-21T10:00:00Z"]] });
     await mk("c5-backlog", { created: "2026-10-22T09:00:00Z", statut: "besichtigung" });
-    await mk("c6-waiting-booked", { created: "2026-10-22T09:00:00Z", statut: "attente", booking: "2026-11-03" });
+    await mk("c6-waiting-booked", { created: "2026-10-22T09:00:00Z", statut: "attente", booking: "2030-11-03" });
     await mk("c7-refused", { created: "2026-10-22T09:00:00Z", statut: "refuse", hist: [["refuse", "2026-10-24T10:00:00Z"]] });
     await mk("c8-other-insurer", { insurer: mapfre, created: "2026-10-22T09:00:00Z", statut: "besichtigung" });
     await mk("c9-deleted", { created: "2026-10-22T09:00:00Z", statut: "besichtigung", deleted: true });
@@ -328,7 +328,7 @@ describe("the PDF preview", () => {
     const pages = await pdfPages(r.bytes);
     const all = pages.join("\n");
     for (const x of ["Informe de actividad PDR", "Allianz", "Periodo: 19/10/2026 - 25/10/2026", "(01/09/2026)", "Peritados sin reparación", "Anexo: vehículos",
-      "Reparado el 23/10/2026", "Cita el 03/11/2026", "Rechazado el 24/10/2026"]) expect(all, x).toContain(x);
+      "Reparado el 23/10/2026", "Cita el 03/11/2030", "Rechazado el 24/10/2026"]) expect(all, x).toContain(x);
     // the plates of this test are long labels: the column clips them, the start is enough to know the car
     for (const x of ["c1-in-rep", "c2-finish", "c5-backlo", "c6-waitin", "c7-refuse", "c3-older-"]) expect(all, x).toContain(x);
     for (const x of ["c4-before", "c8-other-", "c9-delete"]) expect(all, x).not.toContain(x);
