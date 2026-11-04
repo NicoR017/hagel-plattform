@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { vehicles } from "../src/schema";
-import { berlinDate } from "../src/dashboard";
+import { berlinDate } from "../src/domains/reports/dashboard";
 import { call, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;

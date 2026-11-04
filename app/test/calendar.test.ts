@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   TIME_SLOTS, bookableStatus, dayLabel, dayState, isWeekend, missingBooking, monthBounds, monthCells, monthRange, shiftMonth, todayIn, validEmail, validPhone,
-} from "../src/field/calendar";
+} from "../src/shared/calendar";
 
 describe("month grid", () => {
   it("Monday first, blanks before the 1st, every day of the month", () => {

@@ -15,7 +15,6 @@
 - [ ] Wochenbericht : totaux = somme des véhicules de la semaine ; envoi PDF reçu.
 
 ## B. Décisions à prendre
-- [ ] `UI_V3_DEFAULT` : `true` dès la mise en ligne, ou `false` d'abord (la nouvelle interface reste accessible avec `?ui=v3`) puis `true` après une journée de vérification.
 - [ ] Questions encore ouvertes : moment où l'estimation est figée ; annulation d'un déplacement pour un chef limité à la station d'origine ; une photo par étape (Demontage, PDR, Remontage) exigée à Finish ; montants net/TVA/brut dans le rapport envoyé à tous les destinataires ; nom du technicien libre vs choisi dans la liste (Wochenbericht).
 
 ## C. Juste avant la fusion
@@ -23,7 +22,7 @@
 2. [ ] **Sauvegarde manuelle de la prod** : `pg_dump -Fc` vers `backups/pre-v3-AAAAMMJJ.dump` **et** snapshot Railway ; vérifier (`pg_restore --list` au minimum, idéalement restauration en staging + `npm run integrity`).
 3. [ ] Noter l'ID du déploiement / commit de production actuel (pour « Redeploy »).
 4. [ ] `npm run integrity > avant-prod.json` contre la prod (lecture seule).
-5. [ ] Variables de production posées **avant** la fusion : `APP_ENV=production`, `MAIL_MODE=live`, `UI_V3_DEFAULT=<décision B>`.
+5. [ ] Variables de production posées **avant** la fusion : `APP_ENV=production`, `MAIL_MODE=live`.
 
 ## D. Fusion et déploiement
 1. [ ] PR `feature/ui-v3` → `main` (liste des migrations 0010–0012, variables, cette checklist). **Nicolas fusionne.**
@@ -33,14 +32,12 @@
 5. [ ] Un utilisateur sur l'ancienne PWA : il continue de travailler, la mise à jour arrive quand sa file d'envoi est vide et qu'il est sur un écran calme (pas de dialogue, pas dans une expertise).
 
 ## E. Retour arrière
-- **Interface seulement** : `UI_V3_DEFAULT=false` ou `?ui=legacy`. Pas de redéploiement.
-- **Serveur** : « Redeploy » du déploiement précédent. Les migrations étant additives, l'ancien code tourne sur le nouveau schéma. Les clients v3 gardent leurs nouvelles opérations en file.
+- **Serveur** : « Redeploy » du déploiement précédent. Les migrations étant additives, l'ancien code tourne sur le nouveau schéma.
 - **Données** (dernier recours) : restaurer le dump `pre-v3` dans une **nouvelle** base et changer `DATABASE_URL`. Les écritures faites après la sauvegarde sont perdues : décision de Nicolas uniquement.
 
 ## F. Après la mise en ligne (J+1, J+7)
 - [ ] Journal d'audit et logs : pas d'erreur `unsupported_op` répétée, pas d'envoi de rapport en « failed ».
 - [ ] Capacité du calendrier de réparation et envoi des rappels : un jour réel passé sans accroc.
-- [ ] Retirer `?ui=legacy` seulement après plusieurs semaines sans retour de ce côté.
 
 ---
 
@@ -113,6 +110,14 @@ Une quatrième étape **n'est pas une migration** et se lance à la main : le sc
 - [ ] Quatre langues complètes (test i18n vert).
 - [ ] Test hors ligne : un téléphone signe un dépôt en mode avion, se reconnecte → la signature arrive une seule fois, le reçu PDF est créé. Un ancien téléphone (v4) garde ses opérations en file (rien de perdu).
 - [ ] E-mail du reçu client : en `MAIL_MODE=redirect`, reçu chez Nicolas ; en cas d'échec, l'état « échec » et le bouton « Renvoyer » apparaissent dans la fiche du véhicule.
+
+## K2. E-mails via Microsoft Graph (branche `feature/graph-mail`)
+Le choix du fournisseur se fait par variables : `GRAPH_*` → Graph ; sinon `EMAIL_API_KEY` → Resend ; sinon console. **Fusionner et déployer le code ne change rien en prod tant que les `GRAPH_*` n'y sont pas posés** (la prod reste sur Resend).
+- [ ] Staging : `provider=graph from=noreplay-spain@pdr-team.com MAIL_MODE=redirect` dans le log ; `mail-test` sans PJ / petite PJ / grosse PJ (~5 Mo) reçus, objet `[STAGING → …]`, présents dans « Éléments envoyés » ; lien de connexion, reçu client, rapport PDF (« Répondre » → `replyTo`) ; pas de spam ; mauvais secret → erreur claire + « Renvoyer », sans crash ; `GRAPH_*` retirés → retour Resend/console.
+- [ ] Prod, étape 1 (le soir, dès 20:00 Madrid) : fusion + déploiement du code seul → le log dit toujours `provider=resend`, un lien de connexion part normalement.
+- [ ] Prod, étape 2 : Nicolas lance `render_set_mail.ps1 -Api <srv-id api prod> -Production` (secret **prod** distinct du staging, `EMAIL_FROM=noreplay-spain@pdr-team.com`) → redéploiement → log `provider=graph` → `mail-test` vers Nicolas uniquement (`MAIL_MODE=live` : le test part à l'adresse du super-admin appelant) → un vrai lien de connexion.
+- [ ] **Ne pas retirer `EMAIL_API_KEY` de la prod** tant que Graph n'a pas tourné plusieurs jours sans erreur.
+- [ ] Retour arrière : supprimer les trois `GRAPH_*` de l'api prod, redéployer (Resend reprend, pas de revert de code).
 
 ## L. Décisions v5 déjà validées par Nicolas
 - Signature : permission `vehicules.changer_statut` réutilisée ; dépôt « à signer » seulement pour les voitures qui entrent au tableau **après** la mise en ligne (les voitures déjà en réparation n'affichent rien).

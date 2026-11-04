@@ -24,9 +24,12 @@ Les téléphones : staging et production ont des adresses différentes, donc des
 | `APP_ENV` | api, worker | `production` ou `staging` (défaut : `production` si `NODE_ENV=production`) |
 | `MAIL_MODE` | api | `live` \| `redirect` \| `off`. Non défini : `live`, sauf en staging où c'est `off`. `staging` + `live` = le serveur refuse de démarrer. |
 | `MAIL_REDIRECT_TO` | api | obligatoire avec `MAIL_MODE=redirect` (ex. `nicolas.rasteiro@pdr-team.de`) |
-| `UI_V3_DEFAULT` | api | `true` (défaut) ou `false` : nouvelle interface par défaut ; l'ancienne reste ouverte avec `?ui=legacy` |
-
+| `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` | api | expéditeur Microsoft Graph. **Les trois ensemble ou aucun** (sinon le serveur refuse de démarrer). Posés par `infra/scripts/render_set_mail.ps1`, jamais dans le dépôt. |
+| `EMAIL_FROM` | api | boîte partagée expéditrice (`noreplay-spain@pdr-team.com`) ; obligatoire avec `GRAPH_*` |
+| `EMAIL_API_KEY` | api | Resend (ancien fournisseur, repli) |
 Staging, jeu minimal : `APP_ENV=staging`, `MAIL_MODE=off`, `SESSION_SECRET` (nouveau, ≥ 32 car.), `APP_URL`, `DATABASE_URL` (référence au Postgres **staging**), `SEED_SUPERADMIN_EMAIL`. **Ne pas copier** `EMAIL_API_KEY`, `AZURE_STORAGE_SAS`, `S3_*` de la production.
+
+**Fournisseur d'e-mails (choisi par les variables seules, sans changement de code)** : `GRAPH_*` définis → Microsoft Graph ; sinon `EMAIL_API_KEY` → Resend (comportement historique) ; sinon console. Le mode `MAIL_MODE` s'applique par-dessus dans tous les cas. Le démarrage logge `provider=… from=… MAIL_MODE=…` (jamais de secret). Staging avec Graph : `infra/scripts/render_set_mail.ps1 -Api <srv-id staging>` (force `MAIL_MODE=redirect`), puis redéployer ; détails et retour arrière dans `docs/EMAIL_GRAPH.md`. Envoi de test : `POST /api/admin/mail-test` (super-admin) ou `npm run mail:test -w @hagel/server -- --to <adresse> --attach none|small|large`.
 
 ## 3. Données de test
 
@@ -83,10 +86,10 @@ Chiffres d'intégrité identiques ; 1–2 utilisateurs de terrain ont travaillé
 3. Noter l'ID de déploiement / commit de production actuel (`7b5e9ed` ou plus récent) pour le retour arrière.
 
 ### 5.3 Fusion et déploiement
-PR `feature/ui-v3` → `main` (liste des migrations 0010+, variables, checklist). **Seul Nicolas fusionne.** Poser d'abord les variables en prod (`APP_ENV=production`, `MAIL_MODE=live`, `UI_V3_DEFAULT`). Railway déploie, les migrations passent au démarrage. `npm run integrity -- --compare` contre la prod, puis test rapide (connexion, liste, un véhicule, PDF KVA, tableau).
+PR `feature/ui-v3` → `main` (liste des migrations 0010+, variables, checklist). **Seul Nicolas fusionne.** Poser d'abord les variables en prod (`APP_ENV=production`, `MAIL_MODE=live`). Railway déploie, les migrations passent au démarrage. `npm run integrity -- --compare` contre la prod, puis test rapide (connexion, liste, un véhicule, PDF KVA, tableau).
 
 ### 5.4 Retour arrière
-* **Problème d'interface** : `UI_V3_DEFAULT=false` ou `?ui=legacy`. Pas de redéploiement.
+* **Problème d'interface** : redeployer le commit précédent (les migrations additives restent compatibles).
 * **Problème serveur** : « Redeploy » du déploiement précédent. Les migrations sont additives, l'ancien code tourne sur le nouveau schéma. Les clients v3 gardent leurs nouvelles opérations en file (un serveur qui ne les connaît pas répond `409 unsupported_op`, un ancien serveur répond 400 sur les lots v3 : le client les garde aussi).
 * **Corruption de données** (dernier recours) : restaurer le dump `pre-v3` dans une **nouvelle** base et changer `DATABASE_URL` ; les écritures faites après la sauvegarde sont perdues → décision de Nicolas uniquement.
 

@@ -5,7 +5,7 @@ import { loadConfig } from "../src/config";
 import { createDb, type DbHandle } from "../src/db";
 import { MemoryMailer } from "../src/email";
 import { can, filterFields } from "../src/permissions";
-import { loadPrincipal } from "../src/principal";
+import { loadPrincipal } from "../src/domains/auth/principal";
 import { seed } from "../src/seed";
 import { auditLog, roleAssignments, sessions, stations, users, vehicleAssignments, vehicles } from "../src/schema";
 

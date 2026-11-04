@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alsoRemoval, countKinds, fieldPanels, hasStepPhoto, interventionOf, isMine, nextStep, tally, type FieldVehicle } from "../src/v3/fieldLogic";
+import { alsoRemoval, countKinds, fieldPanels, hasStepPhoto, interventionOf, isMine, nextStep, tally, type FieldVehicle } from "../src/domains/expertise/fieldLogic";
 
 const v = (o: Partial<FieldVehicle> = {}): FieldVehicle => ({ id: "1", statut: "reparatur", repairStage: "demontage", myAssign: ["pdr"], ...o });
 

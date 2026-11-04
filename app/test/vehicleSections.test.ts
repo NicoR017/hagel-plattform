@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sectionsFor } from "../src/v3/VehicleDetail";
+import { sectionsFor } from "../src/domains/vehicles/VehicleDetail";
 
 describe("sections of the vehicle detail", () => {
   const all = (p: string) => p === "termine.buchen";

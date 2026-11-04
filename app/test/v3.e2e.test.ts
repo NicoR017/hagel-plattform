@@ -2,10 +2,10 @@
 import "fake-indexeddb/auto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { LocalDb } from "../src/sync/db";
-import { SyncEngine, type Http } from "../src/sync/engine";
-import { createVehicle, moveVehicle, setHeader, setStatus, type MutCtx } from "../src/sync/mutations";
-import { snapshotVehicles, undoMove, undoStatus } from "../src/field/undo";
+import { LocalDb } from "../src/shared/sync/db";
+import { SyncEngine, type Http } from "../src/shared/sync/engine";
+import { createVehicle, moveVehicle, setHeader, setStatus, type MutCtx } from "../src/shared/sync/mutations";
+import { snapshotVehicles, undoMove, undoStatus } from "../src/shared/undo";
 import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { vehicleMoves, vehicleStatusHistory, vehicles } from "../../server/src/schema";
 

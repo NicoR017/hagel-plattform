@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickFilter, type PickItem } from "../src/field/Picker";
+import { pickFilter, type PickItem } from "../src/shared/Picker";
 
 const items: PickItem[] = [
   { id: "1", title: "José Ñandú", sub: "PDR · 50 %", rank: 1 },

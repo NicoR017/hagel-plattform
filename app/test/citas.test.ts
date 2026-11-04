@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { hrefOf, parentRoute, parseRoute } from "../src/field/route";
-import { addDays, dayIn, normPlate } from "../src/v3/citas";
+import { hrefOf, parentRoute, parseRoute } from "../src/shared/route";
+import { addDays, dayIn, normPlate } from "../src/domains/citas/citas";
 
 describe("PDR Citas screens", () => {
   it("the start-from-appointment route survives a round trip, ids with odd characters included", () => {

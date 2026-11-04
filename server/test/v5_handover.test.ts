@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { auditLog, repairEvents, vehicleHandovers, vehicleStatusHistory, vehicles } from "../src/schema";
-import { buildRepairReportPdf } from "../src/repair_report";
+import { buildRepairReportPdf } from "../src/domains/repair/report";
 import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx, H: string, CARRO: string;

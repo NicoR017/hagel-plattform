@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { PERMISSIONS, SYSTEM_ROLES } from "@hagel/shared";
-import { computeInsurerKpis, lastCompletePeriod } from "../src/insurer_reports";
+import { computeInsurerKpis, lastCompletePeriod } from "../src/domains/reports/insurer_reports";
 import { PDFArray, PDFDocument, PDFRawStream, decodePDFRawStream } from "pdf-lib";
 import { auditLog, colibriScans, companies, insurers, repairBookings, roles, vehicleStatusHistory, vehicles } from "../src/schema";
 import { call, inviteAndAccept, setup, type Ctx } from "./helpers";

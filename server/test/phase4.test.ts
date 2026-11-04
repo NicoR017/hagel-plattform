@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { JPEG, PDF, call, inviteAndAccept, op, pull, push, setup, tick, uuid, type Ctx } from "./helpers";
-import { recipientsFor } from "../src/reports";
-import { imageInfo } from "../src/routes_master";
-import { reportMail } from "../src/mails";
+import { recipientsFor } from "../src/domains/reports/reports";
+import { imageInfo } from "../src/domains/admin/master_routes";
+import { reportMail } from "../src/domains/reports/mails";
 import { reportSends, technicians, users, vehicleAssignments } from "../src/schema";
 
 let c: Ctx, A: string, CARRO: string, B: string, assessor: string, chefA: string, tech: string, carro: string, admin: string;

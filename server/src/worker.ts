@@ -1,10 +1,10 @@
 // Background worker (separate Railway service, same codebase): nightly database backup and the Azure -> database mirror.
-import { azureFromEnv } from "./azure";
-import { syncAzure } from "./azure_sync";
+import { azureFromEnv } from "./domains/scans/azure";
+import { syncAzure } from "./domains/scans/mirror";
 import { runBackup, type BackupEnv } from "./backup";
 import { runDiskBackup } from "./backup_disk";
 import { createDb } from "./db";
-import { runDueBookings } from "./repair";
+import { runDueBookings } from "./domains/repair/repair";
 
 const env = process.env;
 const backupEnv = (): BackupEnv | null =>

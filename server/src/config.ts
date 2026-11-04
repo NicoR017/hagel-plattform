@@ -4,6 +4,14 @@ export interface Config {
   sessionSecret: string;
   emailApiKey: string | null;
   emailFrom: string;
+  /** Microsoft Graph credentials (all three or none) */
+  graphTenantId: string | null;
+  graphClientId: string | null;
+  graphClientSecret: string | null;
+  /** graph if GRAPH_* are set, else resend if EMAIL_API_KEY is set, else console */
+  emailProvider: EmailProvider;
+  /** largest total attachment size sent as attachments (MAIL_MAX_ATTACHMENT_MB, Graph only); more is shrunk, else linked */
+  mailMaxAttachmentBytes: number;
   port: number;
   accessTtlSec: number;
   refreshTtlDays: number;
@@ -14,8 +22,6 @@ export interface Config {
   /** off = nothing is sent (logged only); redirect = every mail goes to `mailRedirectTo`; live = real recipients */
   mailMode: MailMode;
   mailRedirectTo: string | null;
-  /** new UI is the default (users can still open `?ui=legacy`) */
-  uiV3Default: boolean;
   /** PDR Citas (read-only API). Both must be set, otherwise the feature is hidden. The key never leaves the server. */
   citasApiUrl: string | null;
   citasApiKey: string | null;
@@ -23,6 +29,7 @@ export interface Config {
 
 export type AppEnv = "production" | "staging" | "development";
 export type MailMode = "off" | "redirect" | "live";
+export type EmailProvider = "graph" | "resend" | "console";
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const secret = env.SESSION_SECRET ?? "";
@@ -34,19 +41,26 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const mailRedirectTo = env.MAIL_REDIRECT_TO?.trim() || null;
   if (mailMode === "redirect" && !mailRedirectTo) throw new Error("MAIL_MODE=redirect needs MAIL_REDIRECT_TO");
   if (appEnv === "staging" && mailMode === "live") throw new Error("APP_ENV=staging must not use MAIL_MODE=live");
+  const graph = [env.GRAPH_TENANT_ID, env.GRAPH_CLIENT_ID, env.GRAPH_CLIENT_SECRET].map((v) => v?.trim() || null);
+  const graphSet = graph.filter(Boolean).length;
+  if (graphSet > 0 && graphSet < 3) throw new Error("GRAPH_TENANT_ID, GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET must be set together");
+  if (graphSet === 3 && !env.EMAIL_FROM?.trim()) throw new Error("GRAPH_* needs EMAIL_FROM (the shared mailbox address)");
+  const emailProvider: EmailProvider = graphSet === 3 ? "graph" : env.EMAIL_API_KEY ? "resend" : "console";
+  const maxMb = env.MAIL_MAX_ATTACHMENT_MB?.trim() ? Number(env.MAIL_MAX_ATTACHMENT_MB) : 2.5;
+  if (!Number.isFinite(maxMb) || maxMb < 2.5 || maxMb > 25) throw new Error("MAIL_MAX_ATTACHMENT_MB must be a number from 2.5 to 25");
   return {
     databaseUrl: env.DATABASE_URL ?? null,
     appUrl: (env.APP_URL ?? "http://localhost:3000").replace(/\/$/, ""),
     sessionSecret: secret || "dev-only-secret-dev-only-secret-dev-only",
     emailApiKey: env.EMAIL_API_KEY ?? null,
-    emailFrom: env.EMAIL_FROM ?? "PDR Hagel <noreply@pdr-team.de>",
+    emailFrom: env.EMAIL_FROM?.trim() || "PDR Hagel <noreply@pdr-team.de>",
+    graphTenantId: graph[0], graphClientId: graph[1], graphClientSecret: graph[2], emailProvider, mailMaxAttachmentBytes: Math.round(maxMb * 1024 * 1024),
     port: Number(env.PORT ?? 3000),
     accessTtlSec: 15 * 60,
     refreshTtlDays: 90,
     inviteTtlHours: 48,
     loginTtlMinutes: 20,
     appEnv, mailMode, mailRedirectTo,
-    uiV3Default: (env.UI_V3_DEFAULT ?? "true") !== "false",
     // the base address of the site; the path of the API is added by the client (pasting the full API address works too)
     citasApiUrl: env.CITAS_API_URL?.trim().replace(/\/+$/, "").replace(/\/api\/v1\/external$/, "") || null,
     citasApiKey: env.CITAS_API_KEY?.trim() || null,
