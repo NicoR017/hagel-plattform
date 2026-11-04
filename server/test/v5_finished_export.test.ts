@@ -50,6 +50,22 @@ describe("finished export", () => {
     expect(Math.abs(x.technician + x.headliner + x.referrer + x.pdr - x.total)).toBeLessThan(0.05);
     expect(typeof x.bodyshop).toBe("string");
   });
+  it("one row per car with every column: file, vehicle, invoice lines, internal split; the checks are 0", async () => {
+    const rows = (await exp(c.superToken)).body.rows as any[];
+    const x = rows.find((y) => y.id === finishedA);
+    expect(x).toMatchObject({ plate: "FIN 1", statut: "fertig", serviceDate: "2026-10-19", vat: 0.21, rate: 69, dem: 100, glass: 0, partsPrice: null, techName: "Pdr Tech", demTechName: "Head Liner", techPct: 50, demTechPct: 80 });
+    expect(x.bollos).toBeGreaterThan(0);
+    expect(x.cat).not.toBe("");
+    expect(x.returned).toBeNull();
+    expect(rows.find((y) => y.id === returnedB).statut).toBe("rendu");
+    for (const y of rows) {
+      // the invoice lines add up to the net total, the internal shares to the split basis
+      expect(Math.abs(y.pdrBase + y.kleber + y.ptp + y.alu + y.replace + y.other + y.dem + y.glass - y.total)).toBeLessThan(0.02);
+      expect(Math.abs(y.check)).toBeLessThan(0.02);
+      expect(Math.abs(y.technician + y.headliner + y.referrer + y.pdr - y.basis)).toBeLessThan(0.02);
+      expect(Math.abs(y.shareCheck)).toBeLessThan(0.02);
+    }
+  });
   it("one station at a time", async () => {
     const r = await exp(c.superToken, `?sites=${A}`);
     expect((r.body.rows as any[]).map((x) => x.plate)).toEqual(["FIN 1"]);

@@ -1,7 +1,7 @@
 import { isPlace } from "../../shared/places";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { REPAIR_STAGES, STATUSES } from "@hagel/shared";
-import { buildFinishedWorkbook, buildTechnicianWorkbook, eur, finishedFileName, type FinishedExportData, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
+import { buildFinishedCsv, buildTechnicianWorkbook, eur, finishedFileName, type FinishedExportData, generateTechnicianWorksheets, techPdfFileName, techWorkbookFileName, type TechSheetData } from "@hagel/documents";
 import { api } from "../../api";
 import { getLang, t } from "../../shared/i18n";
 import { go } from "../../shared/route";
@@ -188,7 +188,7 @@ export function Dashboard({ embedded = false }: { embedded?: boolean }) {
     try {
       const d = await api<FinishedExportData>("GET", `/dashboard/finished-export${query()}`);
       if (!d.rows.length) { toast(t("exportEmpty")); return; }
-      await shareOrDownload(buildFinishedWorkbook(d, getLang()), finishedFileName(d.from, d.to, getLang()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      await shareOrDownload(new Blob([buildFinishedCsv(d)], { type: "text/csv;charset=utf-8" }), finishedFileName(d.from, d.to), "text/csv");
     } catch (e) { toast((e as Error).message); } finally { setBusy(false); }
   };
 
