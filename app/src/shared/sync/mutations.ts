@@ -73,7 +73,7 @@ export const setHeader = (c: MutCtx, vehicleId: string, fields: HeaderFields) =>
 export const setShares = (c: MutCtx, vehicleId: string, fields: Record<string, unknown>) => push(c, op(c, "vehicle.shares", { vehicleId, fields }));
 export const setPanel = (c: MutCtx, vehicleId: string, key: string, panel: Record<string, unknown> | null) => push(c, op(c, "vehicle.panel", { vehicleId, key, panel }));
 export const setStatus = (c: MutCtx, vehicleId: string, statut: string, motif?: string) => push(c, op(c, "vehicle.status", { vehicleId, statut, ...(motif ? { motif } : {}) }));
-export const moveVehicle = (c: MutCtx, vehicleId: string, toStationId: string, note?: string) => push(c, op(c, "vehicle.move", { vehicleId, toStationId, ...(note ? { note } : {}) }));
+export const moveVehicle = (c: MutCtx, vehicleId: string, toStationId: string, note?: string, driverUserId?: string) => push(c, op(c, "vehicle.move", { vehicleId, toStationId, ...(note ? { note } : {}), ...(driverUserId ? { driverUserId } : {}) }));
 /** The customer signs the drop-off / pick-up. Offline it waits in the outbox like every other operation; the server makes the PDF and the e-mail when it arrives. */
 export const signHandover = (c: MutCtx, vehicleId: string, handover: HandoverInput) => push(c, op(c, "vehicle.handover", { vehicleId, handover }));
 export const deleteVehicle = (c: MutCtx, vehicleId: string) => push(c, op(c, "vehicle.delete", { vehicleId }));

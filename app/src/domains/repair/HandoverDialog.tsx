@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { handoverText } from "@hagel/documents";
 import { api, httpFetch } from "../../api";
 import { fmtDateTime, t, type Key } from "../../shared/i18n";
 import type { LocalVehicle } from "../../shared/sync/db";
@@ -12,6 +13,8 @@ import { SignaturePad, type Strokes } from "./SignaturePad";
 export interface HandoverRow {
   id: string; kind: "drop_off" | "pick_up"; customerName: string; customerEmail: string | null; remarks: string; signedAt: string; signedBy: string; station: string;
   mailStatus: "sent" | "failed" | null; mailError: string | null; replaced: boolean; hasReceipt: boolean; sendReceipt: boolean;
+  /** drop-off: the customer's answer about moving the car and the text he accepted (null = not asked) */
+  moveConsent?: boolean | null; moveConsentText?: string | null;
 }
 
 /** The signatures of one car with the customer's data: station staff only (the server answers 404 to everybody else; offline = nothing). */
@@ -48,6 +51,9 @@ export function HandoverDialog({ v, kind, onClose, onSigned }: { v: LocalVehicle
   const [remarks, setRemarks] = useState("");
   const [strokes, setStrokes] = useState<Strokes>([]);
   const [busy, setBusy] = useState(false);
+  // V7: may PDR Team move the car (another station / a partner body shop)? Not ticked by default: the customer decides. The text is in the language of the customer (country of the car).
+  const [moveOk, setMoveOk] = useState(false);
+  const consentText = handoverText(x.land === "ES" ? "ES" : "DE").moveConsentText;
   const station = f.refs?.stations.find((s) => s.id === v.stationId)?.name ?? "";
   const now = new Date();
 
@@ -75,6 +81,7 @@ export function HandoverDialog({ v, kind, onClose, onSigned }: { v: LocalVehicle
       await signHandover(f.mut, v.id, {
         id: crypto.randomUUID(), kind, customerName: name.trim(), customerEmail: email.trim() || null, remarks: remarks.trim(), signedAt: new Date().toISOString(),
         signature: strokes, sendReceipt: send && !!email.trim() && okMail,
+        ...(kind === "drop_off" ? { moveConsent: moveOk, moveConsentText: consentText } : {}),
       });
       toast(navigator.onLine ? t("hoSaved") : t("hoSavedOffline"), 5000);
       onSigned?.();
@@ -94,6 +101,16 @@ export function HandoverDialog({ v, kind, onClose, onSigned }: { v: LocalVehicle
         <span>{t("hoSend")}</span>
       </label>
       {!!email.trim() && !okMail && <div className="err" style={{ marginBottom: 8 }}>{t("hoBadEmail")}</div>}
+      {kind === "drop_off" && (
+        <div style={{ margin: "0 0 12px" }}>
+          <b style={{ fontSize: 14 }}>{t("f1ConsentTitle")}</b>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, margin: "6px 0 4px" }}>
+            <input type="checkbox" style={{ width: 22, height: 22, minHeight: 0, marginTop: 1 }} checked={moveOk} onChange={(e) => setMoveOk(e.target.checked)} />
+            <span>{consentText}</span>
+          </label>
+          <div className="muted" style={{ fontSize: 12 }}>{t("f1ConsentHint")}</div>
+        </div>
+      )}
       <Field label={t("hoRemarks")}><textarea className="inp" rows={3} value={remarks} maxLength={2000} onChange={(e) => setRemarks(e.target.value)} /></Field>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <b style={{ fontSize: 14 }}>{t("hoSignHere")} *</b>

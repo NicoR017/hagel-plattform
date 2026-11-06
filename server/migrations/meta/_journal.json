@@ -176,6 +176,13 @@
       "when": 1793312816050,
       "tag": "0024_v6_report_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793399216050,
+      "tag": "0025_v7_move_consent_driver",
+      "breakpoints": true
     }
   ]
 }

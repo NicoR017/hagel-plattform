@@ -6,7 +6,7 @@ import { LocalDb } from "../src/shared/sync/db";
 import { SyncEngine, type Http } from "../src/shared/sync/engine";
 import { createVehicle, moveVehicle, setHeader, setStatus, type MutCtx } from "../src/shared/sync/mutations";
 import { snapshotVehicles, undoMove, undoStatus } from "../src/shared/undo";
-import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
+import { call, driverAt, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { vehicleMoves, vehicleStatusHistory, vehicles } from "../../server/src/schema";
 
 let c: Ctx, A: string, B: string, CARRO: string, db: LocalDb, engine: SyncEngine, mut: MutCtx, tokenA: string, n = 0;
@@ -77,9 +77,9 @@ describe("undo", () => {
     const id = await newVehicle("UNDO 4");
     await setHeader(mut, id, { clientStationId: CARRO }); await sync();
     const before = await snapshotVehicles(db, [id]);
-    await moveVehicle(mut, id, B, "move test"); await sync();
+    await moveVehicle(mut, id, B, "move test", await driverAt(c, A)); await sync();
     expect((await row(id)).stationId).toBe(B);
-    await undoMove(mut, before, B, "Rückgängig gemacht"); await sync();
+    await undoMove(mut, before, B, "Rückgängig gemacht", await driverAt(c, B)); await sync();
     const r = await row(id);
     expect(r.stationId).toBe(A);
     expect(r.clientStationId).toBe(CARRO);
@@ -101,7 +101,7 @@ describe("undo", () => {
     const only = phone(tokenA);
     await only.engine.syncNow(c.orgES);
     const before = await snapshotVehicles(only.db, [id]);
-    await moveVehicle(only.mut, id, B); await only.engine.syncNow(c.orgES);
+    await moveVehicle(only.mut, id, B, undefined, await driverAt(c, A)); await only.engine.syncNow(c.orgES);
     expect((await row(id)).stationId).toBe(B);
     await undoMove(only.mut, before, B, "Rückgängig gemacht"); await only.engine.syncNow(c.orgES);
     expect((await row(id)).stationId).toBe(B); // refused by the server

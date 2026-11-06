@@ -72,7 +72,7 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
     repairStage: r.repairStage, bodyshopId: r.bodyshopId, methodId: r.methodId, methodVersion: r.methodVersion,
     statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif,
-    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
+    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, noMove: r.noMove, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
     assigneeIds, updatedAt: r.updatedAt.toISOString(), updatedBy: updatedByName, seq: r.seq,
@@ -332,11 +332,14 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       await tx.insert(vehicleHandovers).values({
         id: h.id, vehicleId: row.id, kind: h.kind, customerName: h.customerName, customerEmail: h.customerEmail, remarks: h.remarks, signedAt: when, signedBy: u.id,
         stationId: row.stationId, signature: h.signature as never, sendReceipt: h.sendReceipt && !!h.customerEmail,
+        ...(h.kind === "drop_off" && h.moveConsent !== undefined ? { moveConsent: h.moveConsent, moveConsentText: h.moveConsentText } : {}),
       });
       // never edited: the new signature replaces the previous one of the same kind (which stays in the database)
       await tx.update(vehicleHandovers).set({ replacedBy: h.id }).where(and(eq(vehicleHandovers.vehicleId, row.id), eq(vehicleHandovers.kind, h.kind), isNull(vehicleHandovers.replacedBy), ne(vehicleHandovers.id, h.id)));
       await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "handover_signed", payload: { kind: h.kind, handoverId: h.id } as never }); // history: no personal data
       const set: Partial<typeof vehicles.$inferInsert> = h.kind === "drop_off" ? { dropOffSignedAt: when } : { pickUpSignedAt: when };
+      // V7: the customer's answer on the drop-off signature = "do not move" (a newer signature replaces it; an older app that does not ask leaves the flag as it is)
+      if (h.kind === "drop_off" && h.moveConsent !== undefined) set.noMove = !h.moveConsent;
       if (h.kind === "pick_up") {
         // handing the car back = status "Returned" (same effect as the status change, unless a newer status change already won)
         const stamps = { ...(row.groupAt as Record<string, number>) };
@@ -357,10 +360,25 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
       const [dest] = await tx.select().from(stations).where(and(eq(stations.id, op.toStationId), eq(stations.orgId, row.orgId)));
       if (!dest || !dest.active) throw new Reject("station_unknown");
       if (!isPlaceType(dest.type)) throw new Reject("station_not_a_place"); // a body shop is a customer, never a place
+      // V7 (1) the customer refused the move: only a parking, or back to the station where he left the car
+      if (row.noMove && dest.type === "hall" && dest.id !== row.stationId) {
+        const [drop] = await tx.select({ stationId: vehicleHandovers.stationId }).from(vehicleHandovers).where(and(eq(vehicleHandovers.vehicleId, row.id), eq(vehicleHandovers.kind, "drop_off"), isNull(vehicleHandovers.replacedBy)));
+        if (!drop?.stationId || drop.stationId !== dest.id) throw new Reject("move_forbidden");
+      }
+      // V7 (2) between two stations (workshops) a driver is required: a person assigned to the departure station. Station <-> parking: nobody to name.
+      const [fromSt] = row.stationId ? await tx.select().from(stations).where(eq(stations.id, row.stationId)) : [];
+      let driverId: string | null = null;
+      if (fromSt?.type === "hall" && dest.type === "hall" && fromSt.id !== dest.id) {
+        if (!op.driverUserId) throw new Reject("driver_required");
+        const [ok] = await tx.select({ id: roleAssignments.id }).from(roleAssignments).innerJoin(users, eq(users.id, roleAssignments.userId))
+          .where(and(eq(roleAssignments.userId, op.driverUserId), eq(roleAssignments.orgId, row.orgId), eq(roleAssignments.stationId, fromSt.id), eq(users.status, "active"), sql`(${roleAssignments.expiresAt} is null or ${roleAssignments.expiresAt} > now())`)).limit(1);
+        if (!ok) throw new Reject("driver_invalid");
+        driverId = op.driverUserId;
+      }
       const stamps = { ...(row.groupAt as Record<string, number>) };
       if ((stamps.site ?? 0) > at) return commit(tx, u, row, {}, [], ["site"], op.type, {}, true);
       stamps.site = at;
-      await tx.insert(vehicleMoves).values({ vehicleId: row.id, fromStationId: row.stationId, toStationId: dest.id, userId: u.id, note: op.note ?? null });
+      await tx.insert(vehicleMoves).values({ vehicleId: row.id, fromStationId: row.stationId, toStationId: dest.id, userId: u.id, driverUserId: driverId, note: op.note ?? null });
       const warnings: string[] = [];
       if (dest.capacite > 0) {
         const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(vehicles)
@@ -373,7 +391,7 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
         if (from?.azureTenant && dest.azureTenant && from.azureTenant !== dest.azureTenant) warnings.push("tenant_differs");
       }
       // the customer (clientStationId), the commission snapshot and the report recipients do NOT change with a move
-      const r = await commit(tx, u, row, { stationId: dest.id, groupAt: stamps }, ["site"], [], op.type, { before: { stationId: row.stationId }, after: { stationId: dest.id, note: op.note, ...(warnings.length ? { warnings } : {}) } });
+      const r = await commit(tx, u, row, { stationId: dest.id, groupAt: stamps }, ["site"], [], op.type, { before: { stationId: row.stationId }, after: { stationId: dest.id, note: op.note, ...(driverId ? { driverUserId: driverId } : {}), ...(warnings.length ? { warnings } : {}) } });
       return { ...r, warnings };
     }
 
@@ -703,6 +721,15 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
   const maySplit = u.isSuperadmin || perms.has("repartition_interne.voir");
   const techRows = maySplit ? await db.select().from(technicians).where(and(eq(technicians.orgId, orgId), eq(technicians.active, true))).orderBy(asc(technicians.name)) : [];
   const occ = await occupancyOf(db, orgId, list.map((x) => x.id));
+  // V7: who can drive a car = the active people with a (not expired) assignment to a station; only shown to users who move cars
+  let drivers: NonNullable<PullResponse["refs"]["drivers"]> = [];
+  if (perms.has("vehicules.deplacer")) {
+    const rows = await db.select({ id: users.id, name: users.name, email: users.email, stationId: roleAssignments.stationId }).from(roleAssignments).innerJoin(users, eq(users.id, roleAssignments.userId))
+      .where(and(eq(roleAssignments.orgId, orgId), eq(users.status, "active"), sql`${roleAssignments.stationId} is not null`, sql`(${roleAssignments.expiresAt} is null or ${roleAssignments.expiresAt} > now())`));
+    const by = new Map<string, { id: string; name: string; stationIds: Set<string> }>();
+    for (const r of rows) { const e = by.get(r.id) ?? { id: r.id, name: r.name || r.email, stationIds: new Set<string>() }; if (r.stationId) e.stationIds.add(r.stationId); by.set(r.id, e); }
+    drivers = [...by.values()].map((e) => ({ id: e.id, name: e.name, stationIds: [...e.stationIds] })).sort((a, b) => a.name.localeCompare(b.name));
+  }
   const bodyshops = perms.has("reparatur.board")
     ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
     : [];
@@ -711,7 +738,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
       .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
     : [];
   return {
-    stations: st, bodyshops, repairLocations, occupancy: occ, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, drivers, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { auditLog, vehicleAssignments, vehicles, users } from "../src/schema";
-import { call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
+import { call, driverAt, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 import { berlinDate } from "../src/domains/reports/dashboard";
 
 let c: Ctx;
@@ -54,13 +54,13 @@ describe("occupancy", () => {
 describe("moves", () => {
   it("into a full site: warning, not a block (audited); into another tenant: warning", async () => {
     await status(assessor, ids.a, "reparatur"); // a place is taken by a car in repair only
-    const r1 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.a, toStationId: MINI })]);
+    const r1 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.a, toStationId: MINI, driverUserId: await driverAt(c, A) })]);
     expect(r1.body.results[0]).toMatchObject({ status: "ok" });
     expect(r1.body.results[0].warnings ?? []).toEqual([]); // MINI was empty
-    const r2 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.b, toStationId: MINI })]);
+    const r2 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.b, toStationId: MINI, driverUserId: await driverAt(c, A) })]);
     expect(r2.body.results[0].status).toBe("ok");
     expect(r2.body.results[0].warnings).toEqual(["capacity_full"]);
-    const r3 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.b, toStationId: B })]); // T1 -> T2
+    const r3 = await push(c, c.superToken, [op("vehicle.move", { vehicleId: ids.b, toStationId: B, driverUserId: await driverAt(c, MINI) })]); // T1 -> T2
     expect(r3.body.results[0].warnings).toEqual(["tenant_differs"]);
     const log = (await c.h.db.select().from(auditLog)).filter((x) => x.action === "vehicle.move" || (x.entity === "vehicle" && JSON.stringify(x.after).includes("warnings")));
     expect(log.some((x) => JSON.stringify(x.after).includes("capacity_full"))).toBe(true);

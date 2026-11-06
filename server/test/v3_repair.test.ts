@@ -6,7 +6,7 @@ import { buildReport } from "../src/scripts/integrity";
 import { bookableDay, runDueBookings, todayIn } from "../src/domains/repair/repair";
 import { recipientsFor } from "../src/domains/reports/reports";
 import { calcMethods, insurerMethods, insurers, photos, repairBookings, repairEvents, reportSends, stations, technicians, users, vehicleStatusHistory, vehicles } from "../src/schema";
-import { JPEG, call, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
+import { JPEG, call, driverAt, dentsPanel, inviteAndAccept, op, pull, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx;
 let A: string, B: string, CARRO: string; // A = hall (current place), B = another hall, CARRO = carrosserie (customer only)
@@ -425,7 +425,7 @@ describe("repair calendar: bookings", () => {
     const days = [workday(18), workday(19), workday(20)], day = days[2];
     const ids: string[] = [moved, inRepair, deleted];
     for (const [i, v] of ids.entries()) expect((await one(assessor, book(v, days[i]))).status).toBe("ok");
-    expect((await one(chefA, op("vehicle.move", { vehicleId: moved, toStationId: B }))).status).toBe("ok");
+    expect((await one(chefA, op("vehicle.move", { vehicleId: moved, toStationId: B, driverUserId: await driverAt(c, A) }))).status).toBe("ok");
     await c.h.db.update(vehicles).set({ statut: "reparatur", repairStage: "pdr" }).where(eq(vehicles.id, inRepair)); // e.g. started by hand meanwhile
     expect((await one(chefA, op("vehicle.delete", { vehicleId: deleted }))).status).toBe("ok");
     const res = await runDueBookings(c.h.db, new Date(day + "T12:00:00Z"));

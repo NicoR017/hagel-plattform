@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { JPEG, PDF, call, dentsPanel, inviteAndAccept, op, pull, push, setup, tick, uuid, type Ctx } from "./helpers";
+import { JPEG, PDF, call, driverAt, dentsPanel, inviteAndAccept, op, pull, push, setup, tick, uuid, type Ctx } from "./helpers";
 import { auditLog, insurers, photos, technicians, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles, users } from "../src/schema";
 
 let c: Ctx;
@@ -300,7 +300,7 @@ describe("status, move, delete", () => {
     expect((await push(c, chefB, [op("vehicle.move", { vehicleId: mid, toStationId: B })])).body.results[0].code).toBe("vehicle_not_found");
     const before = await pull(c, chefA, c.orgES);
     expect(byId(before.vehicles, mid)).toBeTruthy();
-    const mv = await push(c, chefA, [op("vehicle.move", { vehicleId: mid, toStationId: B, note: "to hall" })]);
+    const mv = await push(c, chefA, [op("vehicle.move", { vehicleId: mid, toStationId: B, note: "to hall", driverUserId: await driverAt(c, A) })]);
     expect(mv.body.results[0].status).toBe("ok");
     const afterA = await pull(c, chefA, c.orgES, before.cursor, before.epoch);
     expect(afterA.gone).toContain(mid);
@@ -322,9 +322,9 @@ describe("status, move, delete", () => {
     const a = uuid(), b = uuid();
     await push(c, assessor, [createOp(a), createOp(b)]);
     await push(c, assessor, [op("vehicle.status", { vehicleId: a, statut: "reparatur" }), op("vehicle.status", { vehicleId: b, statut: "reparatur" })]); // the occupancy counts cars in repair
-    const r1 = await push(c, chefA, [op("vehicle.move", { vehicleId: a, toStationId: MINI })]);
+    const r1 = await push(c, chefA, [op("vehicle.move", { vehicleId: a, toStationId: MINI, driverUserId: await driverAt(c, A) })]);
     expect(r1.body.results[0].warnings ?? []).toEqual([]);
-    const r2 = await push(c, chefA, [op("vehicle.move", { vehicleId: b, toStationId: MINI })]);
+    const r2 = await push(c, chefA, [op("vehicle.move", { vehicleId: b, toStationId: MINI, driverUserId: await driverAt(c, A) })]);
     expect(r2.body.results[0]).toMatchObject({ status: "ok", warnings: ["capacity_full"] });
   });
   it("moving to an unknown site is rejected", async () => {

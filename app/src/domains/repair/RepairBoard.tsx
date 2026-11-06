@@ -154,6 +154,7 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                       <b style={{ fontSize: 16, color: "#14233B" }}>{String(x.kennzeichen || "—")}</b>
                       {v.statut === "attente" && <span className="badge" style={{ background: "#FDF0E1", color: "#8A4A06", fontSize: 11 }}>{holdLabel(v)}</span>}
                     </span>
+                    {!!v.noMove && <span className="badge" style={{ background: "#FBE7E4", color: "#9B2C1F", fontSize: 11, alignSelf: "flex-start" }} title={t("f1NoMoveTip")}>🚫 {t("f1NoMove")}</span>}
                     {arrivedToday(v, today) && <span className="badge" style={{ background: "#E3ECFD", color: "#1D4FB8", fontSize: 11, alignSelf: "flex-start" }}>{t("v5TerminToday")}</span>}
                     <span style={{ fontSize: 12 }}>📍 {st?.name}{v.clientStationId && v.clientStationId !== v.stationId ? <span className="muted"> · 🏢 {f.refs?.stations.find((s) => s.id === v.clientStationId)?.name ?? String(x.kunde || "")}</span> : null}</span>
                     <span className="muted" style={{ fontSize: 12 }}>{[f.refs?.insurers.find((i) => i.id === v.insurerId)?.name, x.modell].filter(Boolean).join(" · ")}</span>

@@ -215,6 +215,8 @@ export const vehicles = pgTable("vehicles", {
   repairEnteredAt: timestamp("repair_entered_at", { withTimezone: true }),
   dropOffSignedAt: timestamp("drop_off_signed_at", { withTimezone: true }),
   pickUpSignedAt: timestamp("pick_up_signed_at", { withTimezone: true }),
+  /** V7: the customer did not allow the car to be moved to another station / a body shop (drop-off signature): "do not move" */
+  noMove: boolean("no_move").notNull().default(false),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdBy: uuid("created_by").references(() => users.id),
@@ -263,6 +265,8 @@ export const vehicleMoves = pgTable("vehicle_moves", {
   fromStationId: uuid("from_station_id"),
   toStationId: uuid("to_station_id"),
   userId: uuid("user_id").references(() => users.id),
+  /** V7: who drove the car (a person of the departure station); userId stays who clicked */
+  driverUserId: uuid("driver_user_id").references(() => users.id),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   note: text("note"),
 });
@@ -683,5 +687,8 @@ export const vehicleHandovers = pgTable("vehicle_handovers", {
   mailError: text("mail_error"),
   mailedAt: timestamp("mailed_at", { withTimezone: true }),
   replacedBy: uuid("replaced_by"),
+  /** V7 (drop-off): did the customer allow the car to be moved to another station / a body shop, and the exact text he accepted; null = not asked (older app) */
+  moveConsent: boolean("move_consent"),
+  moveConsentText: text("move_consent_text"),
   createdAt: createdAt(),
 }, (t) => ({ byVehicle: index("vehicle_handovers_vehicle_idx").on(t.vehicleId, t.kind) }));

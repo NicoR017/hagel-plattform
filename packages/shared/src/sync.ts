@@ -126,7 +126,10 @@ export const handoverInput = z.object({
   signedAt: z.string().datetime({ offset: true }),
   signature: signatureSchema,
   sendReceipt: z.boolean().default(false),
-});
+  /** V7, drop-off: the customer's choice about moving the car and the exact text he saw (both or none; absent = an older app that does not ask) */
+  moveConsent: z.boolean().optional(),
+  moveConsentText: z.string().trim().min(1).max(600).optional(),
+}).refine((h) => (h.moveConsent === undefined) === (h.moveConsentText === undefined), { message: "consent_text_required" });
 export type HandoverInput = z.infer<typeof handoverInput>;
 
 export const opSchema = z.discriminatedUnion("type", [
@@ -143,7 +146,7 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("vehicle.panel"), vehicleId: uuidStr, key: z.string().max(30), panel: panelSchema.nullable() }),
   z.object({ ...base, type: z.literal("vehicle.shares"), vehicleId: uuidStr, fields: sharesFields.merge(commissionFields) }),
   z.object({ ...base, type: z.literal("vehicle.status"), vehicleId: uuidStr, statut: z.enum(STATUSES), motif: z.string().max(300).optional() }),
-  z.object({ ...base, type: z.literal("vehicle.move"), vehicleId: uuidStr, toStationId: uuidStr, note: z.string().max(300).optional() }),
+  z.object({ ...base, type: z.literal("vehicle.move"), vehicleId: uuidStr, toStationId: uuidStr, note: z.string().max(300).optional(), /** V7: who drives (a person of the departure station); required for a move between two stations */ driverUserId: uuidStr.optional() }),
   z.object({ ...base, type: z.literal("vehicle.delete"), vehicleId: uuidStr }),
   z.object({ ...base, type: z.literal("vehicle.handover"), vehicleId: uuidStr, handover: handoverInput }),
   z.object({ ...base, type: z.literal("vehicle.assign"), vehicleId: uuidStr, kind: z.enum(["pdr", "demontage"]), userIds: z.array(uuidStr).max(20) }),
@@ -224,6 +227,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   repairEnteredAt?: string | null;
   dropOffSignedAt?: string | null;
   pickUpSignedAt?: string | null;
+  /** V7: the customer refused the move (drop-off signature): only the parking next to the station is possible */
+  noMove?: boolean;
   panels: Record<string, unknown>;
   colibri: unknown | null;
   colibriFile: { name: string; size: number } | null;
@@ -328,6 +333,8 @@ export interface PullResponse {
       /** set for a technician / headliner account that does not see the internal split: the app then shows the field interface (v4) */
       fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[]; /** repair steps given by his role(s); empty = rule of his technician kind */ steps?: string[]; /** the moves he may make: [from, to] */ moves?: [string, string][] } | null;
     };
+    /** V7: people who can drive a car, with the stations they are assigned to — only for users who may move cars (absent on an older server) */
+    drivers?: { id: string; name: string; stationIds: string[] }[];
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */
     people: { id: string; name: string; roles?: string[]; stationIds?: string[] }[];
     insurers: ClientInsurer[];

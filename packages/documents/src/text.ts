@@ -45,6 +45,8 @@ const HANDOVER_DE = {
   sentenceDrop: "Mit meiner Unterschrift bestätige ich, {name}, dass ich das Fahrzeug am {date} um {time} Uhr in {station} abgegeben habe. Entgegengenommen von {user}.",
   sentencePick: "Mit meiner Unterschrift bestätige ich, {name}, dass ich das Fahrzeug am {date} um {time} Uhr in {station} zurückerhalten habe. Übergeben von {user}.",
   signaturesTitle: "Unterschriften des Kunden", blockDrop: "Fahrzeugannahme", blockPick: "Fahrzeugrückgabe", unsigned: "noch nicht unterschrieben",
+  moveConsentLabel: "Verlegung des Fahrzeugs", moveYes: "Erlaubt", moveNo: "Nicht erlaubt – Fahrzeug nicht verlegen",
+  moveConsentText: "Ich erlaube PDR Team, mein Fahrzeug während der Reparatur in eine andere PDR-Team-Station oder zu einer Partner-Carrosserie (Lackierung) zu verlegen.",
 };
 const HANDOVER_ES: typeof HANDOVER_DE = {
   titleDrop: "Comprobante de entrega – Recepción del vehículo", titlePick: "Comprobante de entrega – Devolución del vehículo",
@@ -54,6 +56,8 @@ const HANDOVER_ES: typeof HANDOVER_DE = {
   sentenceDrop: "Con mi firma, {name}, confirmo que he entregado el vehículo el {date} a las {time} en {station}. Recibido por {user}.",
   sentencePick: "Con mi firma, {name}, confirmo que he recogido el vehículo el {date} a las {time} en {station}. Entregado por {user}.",
   signaturesTitle: "Firmas del cliente", blockDrop: "Recepción del vehículo", blockPick: "Devolución del vehículo", unsigned: "aún sin firmar",
+  moveConsentLabel: "Traslado del vehículo", moveYes: "Autorizado", moveNo: "No autorizado – no trasladar el vehículo",
+  moveConsentText: "Autorizo a PDR Team a trasladar mi vehículo a otra estación de PDR Team o a un taller colaborador (pintura) durante la reparación.",
 };
 export const handoverText = (land: Land | undefined) => (land === "ES" ? HANDOVER_ES : HANDOVER_DE);
 

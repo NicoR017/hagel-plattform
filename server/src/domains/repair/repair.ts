@@ -385,6 +385,7 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       const [st] = await tx.select().from(stations).where(and(eq(stations.id, placeId), eq(stations.orgId, row.orgId))).for("update"); // serialises two assessors booking the same day
       if (!st || !st.active || (placeId !== row.stationId && st.type === "parc")) throw new Reject("station_unknown");
       if (st.type === "carrosserie") throw new Reject("station_not_a_place");
+      if (row.noMove && st.id !== row.stationId) throw new Reject("move_forbidden"); // V7: the repair there would move the car, and the customer refused
       const today = todayIn(tzOfCountry(st.country));
       if (!bookableDay(b.date, today)) throw new Reject("booking_date_invalid");
       if ((await bookedCount(tx, st.id, b.date)) >= st.repairsPerDay) throw new Reject("booking_full");

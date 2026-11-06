@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { SYSTEM_ROLES } from "@hagel/shared";
 import { auditLog, insurers, roleAssignments, roles, stationInsurers, stations, vehicleMoves, vehicles } from "../src/schema";
 import { MOVE_NOTE, applyBodyshopMove, normName, planBodyshopMove } from "../src/scripts/v5_move_bodyshop_vehicles";
-import { call, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
+import { call, driverAt, dentsPanel, inviteAndAccept, op, push, setup, uuid, type Ctx } from "./helpers";
 
 let c: Ctx, HALL: string, HALL2: string, CARRO: string;
 let chef: string, assessor: string, tech: string;
@@ -30,7 +30,7 @@ describe("a body shop is never a place", () => {
     const id = uuid();
     expect((await res(c.superToken, create(id)))[0].status).toBe("ok");
     expect((await res(c.superToken, op("vehicle.move", { vehicleId: id, toStationId: CARRO })))[0]).toMatchObject({ status: "rejected", code: "station_not_a_place" });
-    expect((await res(c.superToken, op("vehicle.move", { vehicleId: id, toStationId: HALL2 })))[0].status).toBe("ok");
+    expect((await res(c.superToken, op("vehicle.move", { vehicleId: id, toStationId: HALL2, driverUserId: await driverAt(c, HALL) })))[0].status).toBe("ok");
   });
 
   it("the customer must be a body shop; an unchanged old value stays editable", async () => {

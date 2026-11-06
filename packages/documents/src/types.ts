@@ -87,6 +87,8 @@ export interface HandoverDoc {
   stationName: string; stationAddress: string;
   /** the signature */
   strokes: Stroke[];
+  /** drop-off only: did the customer allow moving the car (null / absent = not asked) and the exact text he accepted */
+  moveConsent?: boolean | null; moveConsentText?: string | null;
 }
 
 export interface RepairReportOptions {

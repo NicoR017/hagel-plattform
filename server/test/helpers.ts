@@ -6,6 +6,8 @@ import { createDb, type DbHandle } from "../src/db";
 import { MemoryMailer } from "../src/email";
 import { Hub } from "../src/hub";
 import { MemoryStorage } from "../src/storage";
+import { and, eq } from "drizzle-orm";
+import { roleAssignments, stations } from "../src/schema";
 import { seed } from "../src/seed";
 import { FakeAzure } from "../src/domains/scans/azure_fake";
 import { FakeCitas } from "../src/domains/citas/fake";
@@ -82,6 +84,16 @@ export async function inviteAndAccept(ctx: Ctx, org: string, email: string, body
 }
 
 export const uuid = () => randomUUID();
+
+/** V7: a person assigned to `stationId` (a move between two stations needs a driver of the departure station); one is created when nobody is assigned yet. */
+export async function driverAt(ctx: Ctx, stationId: string): Promise<string> {
+  const [st] = await ctx.h.db.select().from(stations).where(eq(stations.id, stationId));
+  const find = async () => (await ctx.h.db.select({ u: roleAssignments.userId }).from(roleAssignments).where(and(eq(roleAssignments.stationId, stationId), eq(roleAssignments.orgId, st.orgId))))[0]?.u;
+  const have = await find();
+  if (have) return have;
+  await inviteAndAccept(ctx, st.orgId, `driver-${stationId.slice(0, 8)}@example.test`, { role_id: ctx.roleId.technicien, station_id: stationId });
+  return (await find())!;
+}
 let clock = Date.parse("2026-10-19T08:00:00Z");
 /** strictly increasing client timestamps */
 export const tick = (ms = 1000) => new Date((clock += ms)).toISOString();

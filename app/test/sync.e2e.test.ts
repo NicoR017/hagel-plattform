@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { LocalDb, refsKey } from "../src/shared/sync/db";
 import { SyncEngine, type Http } from "../src/shared/sync/engine";
 import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
-import { call, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
+import { call, driverAt, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { users, vehicleAssignments } from "../../server/src/schema";
 
 let c: Ctx;
@@ -165,7 +165,7 @@ describe("two phones", () => {
     expect((await pa.db.issues.toArray()).some((i) => i.opType === "vehicle.move" && i.code === "not_allowed")).toBe(true);
     expect((await veh(pa, id))!.stationId).toBe(A);
     // the chef of site A may move it (right on the SOURCE site)
-    await moveVehicle(pb.ctx, id, B, "to hall");
+    await moveVehicle(pb.ctx, id, B, "to hall", await driverAt(c, A));
     await sync(pb);
     await sync(pc);
     expect(await veh(pc, id)).toBeUndefined();
@@ -343,6 +343,31 @@ describe("misc", () => {
     const rows = (await call(c, "GET", `/vehicles/${id}/handovers`, { token: tokens.chefA, org: c.orgES })).body as { id: string }[];
     expect(rows.filter((r) => r.id === hid)).toHaveLength(1);
     expect(JSON.stringify(await vehicles(p))).not.toContain("Ana Cliente");
+  });
+  it("V7: the answer on the drop-off signature (do not move) shows at once, offline too, and a move between two stations needs a driver", async () => {
+    const p = phone(tokens.chefA);
+    await sync(p);
+    const id = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "NOMOVE 1" } });
+    await sync(p);
+    p.online = false;
+    await signHandover(p.ctx, id, {
+      id: crypto.randomUUID(), kind: "drop_off", customerName: "Ana Cliente", customerEmail: null, remarks: "", signedAt: new Date().toISOString(),
+      signature: [[[10, 10], [200, 80]]], sendReceipt: false, moveConsent: false, moveConsentText: "Autorizo a PDR Team a trasladar mi vehículo.",
+    });
+    expect(((await veh(p, id)) as Record<string, unknown>).noMove).toBe(true);
+    p.online = true;
+    await sync(p);
+    expect(((await veh(p, id)) as Record<string, unknown>).noMove).toBe(true); // the server says the same
+    await moveVehicle(p.ctx, id, B, undefined, await driverAt(c, A));
+    await sync(p);
+    expect((await p.db.issues.toArray()).some((i) => i.opType === "vehicle.move" && i.code === "move_forbidden")).toBe(true);
+    // a car that may move: no driver = refused and reported; with one it goes
+    const id2 = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "DRIVER 1" } });
+    await sync(p);
+    await moveVehicle(p.ctx, id2, B);
+    await sync(p);
+    expect((await p.db.issues.toArray()).some((i) => i.opType === "vehicle.move" && i.code === "driver_required")).toBe(true);
+    expect((await p.db.getMeta(refsKey(c.orgES)) as any).drivers.some((d: any) => d.stationIds.includes(A))).toBe(true);
   });
   it("assigned technician list (people) and refs arrive with the first pull", async () => {
     const p = phone(tokens.assessor);

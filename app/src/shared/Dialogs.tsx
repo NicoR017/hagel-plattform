@@ -76,14 +76,22 @@ export function StatusDialog({ ids, current, onClose, onDone }: { ids: string[];
 /** Move to another site (right on the source site is checked by the server; the customer does not change). */
 export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from?: string | null; onClose: () => void; onDone?: () => void }) {
   const f = useField();
-  const sites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from && isPlace(s));
+  const allSites = (f.refs?.stations ?? []).filter((s) => s.active && s.id !== from && isPlace(s));
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
+  const [driver, setDriver] = useState("");
+  const [noMove, setNoMove] = useState(false);
+  // V7: a car the customer refused to have moved can only go to a parking (the server checks it too)
+  useEffect(() => { void Promise.all(ids.map((id) => f.db.vehicles.get(id))).then((vs) => setNoMove(vs.some((v) => !!v?.noMove))); }, [ids.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sites = allSites.filter((s) => !noMove || s.type === "parc");
   const dest = sites.find((s) => s.id === to);
   const occ = f.refs?.occupancy ?? {};
   const src = (f.refs?.stations ?? []).find((s) => s.id === from);
   // the server warns when the site is already full before the move; show the same warning as soon as the move would fill it
   const full = !!dest && dest.capacite > 0 && (occ[dest.id] ?? 0) + ids.length > dest.capacite;
+  // V7: between two workshops somebody drives the car: chosen among the people of the departure station (no free name). Station <-> parking: nobody to name.
+  const needDriver = !!src && src.type === "hall" && !!dest && dest.type === "hall" && f.refs?.drivers !== undefined;
+  const drivers = (f.refs?.drivers ?? []).filter((d) => !!src && d.stationIds.includes(src.id));
   const tenantDiffers = !!dest && !!src?.azureTenant && !!dest.azureTenant && src.azureTenant !== dest.azureTenant;
   const typeWord = (ty: string) => (ty === "hall" ? t("v3TypeHall") : ty === "parc" ? t("v3TypeParc") : t("v3TypeCarrosserie"));
   const items: PickItem[] = sites.map((s) => {
@@ -109,12 +117,24 @@ export function MoveDialog({ ids, from, onClose, onDone }: { ids: string[]; from
           </div>
         )}
       </Field>
+      {noMove && <div style={{ color: "var(--brick)", fontSize: 13, marginBottom: 8 }}>🚫 {t("f1MoveBlocked")}</div>}
+      {needDriver && (
+        <Field label={`${t("f1Driver")} *`}>
+          <select className="inp" value={driver} onChange={(e) => setDriver(e.target.value)} aria-label={t("f1Driver")}>
+            <option value="">{drivers.length ? t("f1DriverPh") : t("f1DriverNone")}</option>
+            {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{t("f1DriverHint").replace("{n}", String(drivers.length))}</div>
+        </Field>
+      )}
       <Field label={t("moveNote")}><input className="inp" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       <div className="muted" style={{ fontSize: 12 }}>{t("moveHint")}</div>
-      <button className="pbtn" disabled={!dest} onClick={async () => {
+      <button className="pbtn" disabled={!dest || (needDriver && !driver)} onClick={async () => {
         const prev = await snapshotVehicles(f.db, ids);
-        for (const id of ids) await moveVehicle(f.mut, id, to, note || undefined);
-        toast(`${ids.length} → ${dest!.name}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoMove(f.mut, prev, to, t("v3Undone")); toast(t("v3Undone")); } });
+        for (const id of ids) await moveVehicle(f.mut, id, to, note || undefined, needDriver ? driver : undefined);
+        // a move between two workshops had a driver on the road: no "undo" button (the car really drove); station <-> parking keeps it
+        if (needDriver) toast(`${ids.length} → ${dest!.name}`, 4000);
+        else toast(`${ids.length} → ${dest!.name}`, UNDO_MS, { label: t("v3Undo"), run: async () => { await undoMove(f.mut, prev, to, t("v3Undone")); toast(t("v3Undone")); } });
         onDone?.(); onClose();
       }}>{t("apply")}</button>
     </Dialog>

@@ -269,6 +269,7 @@ export async function generateHandoverReceipt(
   if (h.customerEmail) kv(HT.email, h.customerEmail);
   kv(HT.place, [h.stationName, h.stationAddress].filter(Boolean).join(", "));
   kv(HT.remarks, h.remarks);
+  if (!pick && h.moveConsent != null) kv(HT.moveConsentLabel, (h.moveConsent ? HT.moveYes : HT.moveNo) + (h.moveConsentText ? "\n" + h.moveConsentText : ""));
   kv(pick ? HT.receivedByPick : HT.receivedByDrop, h.receivedBy);
 
   cv.y -= 10;

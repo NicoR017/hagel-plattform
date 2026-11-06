@@ -44,6 +44,7 @@ export async function buildHandoverReceipt(deps: { db: Db; storage: Storage }, h
   const hd: HandoverDoc = {
     kind: h.kind as HandoverDoc["kind"], customerName: h.customerName, customerEmail: h.customerEmail, remarks: h.remarks, signedAt: h.signedAt.toISOString(),
     receivedBy: by?.name || by?.email || "", stationName: st?.name ?? "", stationAddress: st?.address ?? "", strokes: h.signature as HandoverDoc["strokes"],
+    moveConsent: h.moveConsent, moveConsentText: h.moveConsentText,
   };
   const bytes = await generateHandoverReceipt(doc, hd, { letterhead: await letterheadOf(db, storage, row), timeZone: land === "ES" ? "Europe/Madrid" : "Europe/Berlin" });
   const plate = fileSafe(String(flat.kennzeichen ?? "")) || "vehicle";
@@ -119,6 +120,7 @@ export function handoverRoutes({ db, storage, mailer, needAuth, needOrg, validat
       id: x.id, kind: x.kind, customerName: x.customerName, customerEmail: x.customerEmail, remarks: x.remarks, signedAt: x.signedAt, receivedAt: x.receivedAt,
       signedBy: people.find((p) => p.id === x.signedBy)?.name || people.find((p) => p.id === x.signedBy)?.email || "", station: x.stationId ? sts.get(x.stationId) ?? "" : "",
       signature: x.signature, sendReceipt: x.sendReceipt, mailStatus: x.mailStatus, mailError: x.mailError, mailedAt: x.mailedAt, replaced: !!x.replacedBy, hasReceipt: !!x.receiptPdfKey,
+      moveConsent: x.moveConsent, moveConsentText: x.moveConsentText,
     })));
   });
 

@@ -60,6 +60,7 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
     case "vehicle.handover": {
       if (!v) return v;
       const n: LocalVehicle = op.handover.kind === "drop_off" ? { ...v, dropOffSignedAt: op.handover.signedAt, updatedAt: at } : { ...v, pickUpSignedAt: op.handover.signedAt, updatedAt: at };
+      if (op.handover.kind === "drop_off" && op.handover.moveConsent !== undefined) n.noMove = !op.handover.moveConsent; // "do not move" shows at once, offline too
       if (op.handover.kind === "pick_up" && v.statut !== "rendu") { n.statut = "rendu"; n.statutMotif = null; n.statutDepuis = at; } // handing the car back = Returned
       return n;
     }
