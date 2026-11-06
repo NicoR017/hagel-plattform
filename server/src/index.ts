@@ -17,6 +17,7 @@ import { citasFromConfig } from "./domains/citas/citas";
 import { runDueInsurerReports } from "./domains/reports/insurer_report_send";
 import { FakeCitas } from "./domains/citas/fake";
 import { runOrderQueue } from "./domains/parts/orders";
+import { runPaintReminders } from "./domains/paint/paint";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
@@ -65,6 +66,18 @@ if (process.env.ORDER_QUEUE !== "off") {
     finally { busy = false; }
   };
   setInterval(() => void tick(), 60_000);
+}
+// V7 F4: the day before a customer's painting appointment he gets one reminder e-mail (claimed in the database first)
+if (process.env.PAINT_REMINDERS !== "off") {
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try { const r = await runPaintReminders({ db: h.db, mailer }); if (r.reminded) console.log("[paint]", JSON.stringify(r)); }
+    catch (e) { console.error("[paint] FAILED", (e as Error).message); }
+    finally { busy = false; }
+  };
+  setInterval(() => void tick(), 15 * 60_000);
 }
 const root = new Hono();
 root.route("/api", api);

@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { REPAIR_STAGES, STATUSES } from "./permissions";
-import type { ClientPart, ClientPartsRefs } from "./parts";
+import type { ClientPaintJob, ClientPart, ClientPartsRefs } from "./parts";
 import { PART_RETURN_REASONS } from "./parts";
 
 export const uuidStr = z.string().uuid();
@@ -273,6 +273,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   repair?: ClientRepair;
   /** V7: spare parts of the car (users with `pieces.voir`; absent on an older server) */
   parts?: ClientPart[];
+  /** V7 F4: paint jobs of the car (users of the repair board / paint managers) */
+  paint?: ClientPaintJob[];
   updatedAt: string;
   updatedBy: string | null;
   seq: number;
@@ -349,7 +351,7 @@ export interface PullResponse {
     /** where a repair can be booked (PDR halls and body shops of the organisation, names only): the choices of the repair appointment; only for users who book */
     repairLocations: { id: string; name: string; type: string; country: string; repairsPerDay: number; azureTenant: string | null }[];
     /** body shops (carrosserie sites, names only) a car can be sent to: the choices of the "At Bodyshop" column; only for users of the repair board */
-    bodyshops: { id: string; name: string; azureTenant: string | null }[];
+    bodyshops: { id: string; name: string; azureTenant: string | null; /** F4: paints for us */ paintPartner?: boolean }[];
     /** occupancy per site = cars in repair status right now, for the sites the user can see */
     occupancy: Record<string, number>;
     settings: OrgSettings;

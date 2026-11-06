@@ -33,6 +33,13 @@ export interface ClientPart {
   /** F3b: the order that carries the part (null = not ordered yet) */
   orderId?: string | null;
 }
+/** V7 F4: paint job of an element */
+export const PAINT_STATUSES = ["to_paint", "scheduled", "at_body_shop", "done"] as const;
+export type PaintStatus = (typeof PAINT_STATUSES)[number];
+export interface ClientPaintJob {
+  id: string; elementKey: string; status: string; source: string; partnerId: string | null; plannedDate: string | null; plannedTime: string | null;
+  customerAppointment: boolean; doneAt: string | null;
+}
 export interface ClientCatalogPart { id: string; names: PartNames; zoneKeys: string[]; validated: boolean }
 export interface ClientCustomZone { key: string; group: "exterior" | "interior"; names: PartNames }
 export interface ClientPartsRefs { zones: ClientCustomZone[]; catalog: ClientCatalogPart[] }

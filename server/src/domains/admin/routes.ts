@@ -434,6 +434,16 @@ export function adminRoutes({ db, cfg, mailer, hub, storage, needAuth, needOrg, 
     hub.publish(orgId, 0);
     return c.json(s, 201);
   });
+  /** V7 F4: this body shop paints for us (offered in "Schedule painting") */
+  org.put("/bodyshops/:id/paint-partner", mayBodyshops, zValidator("json", z.object({ paint_partner: z.boolean() }), validationHook), async (c) => {
+    const orgId = c.get("orgId"), id = c.req.param("id") ?? "";
+    const [before] = await db.select().from(stations).where(and(eq(stations.id, id), eq(stations.orgId, orgId), eq(stations.type, "carrosserie")));
+    if (!before) throw new HttpError(404, "station_not_found");
+    const [s] = await db.update(stations).set({ paintPartner: c.req.valid("json").paint_partner }).where(eq(stations.id, id)).returning();
+    await audit(db, { orgId, userId: c.get("principal").id, action: "update", entity: "bodyshop", entityId: id, before: { paintPartner: before.paintPartner }, after: { paintPartner: s.paintPartner } });
+    hub.publish(orgId, 0);
+    return c.json({ id: s.id, paintPartner: s.paintPartner });
+  });
   org.put("/bodyshops/:id", mayBodyshops, zValidator("json", bodyshopInput.partial(), validationHook), async (c) => {
     const b = c.req.valid("json"), orgId = c.get("orgId");
     const before = await bodyshopOf(c.req.param("id") ?? "", orgId);

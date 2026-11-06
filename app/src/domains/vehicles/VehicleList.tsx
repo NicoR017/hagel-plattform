@@ -101,6 +101,7 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
           <button className={"chip" + (!asList ? " on" : "")} aria-pressed={!asList} onClick={() => setAsList(false)}>{t("v5ViewBoard")}</button>
           <button className={"chip" + (asList ? " on" : "")} aria-pressed={asList} onClick={() => setAsList(true)}>{t("v5ViewList")}</button>
           {f.can("pieces.voir") && <button className="chip" onClick={() => go({ page: "parts", stationId, view: "part" })}>🔩 {t("f3ViewParts")}</button>}
+          <button className="chip" onClick={() => go({ page: "paint", stationId, view: "element" })}>🎨 {t("f5ViewPaint")}</button>
         </div>
       )}
       {mode === "rep" && !asList && <RepairBoard stationId={stationId} />}

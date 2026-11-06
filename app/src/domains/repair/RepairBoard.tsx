@@ -17,6 +17,7 @@ import { HandoverDialog } from "./HandoverDialog";
 import { holdLabel } from "../vehicles/listActions";
 import { BodyshopPick } from "../admin/BodyshopPick";
 import { deliveredOf, isLate } from "../parts/partsBoardLogic";
+import { paintOf, paintProgress } from "../paint/paintLogic";
 import { partsOfVehicle } from "../vehicles/partsLogic";
 
 export const stageLabel = (s: string) => t(`v5Stage_${s}` as Key);
@@ -173,6 +174,9 @@ export function RepairBoard({ stationId }: { stationId: string }) {
                   {(() => { const ps = partsOfVehicle(v as { parts?: never }); if (!ps.length) return null; const { d, n } = deliveredOf(ps); const late = ps.some((p) => isLate(p)); return (
                     <button className="chip" style={{ minHeight: 36, alignSelf: "flex-start", background: late ? "#FBE7E4" : d === n ? "#E3F4EA" : "#E3ECFD", color: late ? "#9B2C1F" : d === n ? "#17663F" : "#1D4FB8", fontWeight: 700 }} title={t("f3BadgeTip").replace("{d}", String(d)).replace("{n}", String(n))}
                       onClick={() => go({ page: "parts", stationId, view: "part", car: v.id })}>🔩 {d}/{n}{late ? " ⏰" : ""}</button>); })()}
+                  {(() => { const pj = paintOf(v); if (!pj.length) return null; const { d, n } = paintProgress(pj); return (
+                    <button className="chip" style={{ minHeight: 36, alignSelf: "flex-start", background: d === n ? "#E3F4EA" : "#F3EEFB", color: d === n ? "#17663F" : "#5B3FA0", fontWeight: 700 }} title={t("f5Progress").replace("{d}", String(d)).replace("{n}", String(n))}
+                      onClick={() => go({ page: "paint", stationId, view: "element", car: v.id })}>🎨 {d}/{n}</button>); })()}
                   <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
                     <span className="badge" style={{ background: open ? "#FBF1D9" : "#E3F4EA", color: open ? "#7A5300" : "#17663F", fontSize: 11 }}>{open ? `${t("v5Todo")}: ${open} ${t("v3Open")}` : `${t("v5Todo")} ✓`}</span>
                     {may && (

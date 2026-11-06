@@ -7,6 +7,7 @@ import {
 } from "@hagel/shared";
 import { audit } from "../../audit";
 import { applyPartOp, catalogueRefs, isPartOp, partsFor } from "../parts/parts";
+import { paintFor, syncPaintJob } from "../paint/paint";
 import { finishHandover } from "../repair/handover";
 import type { Mailer } from "../../email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "../admin/methods";
@@ -285,6 +286,8 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
         panels[op.key] = next;
       } else delete panels[op.key];
       stamps[op.key] = at;
+      // V7 F4: "push to paint" gives the element its paint job (and takes an unstarted one away when the method changes)
+      await syncPaintJob(tx, row, op.key, !!op.panel && op.panel.method === "ptp", u.id);
       return commit(tx, u, row, { panels, panelsAt: stamps }, ["panel"], [], op.type, { before, after: panels[op.key] ?? null });
     }
 
@@ -568,6 +571,8 @@ async function createVehicle(tx: Tx, u: Principal, op: Extract<Op, { type: "vehi
     methodId: chosen?.id ?? null, methodVersion: chosen?.version ?? null,
   });
   await tx.insert(vehicleStatusHistory).values({ vehicleId: v.id, statut: v.statut, userId: u.id });
+  // a car created with "push to paint" elements (created offline with its dents) gets its paint jobs
+  for (const [k, p] of Object.entries(v.panels)) if ((p as { method?: string }).method === "ptp") await syncPaintJob(tx, { id: v.id, orgId: dest.orgId } as VehicleRow, k, true, u.id);
   // an account that only sees the cars assigned to it (technician, freelancer) is assigned to the car it creates, or it would vanish
   if (u.grants.some((g) => g.orgId === dest.orgId && (g.scope === "assigne" || g.scope === "campagne"))) await tx.insert(vehicleAssignments).values({ vehicleId: v.id, userId: u.id, type: "pdr" }).onConflictDoNothing();
   await audit(tx as unknown as Db, { orgId: dest.orgId, userId: u.id, action: op.type, entity: "vehicle", entityId: v.id, after: { stationId: v.stationId, ...pick(header, ["kennzeichen", "land"]) } });
@@ -639,6 +644,8 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   // V7: spare parts of each car (users with pieces.voir)
   const partsMap = await partsFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
   for (const cv of outVehicles) { const x = partsMap.get(cv.id); if (x) cv.parts = x; }
+  const paintMap = await paintFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
+  for (const cv of outVehicles) { const x = paintMap.get(cv.id); if (x) cv.paint = x; }
   const photoNames = await userNames(db, ps.map((p) => p.takenBy));
   const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map((p) => photoToClient(p, photoNames));
 
@@ -736,7 +743,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
     drivers = [...by.values()].map((e) => ({ id: e.id, name: e.name, stationIds: [...e.stationIds] })).sort((a, b) => a.name.localeCompare(b.name));
   }
   const bodyshops = perms.has("reparatur.board")
-    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant }))
+    ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "carrosserie"), eq(stations.active, true))).orderBy(asc(stations.name))).map((s) => ({ id: s.id, name: s.name, azureTenant: s.azureTenant, paintPartner: s.paintPartner }))
     : [];
   const repairLocations = perms.has("termine.buchen")
     ? (await db.select().from(stations).where(and(eq(stations.orgId, orgId), eq(stations.type, "hall"), eq(stations.active, true))).orderBy(asc(stations.name)))

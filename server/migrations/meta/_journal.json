@@ -204,6 +204,13 @@
       "when": 1793658416050,
       "tag": "0028_v7_parts_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793744816050,
+      "tag": "0029_v7_paint",
+      "breakpoints": true
     }
   ]
 }

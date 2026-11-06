@@ -158,7 +158,7 @@ function evText(e: Ev): string {
   };
   if (map[k]) return map[k];
   // parts and orders (F2 / F3a / F3b): "Order sent: PED-2026-00042" …
-  const ev = tOr(`f4Ev_${k}`, "");
+  const ev = tOr(`f4Ev_${k}`, "") || tOr(`f5Ev_${k}`, "");
   if (ev) return [ev, d.number, d.name, d.reason ? String(d.reason) : "", d.error ? String(d.error) : ""].filter(Boolean).join(" · ");
   return k;
 }

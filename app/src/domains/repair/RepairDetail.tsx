@@ -19,6 +19,7 @@ import { REPAIR_STAGES, neighbour, stageIndex, stageOf, todosOpen, type RepairSt
 import { blockersText, stageLabel } from "./RepairBoard";
 import { Verlauf } from "../vehicles/VehicleDetail";
 import { CarParts } from "../parts/CarParts";
+import { CarPaint } from "../paint/CarPaint";
 
 type Repair = NonNullable<LocalVehicle["repair"]> & {
   todos: { id: string; text: string; source: string; done: boolean; doneBy: string | null; doneAt: string | null }[];
@@ -26,7 +27,7 @@ type Repair = NonNullable<LocalVehicle["repair"]> & {
   finishBlockers: string[]; lastReport?: { status: string; at: string; auto: boolean } | null;
 };
 const dm = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
-const TAB_LABEL: Record<RTab, Key> = { uebersicht: "v5TabOverview", teile: "f3TabParts", fotos: "v5TabPhotos", abschluss: "v5TabClosing", verlauf: "v4SecHistory" };
+const TAB_LABEL: Record<RTab, Key> = { uebersicht: "v5TabOverview", teile: "f3TabParts", lack: "f5PaintTab", fotos: "v5TabPhotos", abschluss: "v5TabClosing", verlauf: "v4SecHistory" };
 
 function Thumb({ p, onOpen }: { p: LocalPhoto; onOpen: () => void }) {
   const url = usePhotoUrl(p);
@@ -136,10 +137,11 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
           {may && <button className="chip" disabled={!next || next === "finish"} aria-label={t("v5OneForward")} onClick={() => next && next !== "finish" && void setRepairStage(f.mut, id, next)}>›</button>}
         </div>
         <div className="rd-tabs" role="tablist">
-          {RTABS.filter((tb) => tb !== "teile" || (Array.isArray((v as Record<string, unknown>).parts) && f.can("pieces.voir"))).map((tb) => <button key={tb} role="tab" aria-selected={tab === tb} className={tab === tb ? "on" : ""} onClick={() => goTab(tb)}>{t(TAB_LABEL[tb])}{tb === "uebersicht" && open > 0 ? ` (${open})` : ""}{tb === "fotos" && photos.length ? ` (${photos.length})` : ""}</button>)}
+          {RTABS.filter((tb) => (tb !== "teile" || (Array.isArray((v as Record<string, unknown>).parts) && f.can("pieces.voir"))) && (tb !== "lack" || Array.isArray((v as Record<string, unknown>).paint))).map((tb) => <button key={tb} role="tab" aria-selected={tab === tb} className={tab === tb ? "on" : ""} onClick={() => goTab(tb)}>{t(TAB_LABEL[tb])}{tb === "uebersicht" && open > 0 ? ` (${open})` : ""}{tb === "fotos" && photos.length ? ` (${photos.length})` : ""}</button>)}
         </div>
 
         {tab === "teile" && <><CarParts v={v} stationId={stationId} /></>}
+        {tab === "lack" && <CarPaint v={v} stationId={stationId} />}
 
         {tab === "uebersicht" && (
           <>

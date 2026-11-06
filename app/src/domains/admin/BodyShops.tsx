@@ -7,7 +7,7 @@ import { t } from "../../shared/i18n";
 interface BodyShop {
   id: string; name: string; address: string; country: string; azureTenant: string | null; active: boolean;
   commissionPct: string; reportEmails: string[]; excludedInsurerEmails: string[]; contactName: string | null; contactPhone: string | null; cif: string | null;
-  azureBcIds: string[]; azureLinkIds: string[]; openVehicles: number; totalVehicles: number; insurerIds: string[]; accounts: { email: string; name: string }[];
+  azureBcIds: string[]; azureLinkIds: string[]; paintPartner?: boolean; openVehicles: number; totalVehicles: number; insurerIds: string[]; accounts: { email: string; name: string }[];
 }
 interface Form {
   id?: string; name: string; address: string; country: string; azure_tenant: string; contact_name: string; contact_phone: string; cif: string; commission_pct: number;
@@ -51,6 +51,7 @@ export function BodyShopsPage({ canManage = true, canInsurers = true }: { canMan
               <td>{b.openVehicles} / {b.totalVehicles}</td>
               <td style={{ whiteSpace: "nowrap" }}>{canManage && <>
                 <button className="btn sec" onClick={() => edit(b)}>{t("edit")}</button>{" "}
+                <button className={"btn " + (b.paintPartner ? "" : "sec")} title={t("f5PaintPartnerHint")} aria-pressed={!!b.paintPartner} onClick={() => act(() => api("PUT", `/admin/bodyshops/${b.id}/paint-partner`, { paint_partner: !b.paintPartner }), setErr, list.reload)}>🎨 {b.paintPartner ? t("f5PaintPartnerOn") : t("f5PaintPartner")}</button>{" "}
                 <button className="btn danger" onClick={() => act(() => api("POST", `/admin/bodyshops/${b.id}/active`, { active: !b.active }), setErr, list.reload)}>{b.active ? t("deactivate") : t("reactivate")}</button>{" "}
                 <button className="btn danger" onClick={() => { if (confirmDialog(`${t("v8DeleteBodyShopQ")}\n\n${b.name}`)) void act(() => api("DELETE", `/admin/bodyshops/${b.id}`), setErr, () => { setF(null); void list.reload(); }); }}>{t("delete")}</button></>}</td>
             </tr>

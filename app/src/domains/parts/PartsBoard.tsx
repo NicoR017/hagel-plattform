@@ -54,6 +54,7 @@ export function PartsBoard({ stationId, view, car }: { stationId: string; view: 
         <div role="status" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between", background: "#EAF2FF", border: "1px solid #C9DBF8", borderRadius: 12, padding: "10px 14px", margin: "0 0 10px" }}>
           <b>🚗 {t("f3CarBanner").replace("{plate}", plateOf(carV))} <span className="muted" style={{ fontWeight: 400 }}>· {String((carV as Record<string, unknown>).modell ?? "")}</span></b>
           <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button className="chip" onClick={() => go({ page: "paint", stationId, view: "element", car: carV.id })}>🎨 {t("f5SwitchPaint")}</button>
             <button className="chip" onClick={() => go({ page: "repair", id: carV.id, tab: "teile", stationId })}>{t("f3OpenRepair")}</button>
             <button className="chip" onClick={() => to({ car: null })}>{t("f3AllCars")}</button>
           </span>

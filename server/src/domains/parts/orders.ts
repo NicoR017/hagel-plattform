@@ -104,6 +104,7 @@ export async function wantedDate(db: Pick<Db, "select">, row: VehicleRow, settin
 /** tells the phones to pull (set once by the app): order changes also change what the car's parts look like */
 let notifier: ((orgId: string, seq: number) => void) | null = null;
 export const setOrderNotifier = (fn: ((orgId: string, seq: number) => void) | null) => { notifier = fn; };
+export const notifyPhones = (orgId: string, seq: number) => { if (notifier) notifier(orgId, seq); };
 const touch = async (db: Db, vehicleId: string, userId: string | null) => {
   const seq = await nextSeq(db as never);
   const [v] = await db.update(vehicles).set({ seq, ...(userId ? { updatedBy: userId } : {}), updatedAt: new Date() }).where(eq(vehicles.id, vehicleId)).returning({ orgId: vehicles.orgId });

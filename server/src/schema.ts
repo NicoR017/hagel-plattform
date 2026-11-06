@@ -86,6 +86,8 @@ export const stations = pgTable("stations", {
   contactPhone: text("contact_phone"),
   /** body shops (customers) only: tax number (CIF / NIF) */
   cif: text("cif"),
+  /** V7 F4: a body shop that paints for us (offered in "Schedule painting") */
+  paintPartner: boolean("paint_partner").notNull().default(false),
   citasLocationId: text("citas_location_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -668,6 +670,34 @@ export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
  * never for technician / headliner profiles, never in an Excel export. A signature is never edited: signing again creates a new row and
  * the previous one gets `replaced_by`. The id is created on the phone, so a replayed offline operation is applied once.
  */
+/** V7 F4: one paint job per element to paint (created from the "push to paint" elements of the estimate, or by hand) */
+export const paintJobs = pgTable("paint_jobs", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  elementKey: text("element_key").notNull(),
+  /** to_paint | scheduled | at_body_shop | done */
+  status: text("status").notNull().default("to_paint"),
+  /** ptp | manual */
+  source: text("source").notNull().default("ptp"),
+  partnerStationId: uuid("partner_station_id").references(() => stations.id),
+  plannedDate: date("planned_date"),
+  plannedTime: text("planned_time"),
+  /** the car does not move: the customer brings it to the painter on this day (confirmation e-mail + reminder the day before) */
+  customerAppointment: boolean("customer_appointment").notNull().default(false),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
+  confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  driverUserId: uuid("driver_user_id").references(() => users.id),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  doneBy: uuid("done_by").references(() => users.id),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byVehicle: index("paint_jobs_vehicle_idx").on(t.vehicleId), byPlan: index("paint_jobs_plan_idx").on(t.partnerStationId, t.plannedDate) }));
+
 /** V7 F3b: counters for numbers that are never reused (PED-YYYY-NNNNN per organisation and year) */
 export const orgCounters = pgTable("org_counters", {
   orgId: uuid("org_id").notNull(),
