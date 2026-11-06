@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   "pieces.voir", "pieces.catalogue", "pieces.reception", "pieces.installer", "pieces.commander", "pieces.prix.voir", "facturation.gerer",
   // V7 F4: paint statuses, planning, partner body shop, customer appointment
   "peinture.gerer",
+  // V7 F5: import documents, send the repair dossier, see the billing information of a car
+  "documents.importer", "dossier.envoyer", "facturation.voir",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

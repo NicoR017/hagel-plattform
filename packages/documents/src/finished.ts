@@ -13,6 +13,8 @@ export interface FinishedRow {
   vat: number; rate: number;
   pdrH: number; pdrBase: number; kleberH: number; kleber: number; ptpH: number; ptp: number; ptpPanels: number;
   aluH: number; alu: number; replaceH: number; replace: number; replacePanels: number; replaceList: string; partsPrice: number | null;
+  /** V7 F5: the parts invoice of the body shop (one per car): its number and "received" / "missing" (orders exist, no invoice yet) / "n/a" (no parts order) */
+  partsInvoiceNo: string; partsInvoiceStatus: string;
   other: number; dem: number; glass: number; totalH: number; total: number; check: number;
   basis: number; werkMode: string; werkPct: number; referrer: number;
   techName: string; techPct: number; technician: number; demTechName: string; demTechPct: number; headliner: number; pdr: number; shareCheck: number;
@@ -64,6 +66,8 @@ const COLS: Col[] = [
   c(5, "Replaced panels", "i", (r) => r.replacePanels),
   c(5, "Parts to replace", "t", (r) => r.replaceList),
   c(5, "Parts price", "m", (r) => r.partsPrice),
+  c(5, "Parts invoice no.", "t", (r) => r.partsInvoiceNo),
+  c(5, "Parts invoice", "t", (r) => r.partsInvoiceStatus),
   c(5, "Other items (AW method)", "m", (r) => r.other),
   c(5, "Dismantling / fitting", "m", (r) => r.dem),
   c(5, "Glazing", "m", (r) => r.glass),

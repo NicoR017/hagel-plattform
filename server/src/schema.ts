@@ -670,6 +670,48 @@ export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
  * never for technician / headliner profiles, never in an Excel export. A signature is never edited: signing again creates a new row and
  * the previous one gets `replaced_by`. The id is created on the phone, so a replayed offline operation is applied once.
  */
+/** V7 F5: a document imported for a car (and its versions: a new version replaces, the old one stays) */
+export const vehicleDocuments = pgTable("vehicle_documents", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  /** assessment | repair | parts | paint | other */
+  category: text("category").notNull(),
+  /** parts_invoice | paint_invoice | insurer_doc | customer_doc | photos | other */
+  type: text("type").notNull(),
+  title: text("title").notNull().default(""),
+  fileKey: text("file_key"),
+  contentType: text("content_type"),
+  size: integer("size").notNull().default(0),
+  number: text("number"),
+  amountHt: numeric("amount_ht", { precision: 12, scale: 2 }),
+  /** paint invoice: the painter (partner body shop) */
+  partnerStationId: uuid("partner_station_id"),
+  orderIds: uuid("order_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  paintJobIds: uuid("paint_job_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  inDossier: boolean("in_dossier").notNull().default(false),
+  version: integer("version").notNull().default(1),
+  supersedesId: uuid("supersedes_id"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => ({ byVehicle: index("vehicle_documents_vehicle_idx").on(t.vehicleId) }));
+
+/** V7 F5: the repair dossier sent to the insurer (who, what was in it, what was still missing) */
+export const dossierSends = pgTable("dossier_sends", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  toEmails: text("to_emails").array().notNull().default(sql`'{}'::text[]`),
+  ccEmails: text("cc_emails").array().notNull().default(sql`'{}'::text[]`),
+  status: text("status").notNull().default("sent"),
+  error: text("error"),
+  included: jsonb("included").notNull().default(sql`'[]'::jsonb`),
+  missing: jsonb("missing").notNull().default(sql`'[]'::jsonb`),
+  note: text("note"),
+  sentBy: uuid("sent_by").references(() => users.id),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ byVehicle: index("dossier_sends_vehicle_idx").on(t.vehicleId) }));
+
 /** V7 F4: one paint job per element to paint (created from the "push to paint" elements of the estimate, or by hand) */
 export const paintJobs = pgTable("paint_jobs", {
   id: id(),

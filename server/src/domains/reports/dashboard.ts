@@ -3,7 +3,7 @@ import { computeShares, computeVehicle, type CalcVehicle } from "@hagel/calc";
 import { REPAIR_STAGES, STATUSES, isOffRepairHold } from "@hagel/shared";
 import type { Db } from "../../db";
 import { effectivePermissions, type Principal } from "../../permissions";
-import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "../../schema";
+import { insurers, partOrders, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleDocuments, vehicleMoves, vehicleStatusHistory, vehicles } from "../../schema";
 import { loadMethodMap, methodOf } from "../admin/methods";
 import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "../vehicles/sync";
 import { partLabelsFor } from "../parts/parts";
@@ -370,7 +370,7 @@ export interface FinishedExportRow {
   repairShop: string; repairShopCif: string; repairShopAddress: string;
   vat: number; rate: number;
   pdrH: number; pdrBase: number; kleberH: number; kleber: number; ptpH: number; ptp: number; ptpPanels: number;
-  aluH: number; alu: number; replaceH: number; replace: number; replacePanels: number; replaceList: string; partsPrice: number | null;
+  aluH: number; alu: number; replaceH: number; replace: number; replacePanels: number; replaceList: string; partsPrice: number | null; partsInvoiceNo: string; partsInvoiceStatus: string;
   /** AW (German) engine only: finish, set-up, handles, cavity and big-dent amounts, which have no column of their own */
   other: number; dem: number; glass: number; totalH: number; total: number;
   /** total − sum of the invoice lines: must be 0 */
@@ -413,6 +413,11 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
   const personName = (id: string) => people.find((p) => p.id === id)?.name || people.find((p) => p.id === id)?.email || "";
 
   const partLabels = await partLabelsFor(db, rows.map((r) => ({ id: r.id, header: r.header })));
+  // V7 F5: the parts invoice of the body shop (current version) and whether parts were ordered for the car
+  const invDocs = ids.length ? await db.select().from(vehicleDocuments).where(and(inArray(vehicleDocuments.vehicleId, ids), eq(vehicleDocuments.type, "parts_invoice"))) : [];
+  const ordRows = ids.length ? await db.select({ vehicleId: partOrders.vehicleId, kind: partOrders.kind, status: partOrders.status }).from(partOrders).where(inArray(partOrders.vehicleId, ids)) : [];
+  const invoiceOf = (vid: string) => invDocs.find((d) => d.vehicleId === vid && d.fileKey && !invDocs.some((x) => x.supersedesId === d.id));
+  const ordered = (vid: string) => ordRows.some((o) => o.vehicleId === vid && (o.kind === "main" || o.kind === "complement") && o.status !== "cancelled");
   const out: FinishedExportRow[] = [];
   for (const r of rows) {
     const h = histBy.get(r.id) ?? [];
@@ -461,7 +466,8 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
       vat: calc.vat, rate: round2(rate),
       pdrH: round2(pdrH), pdrBase: round2(pdrBase), kleberH: round2(kleberH), kleber: round2(kleber), ptpH: round2(ptpH), ptp: round2(ptp), ptpPanels: nPtp,
       aluH: round2(aluH), alu: round2(alu), replaceH: round2(replaceH), replace: round2(replace), replacePanels: nErn,
-      replaceList: parts.join("; "), partsPrice: null,
+      replaceList: parts.join("; "), partsPrice: invoiceOf(r.id)?.amountHt == null ? null : Number(invoiceOf(r.id)!.amountHt),
+      partsInvoiceNo: invoiceOf(r.id)?.number ?? "", partsInvoiceStatus: invoiceOf(r.id) ? "received" : ordered(r.id) ? "missing" : "n/a",
       other: round2(other), dem: round2(calc.demEur), glass: round2(calc.glassEur), totalH: round2(calc.totalAW), total: round2(calc.netto),
       check: round2(calc.netto - lines),
       basis: round2(sh.basis), werkMode: sh.werkMode, werkPct: round2(sh.werkPct), referrer: round2(sh.werkEur),

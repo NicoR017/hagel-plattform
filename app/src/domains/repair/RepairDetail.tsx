@@ -20,6 +20,9 @@ import { blockersText, stageLabel } from "./RepairBoard";
 import { Verlauf } from "../vehicles/VehicleDetail";
 import { CarParts } from "../parts/CarParts";
 import { CarPaint } from "../paint/CarPaint";
+import { CarDocuments } from "../docs/CarDocuments";
+import { CarBilling } from "../docs/CarBilling";
+import { DossierDialog } from "../docs/DossierDialog";
 
 type Repair = NonNullable<LocalVehicle["repair"]> & {
   todos: { id: string; text: string; source: string; done: boolean; doneBy: string | null; doneAt: string | null }[];
@@ -27,7 +30,7 @@ type Repair = NonNullable<LocalVehicle["repair"]> & {
   finishBlockers: string[]; lastReport?: { status: string; at: string; auto: boolean } | null;
 };
 const dm = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
-const TAB_LABEL: Record<RTab, Key> = { uebersicht: "v5TabOverview", teile: "f3TabParts", lack: "f5PaintTab", fotos: "v5TabPhotos", abschluss: "v5TabClosing", verlauf: "v4SecHistory" };
+const TAB_LABEL: Record<RTab, Key> = { uebersicht: "v5TabOverview", teile: "f3TabParts", lack: "f5PaintTab", dokumente: "f6TabDocs", billing: "f6TabBilling", fotos: "v5TabPhotos", abschluss: "v5TabClosing", verlauf: "v4SecHistory" };
 
 function Thumb({ p, onOpen }: { p: LocalPhoto; onOpen: () => void }) {
   const url = usePhotoUrl(p);
@@ -57,6 +60,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
   const [busy, setBusy] = useState(false);
   const cam = useRef<HTMLInputElement>(null), gal = useRef<HTMLInputElement>(null);
   const [sign, setSign] = useState<"drop_off" | "pick_up" | null>(null);
+  const [dossierOpen, setDossierOpen] = useState(false);
   // customer data: station staff only (technician / headliner never), read online from the server
   const mayHandover = f.can("vehicules.changer_statut") && !f.refs?.me.fieldView;
   const hv = v ? (v as Record<string, unknown>) : {};
@@ -137,11 +141,13 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
           {may && <button className="chip" disabled={!next || next === "finish"} aria-label={t("v5OneForward")} onClick={() => next && next !== "finish" && void setRepairStage(f.mut, id, next)}>›</button>}
         </div>
         <div className="rd-tabs" role="tablist">
-          {RTABS.filter((tb) => (tb !== "teile" || (Array.isArray((v as Record<string, unknown>).parts) && f.can("pieces.voir"))) && (tb !== "lack" || Array.isArray((v as Record<string, unknown>).paint))).map((tb) => <button key={tb} role="tab" aria-selected={tab === tb} className={tab === tb ? "on" : ""} onClick={() => goTab(tb)}>{t(TAB_LABEL[tb])}{tb === "uebersicht" && open > 0 ? ` (${open})` : ""}{tb === "fotos" && photos.length ? ` (${photos.length})` : ""}</button>)}
+          {RTABS.filter((tb) => (tb !== "teile" || (Array.isArray((v as Record<string, unknown>).parts) && f.can("pieces.voir"))) && (tb !== "lack" || Array.isArray((v as Record<string, unknown>).paint)) && (tb !== "dokumente" || f.can("documents.importer") || f.can("dossier.envoyer")) && (tb !== "billing" || (f.can("facturation.voir") && f.can("prix.voir")))).map((tb) => <button key={tb} role="tab" aria-selected={tab === tb} className={tab === tb ? "on" : ""} onClick={() => goTab(tb)}>{t(TAB_LABEL[tb])}{tb === "uebersicht" && open > 0 ? ` (${open})` : ""}{tb === "fotos" && photos.length ? ` (${photos.length})` : ""}</button>)}
         </div>
 
         {tab === "teile" && <><CarParts v={v} stationId={stationId} /></>}
         {tab === "lack" && <CarPaint v={v} stationId={stationId} />}
+        {tab === "dokumente" && <CarDocuments v={v} />}
+        {tab === "billing" && <CarBilling v={v} />}
 
         {tab === "uebersicht" && (
           <>
@@ -292,6 +298,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
                   <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{reportLine}</div>
                   {(chief || f.can("rapport_reparation.envoyer")) && <button className="btn" style={{ marginTop: 10 }} disabled={busy} onClick={() => void resend()}>✉ {busy ? t("preparing") : t("v5Resend")}</button>}
                 </div>
+                {f.can("dossier.envoyer") && <button className="btn primary" style={{ marginTop: 14 }} onClick={() => setDossierOpen(true)}>✉ {t("f6SendDossier")}</button>}
                 {mayHandover && v.statut === "fertig" && (
                   <button className="btn primary" style={{ marginTop: 14 }} onClick={() => setSign("pick_up")}>{t("v5Handover")}</button>
                 )}
@@ -302,6 +309,7 @@ export function RepairDetail({ id, tab, stationId }: { id: string; tab: RTab; st
 
         {tab === "verlauf" && <Verlauf id={id} />}
       </div>
+      {dossierOpen && <DossierDialog v={v} onClose={() => setDossierOpen(false)} onDone={() => setDossierOpen(false)} />}
       {sign && <HandoverDialog v={v} kind={sign} onClose={() => setSign(null)} onSigned={() => { ho.reload(); if (sign === "pick_up") go({ page: "list", stationId, mode: "rep" }); }} />}
     </>
   );

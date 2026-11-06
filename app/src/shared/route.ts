@@ -6,8 +6,8 @@ export type Tab4 = "basis" | "erfassung" | "bilder" | "kva";
 export type Tab = Tab4 | "termin" | "techniker" | "planung" | "dokumente" | "kommunikation" | "gtmotive" | "verlauf";
 export type Step = Tab4;
 /** tabs of the repair detail (the card of the Kanban board) */
-export type RTab = "uebersicht" | "teile" | "lack" | "fotos" | "abschluss" | "verlauf";
-export const RTABS: RTab[] = ["uebersicht", "teile", "lack", "fotos", "abschluss", "verlauf"];
+export type RTab = "uebersicht" | "teile" | "lack" | "dokumente" | "billing" | "fotos" | "abschluss" | "verlauf";
+export const RTABS: RTab[] = ["uebersicht", "teile", "lack", "dokumente", "billing", "fotos", "abschluss", "verlauf"];
 /** Kalkulation / Reparatur / Alle Fahrzeuge */
 export type Mode = "kalk" | "rep" | "all";
 export const MODES: Mode[] = ["kalk", "rep", "all"];

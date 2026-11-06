@@ -15,6 +15,7 @@ import { go, type Ctx, type Mode, type Tab } from "../../shared/route";
 import { useField, usePhotos, useVehicle } from "../../shared/store";
 import { STATUS_STYLE } from "../shell/modes";
 import { Documents } from "../reports/Documents";
+import { CarDocuments } from "../docs/CarDocuments";
 
 interface Repair { comments: { id: string; userName: string; at: string; text: string }[]; appointments: { id: string; technicianId: string; date: string; durationMin: number; note: string }[]; booking: unknown }
 
@@ -158,7 +159,7 @@ function evText(e: Ev): string {
   };
   if (map[k]) return map[k];
   // parts and orders (F2 / F3a / F3b): "Order sent: PED-2026-00042" …
-  const ev = tOr(`f4Ev_${k}`, "") || tOr(`f5Ev_${k}`, "");
+  const ev = tOr(`f4Ev_${k}`, "") || tOr(`f5Ev_${k}`, "") || tOr(`f6Ev_${k}`, "");
   if (ev) return [ev, d.number, d.name, d.reason ? String(d.reason) : "", d.error ? String(d.error) : ""].filter(Boolean).join(" · ");
   return k;
 }
@@ -273,7 +274,7 @@ export function VehicleDetail({ id, tab, ctx }: { id: string; tab: Tab; ctx?: Ct
           {cur === "planung" && <Planung v={v} />}
           {cur === "bilder" && embed(<Bilder v={v} />)}
           {cur === "kva" && embed(<Kva v={v} technicians={false} />)}
-          {cur === "dokumente" && <Documents v={v} />}
+          {cur === "dokumente" && <><Documents v={v} />{(f.can("documents.importer") || f.can("dossier.envoyer")) && <div style={{ marginTop: 16 }}><CarDocuments v={v} /></div>}</>}
           {cur === "kommunikation" && <Comments v={v} />}
           {cur === "gtmotive" && <GtMotive />}
           {cur === "verlauf" && <Verlauf id={id} ctx={ctx} deletable />}

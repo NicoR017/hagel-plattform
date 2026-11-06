@@ -20,6 +20,7 @@ import { syncRoutes } from "./domains/vehicles/routes";
 import { repairRoutes } from "./domains/repair/routes";
 import { orderRoutes } from "./domains/parts/orders_routes";
 import { paintRoutes } from "./domains/paint/paint";
+import { documentRoutes } from "./domains/documents/documents";
 import { setOrderNotifier } from "./domains/parts/orders";
 import { weeklyRoutes } from "./domains/reports/weekly";
 import { adminRoutes } from "./domains/admin/routes";
@@ -233,6 +234,7 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   setOrderNotifier((o, s) => hub.publish(o, s));
   app.route("/", orderRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", paintRoutes({ db, mailer, needAuth, needOrg, validationHook }));
+  app.route("/", documentRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));
