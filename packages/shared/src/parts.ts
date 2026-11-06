@@ -30,6 +30,8 @@ export interface ClientPart {
   status: string;
   /** F3a: announced / expected delivery day (YYYY-MM-DD), delivered / installed instants, the installation photos, how often it came back */
   expectedAt?: string | null; deliveredAt?: string | null; installedAt?: string | null; photoBeforeId?: string | null; photoAfterId?: string | null; returnCount?: number;
+  /** F3b: the order that carries the part (null = not ordered yet) */
+  orderId?: string | null;
 }
 export interface ClientCatalogPart { id: string; names: PartNames; zoneKeys: string[]; validated: boolean }
 export interface ClientCustomZone { key: string; group: "exterior" | "interior"; names: PartNames }

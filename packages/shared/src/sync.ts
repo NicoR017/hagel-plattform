@@ -250,6 +250,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   pickUpSignedAt?: string | null;
   /** V7: the customer refused the move (drop-off signature): only the parking next to the station is possible */
   noMove?: boolean;
+  /** V7 F3b: when the insurer approved the repair (starts the main parts order with the repair appointment) */
+  insurerApprovedAt?: string | null;
   panels: Record<string, unknown>;
   colibri: unknown | null;
   colibriFile: { name: string; size: number } | null;

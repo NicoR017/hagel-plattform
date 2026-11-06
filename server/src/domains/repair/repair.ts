@@ -18,6 +18,7 @@ import {
   vehicleComments, vehicleMoves, vehicleParts, vehicleStatusHistory, vehicles,
 } from "../../schema";
 import { partLabelsFor } from "../parts/parts";
+import { maybeCreateMainOrder } from "../parts/orders";
 import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
 
 const BOOKABLE = ["arrive", "besichtigung", "attente"] as const;
@@ -397,7 +398,11 @@ export async function applyRepairOp(deps: { db: Db; mailer?: Mailer; storage?: S
       await event(tx, row.id, u.id, "booking_created", { bookingId: b.id, date: b.date, time: b.time, stationId: st.id });
       await audit(db, { orgId: row.orgId, userId: u.id, action: op.type, entity: "booking", entityId: b.id, after: { date: b.date, time: b.time, vehicleId: row.id } });
       const out = b.date === today ? await startBooking(tx, created, row, u.id, "booked_for_today") : await touchVehicle(tx, u, row);
-      return { ...out, after: () => sendBookingMail({ db: deps.db, mailer: deps.mailer }, "created", b.id, u.id) };
+      // V7 F3b: the repair appointment is booked: with the insurer approval already recorded, the main parts order starts (never fatal, the booking stays)
+      return { ...out, after: async () => {
+        await sendBookingMail({ db: deps.db, mailer: deps.mailer }, "created", b.id, u.id);
+        if (deps.storage) await maybeCreateMainOrder({ db: deps.db, storage: deps.storage, mailer: deps.mailer }, row.id, u.id).catch((e) => console.error("[parts-orders] main order", (e as Error).message));
+      } };
     }
 
     case "booking.move":

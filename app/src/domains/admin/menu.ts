@@ -1,6 +1,6 @@
 import { t, type Key } from "../../shared/i18n";
 
-export type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "scanners" | "insurers" | "methods" | "technicians" | "weekly" | "reports" | "parts" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
+export type Section = "overview" | "users" | "roles" | "sites" | "bodyshops" | "scanners" | "insurers" | "methods" | "technicians" | "weekly" | "reports" | "parts" | "billing" | "letterheads" | "prices" | "azure" | "audit" | "orgs";
 
 /** Map of the old tab names (bookmarks) to the new sections */
 export const ALIAS: Record<string, Section> = { users: "users", roles: "roles", sites: "sites", azure: "azure", insurers: "insurers", letterheads: "letterheads", technicians: "technicians", audit: "audit", orgs: "orgs" };
@@ -22,6 +22,9 @@ export function menuGroups(has: (p: string) => boolean, hasAny: (p: string) => b
     { title: "v6MenuCalc", items: [
       { k: "methods", label: t("v6MenuMethods"), show: has("methoden.gerer") },
       { k: "prices", label: t("v6MenuPrices"), show: has("parametres.gerer") },
+    ] },
+    { title: "f4MenuBilling", items: [
+      { k: "billing", label: t("f4MenuBodyShopBilling"), show: has("facturation.gerer") },
     ] },
     { title: "v6MenuWork", items: [
       { k: "technicians", label: t("v6MenuTech"), show: has("parametres.gerer") },

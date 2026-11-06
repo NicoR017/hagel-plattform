@@ -13,7 +13,7 @@ export const PERMISSIONS = [
   // V6: automatic insurer reports (see / send now / set up)
   "rapports.voir", "rapports.envoyer", "rapports.gerer",
   // V7 (Repair v2): spare parts — see them / manage the catalogue of part names and zones
-  "pieces.voir", "pieces.catalogue", "pieces.reception", "pieces.installer",
+  "pieces.voir", "pieces.catalogue", "pieces.reception", "pieces.installer", "pieces.commander", "pieces.prix.voir", "facturation.gerer",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -71,7 +71,7 @@ export const SYSTEM_ROLES: SystemRole[] = [
   },
   {
     key: "chef_site", name: "Chef de station (Stationsleiter)", description: "Gère les véhicules et l'équipe d'un site", scope: "station",
-    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir", "methoden.gerer", "wochenbericht.voir", "rapports.gerer"),
+    permissions: without(ALL, "roles.gerer", "parametres.gerer", "stations.gerer", "audit.voir", "methoden.gerer", "wochenbericht.voir", "rapports.gerer", "facturation.gerer"),
   },
   {
     key: "aufnehmer", name: "Aufnehmer / Expert", description: "Crée et chiffre les véhicules", scope: "station",

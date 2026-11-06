@@ -73,7 +73,7 @@ export function flatten(r: VehicleRow, assigneeIds: string[], updatedByName: str
     id: r.id, orgId: r.orgId, stationId: r.stationId, clientStationId: r.clientStationId, campaignId: r.campaignId, insurerId: r.insurerId,
     repairStage: r.repairStage, bodyshopId: r.bodyshopId, methodId: r.methodId, methodVersion: r.methodVersion,
     statut: r.statut, statutAvant: r.statutAvant, statutMotif: r.statutMotif,
-    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, noMove: r.noMove, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
+    repairEnteredAt: r.repairEnteredAt?.toISOString() ?? null, dropOffSignedAt: r.dropOffSignedAt?.toISOString() ?? null, pickUpSignedAt: r.pickUpSignedAt?.toISOString() ?? null, noMove: r.noMove, insurerApprovedAt: r.insurerApprovedAt?.toISOString() ?? null, statutDepuis: r.statutDepuis?.toISOString() ?? null, repAt: r.repAt?.toISOString() ?? null,
     panels: (r.panels ?? {}) as Record<string, unknown>, colibri: r.colibri ?? null,
     colibriFile: (r.colibriFile as ClientVehicle["colibriFile"]) ?? null,
     assigneeIds, updatedAt: r.updatedAt.toISOString(), updatedBy: updatedByName, seq: r.seq,

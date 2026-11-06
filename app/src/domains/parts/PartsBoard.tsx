@@ -6,10 +6,11 @@ import { useField, useVehicles } from "../../shared/store";
 import { allZones, zoneLabel } from "../vehicles/partsLogic";
 import { StatusPill } from "./CarParts";
 import { PartActions } from "./PartActions";
-import { COLUMNS, carPartsState, deliveredOf, matchesRow, partsCsv, plateOf, rowsOf, statusLabel, type PartRow } from "./partsBoardLogic";
+import { OrdersList } from "./Orders";
+import { COLUMNS, isLate, carPartsState, deliveredOf, matchesRow, partsCsv, plateOf, rowsOf, statusLabel, type PartRow } from "./partsBoardLogic";
 import { partsOfVehicle } from "../vehicles/partsLogic";
 
-export type PartsView = "part" | "car" | "all";
+export type PartsView = "part" | "car" | "all" | "orders";
 
 /**
  * Repair → Parts board: one card per part in the columns To order · Order sent · Ordered · Delivered · Installed; views By part, By car and All parts
@@ -32,7 +33,7 @@ export function PartsBoard({ stationId, view, car }: { stationId: string; view: 
     const list = (view === "all" ? rows.filter((r) => (status === "all" || r.p.status === status) && (zone === "all" || r.p.zoneKey === zone)) : rows);
     await shareOrDownload(new Blob([partsCsv(list, stationName, custom)], { type: "text/csv;charset=utf-8" }), `parts_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
   };
-  const views: { k: PartsView; label: Key }[] = [{ k: "part", label: "f3ByPart" }, { k: "car", label: "f3ByCar" }, { k: "all", label: "f3AllParts" }];
+  const views: { k: PartsView; label: Key }[] = [{ k: "part", label: "f3ByPart" }, { k: "car", label: "f3ByCar" }, { k: "all", label: "f3AllParts" }, { k: "orders", label: "f4ViewOrders" }];
 
   return (
     <main>
@@ -59,7 +60,8 @@ export function PartsBoard({ stationId, view, car }: { stationId: string; view: 
         </div>
       )}
 
-      <div className="toolbar" style={{ marginBottom: 10 }}>
+      {view === "orders" && <OrdersList stationId={stationId} />}
+      {view !== "orders" && <div className="toolbar" style={{ marginBottom: 10 }}>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("f3Search")} aria-label={t("f3Search")} style={{ flex: "1 1 240px" }} />
         {view === "all" && (
           <>
@@ -67,7 +69,7 @@ export function PartsBoard({ stationId, view, car }: { stationId: string; view: 
             <select value={zone} onChange={(e) => setZone(e.target.value)} aria-label={t("f3Zone")}><option value="all">{t("f3AllZones")}</option>{allZones(f.refs?.parts).map((z) => <option key={z.key} value={z.key}>{z.label}</option>)}</select>
           </>
         )}
-      </div>
+      </div>}
 
       {view === "part" && (
         <div className="board" style={{ display: "grid", gridAutoFlow: "column", gridAutoColumns: "minmax(230px, 1fr)", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
@@ -101,7 +103,7 @@ export function PartsBoard({ stationId, view, car }: { stationId: string; view: 
           ))}</tbody>
         </table>
       )}
-      {!rows.length && <p className="muted" style={{ marginTop: 14 }}>{t("f3NoParts")}</p>}
+      {view !== "orders" && !rows.length && <p className="muted" style={{ marginTop: 14 }}>{t("f3NoParts")}</p>}
     </main>
   );
 }
@@ -115,6 +117,7 @@ function PartCard({ r, stationId }: { r: PartRow; stationId: string }) {
         <b>{r.p.name}{r.p.qty > 1 ? ` × ${r.p.qty}` : ""}</b>
         <span className="muted" style={{ fontSize: 12 }}>{r.p.zoneKey ? zoneLabel(r.p.zoneKey, custom) : t("f2BoxZone")}</span>
         <span style={{ fontSize: 13 }}>🚗 {plateOf(r.v)} <span className="muted">{String((r.v as Record<string, unknown>).modell ?? "")}</span></span>
+        {isLate(r.p) && <span className="badge" style={{ background: "#FBE7E4", color: "#9B2C1F", fontSize: 11, alignSelf: "flex-start" }}>⏰ {t("f4Late")}</span>}
         {(r.p.returnCount ?? 0) > 0 && <span className="badge" style={{ background: "#FBE7E4", color: "#9B2C1F", fontSize: 11, alignSelf: "flex-start" }}>↩ {t("f3ReturnedTimes").replace("{n}", String(r.p.returnCount))}</span>}
       </button>
       <PartActions v={r.v} p={r.p} compact />

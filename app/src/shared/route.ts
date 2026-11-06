@@ -38,7 +38,7 @@ export type Route =
   /** repair detail: #/s/:station/rep/r/:id/:tab */
   | { page: "repair"; id: string; tab: RTab; stationId: string }
   /** V7: Parts board of a station: #/s/:station/rep/parts?view=part|car|all[&car=:id] */
-  | { page: "parts"; stationId: string; view: "part" | "car" | "all"; car?: string }
+  | { page: "parts"; stationId: string; view: "part" | "car" | "all" | "orders"; car?: string }
   | { page: "admin"; tab?: string };
 
 export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "dokumente", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
@@ -64,7 +64,7 @@ export function parseRoute(hash: string): Route {
     const stationId = p[1];
     if (p[2] === "rep" && p[3] === "parts") {
       const q = new URLSearchParams(query), v = q.get("view");
-      return { page: "parts", stationId, view: v === "car" || v === "all" ? v : "part", ...(q.get("car") ? { car: q.get("car")! } : {}) };
+      return { page: "parts", stationId, view: v === "car" || v === "all" || v === "orders" ? v : "part", ...(q.get("car") ? { car: q.get("car")! } : {}) };
     }
     if (p[2] === "rep" && p[3] === "r" && p[4]) return { page: "repair", id: p[4], tab: (RTABS as string[]).includes(p[5] ?? "") ? (p[5] as RTab) : "uebersicht", stationId };
     if (p[2] === "cal") return { page: "calendar", stationId, month: /^d{4}-d{2}$/.test(p[3] ?? "") ? p[3] : undefined, date: /^d{4}-d{2}-d{2}$/.test(p[4] ?? "") ? p[4] : undefined };

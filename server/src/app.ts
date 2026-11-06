@@ -18,6 +18,8 @@ import { Hub } from "./hub";
 import { canOrg, isMemberOfOrg } from "./permissions";
 import { syncRoutes } from "./domains/vehicles/routes";
 import { repairRoutes } from "./domains/repair/routes";
+import { orderRoutes } from "./domains/parts/orders_routes";
+import { setOrderNotifier } from "./domains/parts/orders";
 import { weeklyRoutes } from "./domains/reports/weekly";
 import { adminRoutes } from "./domains/admin/routes";
 import { azureRoutes } from "./domains/scans/routes";
@@ -227,6 +229,8 @@ export function createApp({ db, cfg, mailer, limits: lim, storage = new MemorySt
   app.route("/", syncRoutes({ db, hub, storage, mailer, needAuth, needOrg, ocr, validationHook }));
   app.route("/", handoverRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", repairRoutes({ db, storage, mailer, needAuth, needOrg }));
+  setOrderNotifier((o, s) => hub.publish(o, s));
+  app.route("/", orderRoutes({ db, storage, mailer, needAuth, needOrg, validationHook }));
   app.route("/", weeklyRoutes({ db, mailer, needAuth, needOrg, validationHook }));
 
   app.route("/", azureRoutes({ db, hub, storage, az, needAuth, needOrg, validationHook }));

@@ -16,6 +16,7 @@ import { azureFromEnv } from "./domains/scans/azure";
 import { citasFromConfig } from "./domains/citas/citas";
 import { runDueInsurerReports } from "./domains/reports/insurer_report_send";
 import { FakeCitas } from "./domains/citas/fake";
+import { runOrderQueue } from "./domains/parts/orders";
 
 const cfg = loadConfig();
 const h = await createDb(cfg.databaseUrl);
@@ -49,6 +50,18 @@ if (process.env.INSURER_REPORTS_SCHEDULER !== "off") {
     busy = true;
     try { const r = await runDueInsurerReports({ db: h.db, storage, mailer }); if (r.sent || r.failed) console.log("[insurer-reports]", JSON.stringify(r)); }
     catch (e) { console.error("[insurer-reports] FAILED", (e as Error).message); }
+    finally { busy = false; }
+  };
+  setInterval(() => void tick(), 60_000);
+}
+// V7 F3b: parts orders — retries of the sending (3 attempts, then "send failed") and the reminders, looked at every minute; each send is claimed in the database first
+if (process.env.ORDER_QUEUE !== "off") {
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try { const r = await runOrderQueue({ db: h.db, storage, mailer }); if (r.sent || r.failed || r.reminded) console.log("[parts-orders]", JSON.stringify(r)); }
+    catch (e) { console.error("[parts-orders] FAILED", (e as Error).message); }
     finally { busy = false; }
   };
   setInterval(() => void tick(), 60_000);

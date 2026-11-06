@@ -9,6 +9,9 @@ export const plateOf = (v: LocalVehicle) => String((v as Record<string, unknown>
 export const rowsOf = (vs: LocalVehicle[]): PartRow[] => vs.flatMap((v) => partsOfVehicle(v as { parts?: never }).map((p) => ({ v, p })));
 export const statusLabel = (s: string): string => t(`f3Col_${s}` as Key);
 export const COLUMNS = PART_BOARD_COLUMNS;
+/** late: the announced (else expected) delivery day passed and the part has not arrived (Madrid day) */
+export const isLate = (p: ClientPart, today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Madrid" })): boolean =>
+  !!p.expectedAt && p.expectedAt < today && !["delivered", "installed", "cancelled", "to_order"].includes(p.status);
 
 /** where a car stands with its parts: nothing / order to send / waiting for parts / all delivered (ready for reassembly) / all installed */
 export type CarPartsState = "none" | "to_order" | "waiting" | "ready" | "installed";

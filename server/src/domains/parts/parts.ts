@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DEFAULT_ZONE_KEYS, type ClientCatalogPart, type ClientCustomZone, type ClientPart, type ClientPartsRefs, type Op, type PartNames } from "@hagel/shared";
 import { effectivePermissions, fieldProfile, type Principal, type VehicleRef } from "../../permissions";
 import { isHisCar } from "../repair/repair";
+import { refreshDelivered } from "./orders";
 import type { Db } from "../../db";
 import { partCatalog, partCatalogZones, partZones, photos, repairEvents, vehicleParts, vehicles } from "../../schema";
 import { Reject, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
@@ -69,6 +70,7 @@ export async function applyPartOp(tx: Tx, u: Principal, op: PartOp): Promise<OpO
       if (!["to_order", "order_sent", "ordered"].includes(part.status)) throw new Reject("part_not_deliverable");
       await tx.update(vehicleParts).set({ status: "delivered", deliveredAt: new Date(), deliveredBy: u.id, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
       await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_delivered", payload: { partId: part.id, name: part.name } as never });
+      await refreshDelivered(tx as unknown as Db, part.orderId);
       void ref;
       return touch(tx, u, row);
     }
@@ -94,7 +96,7 @@ export async function applyPartOp(tx: Tx, u: Principal, op: PartOp): Promise<OpO
       try { ctx = await partOf(tx, u, op.partId, "pieces.reception"); } catch (e) { if (!(e instanceof Reject) || e.code !== "not_allowed") throw e; ctx = await partOf(tx, u, op.partId, "pieces.installer"); }
       const { part, row } = ctx;
       if (!part || (part.status !== "delivered" && part.status !== "installed")) throw new Reject("part_not_returnable");
-      await tx.update(vehicleParts).set({ status: "to_order", deliveredAt: null, deliveredBy: null, installedAt: null, installedBy: null, photoBeforeId: null, photoAfterId: null, returnCount: part.returnCount + 1, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
+      await tx.update(vehicleParts).set({ status: "to_order", deliveredAt: null, deliveredBy: null, installedAt: null, installedBy: null, photoBeforeId: null, photoAfterId: null, orderId: null, returnCount: part.returnCount + 1, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
       await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_returned", payload: { partId: part.id, name: part.name, reason: op.reason, note: op.note ?? null } as never });
       return touch(tx, u, row);
     }
@@ -129,7 +131,7 @@ export async function partsFor(db: Pick<Db, "select">, u: Principal, items: { ro
   for (const { row } of eligible) out.set(row.id, []);
   for (const r of rows) out.get(r.vehicleId)?.push({
     id: r.id, zoneKey: r.zoneKey, catalogId: r.catalogId, name: r.name, qty: r.qty, oemRef: r.oemRef, source: r.source, status: r.status,
-    expectedAt: r.expectedAt, deliveredAt: r.deliveredAt?.toISOString() ?? null, installedAt: r.installedAt?.toISOString() ?? null, photoBeforeId: r.photoBeforeId, photoAfterId: r.photoAfterId, returnCount: r.returnCount,
+    expectedAt: r.expectedAt, deliveredAt: r.deliveredAt?.toISOString() ?? null, installedAt: r.installedAt?.toISOString() ?? null, photoBeforeId: r.photoBeforeId, photoAfterId: r.photoAfterId, returnCount: r.returnCount, orderId: r.orderId,
   });
   return out;
 }

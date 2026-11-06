@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { STATUSES, parseRefuseMotif } from "@hagel/shared";
 import { api } from "../../api";
-import { fmtDateTime, t } from "../../shared/i18n";
+import { fmtDateTime, t, tOr } from "../../shared/i18n";
 import { addAppointment, addComment, deleteAppointment, deleteVehicle } from "../../shared/sync/mutations";
 import type { LocalVehicle } from "../../shared/sync/db";
 import { AssignDialog, MoveDialog, StatusDialog, holdReasonLabel, refuseReasonLabel, statusLabel } from "../../shared/Dialogs";
@@ -156,7 +156,11 @@ function evText(e: Ev): string {
     booking_created: `${t("v4EvBook")}: ${dmy(d.date)} ${String(d.time ?? "")}`, booking_moved: `${t("v4EvBookMoved")}: ${dmy(d.to)}`,
     booking_cancelled: `${t("v4EvBookCancelled")}: ${dmy(d.date)}`, booking_started: t("v4EvBookStarted"),
   };
-  return map[k] ?? k;
+  if (map[k]) return map[k];
+  // parts and orders (F2 / F3a / F3b): "Order sent: PED-2026-00042" …
+  const ev = tOr(`f4Ev_${k}`, "");
+  if (ev) return [ev, d.number, d.name, d.reason ? String(d.reason) : "", d.error ? String(d.error) : ""].filter(Boolean).join(" · ");
+  return k;
 }
 
 /** the only place a vehicle can be deleted: needs the right "Delete vehicles", and the plate typed again */

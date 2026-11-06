@@ -215,6 +215,10 @@ export const vehicles = pgTable("vehicles", {
   repairEnteredAt: timestamp("repair_entered_at", { withTimezone: true }),
   dropOffSignedAt: timestamp("drop_off_signed_at", { withTimezone: true }),
   pickUpSignedAt: timestamp("pick_up_signed_at", { withTimezone: true }),
+  /** V7 F3b: the insurer approved the repair (starts the main parts order together with the repair appointment) */
+  insurerApprovedAt: timestamp("insurer_approved_at", { withTimezone: true }),
+  insurerApprovedBy: uuid("insurer_approved_by").references((): AnyPgColumn => users.id),
+  insurerApprovalNote: text("insurer_approval_note"),
   /** V7: the customer did not allow the car to be moved to another station / a body shop (drop-off signature): "do not move" */
   noMove: boolean("no_move").notNull().default(false),
   seq: bigint("seq", { mode: "number" }).notNull().default(0),
@@ -664,6 +668,77 @@ export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
  * never for technician / headliner profiles, never in an Excel export. A signature is never edited: signing again creates a new row and
  * the previous one gets `replaced_by`. The id is created on the phone, so a replayed offline operation is applied once.
  */
+/** V7 F3b: counters for numbers that are never reused (PED-YYYY-NNNNN per organisation and year) */
+export const orgCounters = pgTable("org_counters", {
+  orgId: uuid("org_id").notNull(),
+  key: text("key").notNull(),
+  year: integer("year").notNull(),
+  n: integer("n").notNull().default(0),
+}, (t) => ({ pk: primaryKey({ columns: [t.orgId, t.key, t.year] }) }));
+
+/** V7 F3b: parts ordering through a body shop (station of type carrosserie): the settings of that body shop */
+export const bodyShopOrderSettings = pgTable("body_shop_order_settings", {
+  stationId: uuid("station_id").primaryKey().references(() => stations.id),
+  orgId: uuid("org_id").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  /** automatic | manual (validation by a person before it leaves) */
+  mode: text("mode").notNull().default("manual"),
+  toEmails: text("to_emails").array().notNull().default(sql`'{}'::text[]`),
+  ccEmails: text("cc_emails").array().notNull().default(sql`'{}'::text[]`),
+  replyTo: text("reply_to"),
+  lang: text("lang").notNull().default("es"),
+  showPrices: boolean("show_prices").notNull().default(false),
+  deliveryDays: integer("delivery_days").notNull().default(3),
+  reminderDays: integer("reminder_days").notNull().default(0),
+  subjectTemplate: text("subject_template").notNull().default(""),
+  bodyTemplate: text("body_template").notNull().default(""),
+  updatedAt: updatedAt(),
+});
+
+/** V7 F3b: an order = one car x one body shop x one sending. Draft -> sending -> sent -> confirmed -> delivered; send_failed; cancelled. Never deleted. */
+export const partOrders = pgTable("part_orders", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  number: text("number").notNull(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  bodyShopId: uuid("body_shop_id").notNull().references(() => stations.id),
+  /** main | complement | modification | cancellation */
+  kind: text("kind").notNull(),
+  parentOrderId: uuid("parent_order_id"),
+  reason: text("reason"),
+  status: text("status").notNull().default("draft"),
+  requestedDeliveryDate: date("requested_delivery_date"),
+  announcedDeliveryDate: date("announced_delivery_date"),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  /** snapshot of the recipients at the time of the order */
+  recipients: jsonb("recipients").notNull().default(sql`'{}'::jsonb`),
+  lang: text("lang").notNull().default("es"),
+  observations: text("observations").notNull().default(""),
+  /** the frozen PDF that was (or will be) sent */
+  pdfKey: text("pdf_key"),
+  attempts: integer("attempts").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => ({ uq: uniqueIndex("part_orders_number_uq").on(t.orgId, t.number), byVehicle: index("part_orders_vehicle_idx").on(t.vehicleId), byStatus: index("part_orders_status_idx").on(t.orgId, t.status) }));
+
+/** the lines of an order are a SNAPSHOT: changing the car afterwards never changes what was sent */
+export const partOrderLines = pgTable("part_order_lines", {
+  id: id(),
+  orderId: uuid("order_id").notNull().references(() => partOrders.id),
+  vehiclePartId: uuid("vehicle_part_id").notNull().references(() => vehicleParts.id),
+  n: integer("n").notNull().default(1),
+  zone: text("zone").notNull().default(""),
+  designation: text("designation").notNull(),
+  oemRef: text("oem_ref").notNull().default(""),
+  qty: integer("qty").notNull().default(1),
+  observations: text("observations").notNull().default(""),
+}, (t) => ({ byOrder: index("part_order_lines_order_idx").on(t.orderId) }));
+
 /** V7 (F2) catalogue of generic part names (no reference, no car model) with a name in each of the four languages. */
 export const partCatalog = pgTable("part_catalog", {
   id: id(),
@@ -723,6 +798,8 @@ export const vehicleParts = pgTable("vehicle_parts", {
   photoBeforeId: uuid("photo_before_id"),
   photoAfterId: uuid("photo_after_id"),
   returnCount: integer("return_count").notNull().default(0),
+  /** F3b: the order that carries this part (null = not ordered yet) */
+  orderId: uuid("order_id"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

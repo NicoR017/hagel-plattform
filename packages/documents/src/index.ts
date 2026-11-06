@@ -13,3 +13,5 @@ export {
   INSURER_REPORT_LABELS, insurerReportFileName, reportDate, reportInt, reportMoney, reportPercent,
   type InsurerReportData, type InsurerReportFigures, type InsurerReportKpi, type InsurerReportLang, type InsurerReportOptions, type InsurerReportRow, type InsurerReportTrendPoint,
 } from "./insurer_report";
+export { generateOrderPdf } from "./pdf";
+export * from "./ordertext";

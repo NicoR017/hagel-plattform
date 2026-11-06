@@ -4,6 +4,7 @@ import type { LocalVehicle } from "../../shared/sync/db";
 import { useField } from "../../shared/store";
 import { partsOfVehicle, zoneLabel } from "../vehicles/partsLogic";
 import { PartActions } from "./PartActions";
+import { CarOrders } from "./Orders";
 import { carPartsState, deliveredOf, missingCount, statusLabel } from "./partsBoardLogic";
 
 const COLOR: Record<string, { bg: string; fg: string }> = {
@@ -54,6 +55,7 @@ export function CarParts({ v, stationId }: { v: LocalVehicle; stationId: string 
           </li>
         ))}
       </ul>
+      <CarOrders v={v} />
     </section>
   );
 }

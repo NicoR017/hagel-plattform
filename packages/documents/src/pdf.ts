@@ -3,6 +3,7 @@ import type { PDFFont, PDFImage, PDFPage } from "pdf-lib";
 import type { CalcResult, Land } from "@hagel/calc";
 import { eur, fmtDateL, fmtDateTime, h1, num } from "./format";
 import { dentBreak, docText, handoverText, esFormula, esLines, esRange, imgLabel, partsOf, plabel, zustStr } from "./text";
+import { orderLabels, orderKindLabel, type OrderDoc } from "./ordertext";
 import { SIG_H, SIG_W } from "./types";
 import type { DocPhoto, DocVehicle, HandoverDoc, KvaOptions, Letterhead, PhotoPhase, RepairReportOptions } from "./types";
 import { TECH_LABELS, techDate, type TechLang, type TechSheetData } from "./techsheet";
@@ -287,6 +288,72 @@ export async function generateHandoverReceipt(
   cv.black();
   drawFooters(cv, lh);
   cv.doc.setTitle(title + " " + (v.kennzeichen || ""));
+  return cv.doc.save();
+}
+
+/** "2026-11-06" / ISO instant -> "06/11/2026" */
+const dmy = (s: string | null | undefined) => { if (!s) return "—"; const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; };
+
+/**
+ * "Solicitud de pedido de piezas" (and its modification / cancellation): a REQUEST sent to the body shop, never an invoice. No VAT, no total, no IBAN,
+ * no payment terms, no prices. Blocks: Destinatario · Vehículo · Entrega · Piezas · Observaciones; the non-fiscal footer is on every page.
+ */
+export async function generateOrderPdf(d: OrderDoc, opts: { letterhead?: Letterhead | null; now?: Date } = {}): Promise<Uint8Array> {
+  const cv = await Canvas.create(opts.now || new Date());
+  const lh = opts.letterhead || null;
+  const LB = orderLabels(d.lang);
+  const title = d.kind === "modification" ? LB.titleModification : d.kind === "cancellation" ? LB.titleCancellation : LB.title;
+  cv.top();
+  cv.y = await drawLetterhead(cv, lh);
+  cv.rgbc(22, 35, 63); cv.rect(L, cv.y - 30, R - L, 34);
+  cv.rgbc(255, 255, 255); cv.T(L + 10, cv.y - 18, title, 15, true);
+  cv.black(); cv.y -= 52;
+  const room = (n: number) => { if (cv.y - n < 70) { cv.np(); cv.top(); cv.y -= 10; } };
+  const head = (s: string) => { room(40); cv.rgbc(22, 35, 63); cv.T(L, cv.y, s.toUpperCase(), 9.5, true); cv.black(); cv.RG(190, 198, 210); cv.line(L, cv.y - 4, R, cv.y - 4, 0.6); cv.y -= 18; };
+  const VX = L + 150, maxW = R - VX;
+  const kv = (label: string, value: string | null | undefined) => {
+    const lines = wrapWidth(cv, value && value.trim() ? value : "—", maxW, 10).slice(0, 6);
+    room(lines.length * 14 + 6);
+    cv.black(); cv.T(L, cv.y, label, 9.5, true);
+    lines.forEach((ln) => { cv.T(VX, cv.y, ln, 10); cv.y -= 14; });
+    cv.y -= 2;
+  };
+  kv(LB.number, d.number); kv(LB.date, dmy(d.date)); kv(LB.type, orderKindLabel(d.kind, d.lang));
+  if (d.parentNumber) kv(LB.replaces, d.parentNumber);
+  if (d.reason) kv(LB.reason, LB.reasonLabels[d.reason] ?? d.reason);
+  cv.y -= 6; head(LB.recipient);
+  kv(LB.recipient, d.to.name); if (d.to.cif) kv(LB.cif, d.to.cif); if (d.to.address) kv(LB.address, d.to.address); if (d.to.contact) kv(LB.contact, d.to.contact);
+  cv.y -= 6; head(LB.vehicle);
+  kv(LB.plate, d.vehicle.plate); kv(LB.vin, d.vehicle.vin); kv(LB.makeModel, d.vehicle.makeModel); kv(LB.insurer, d.vehicle.insurer); kv(LB.claim, d.vehicle.claim); if (d.vehicle.expertNo) kv(LB.expert, d.vehicle.expertNo);
+  cv.y -= 6; head(LB.delivery);
+  kv(LB.deliverAt, d.delivery.address); kv(LB.wantedDate, dmy(d.delivery.date)); if (d.delivery.contact) kv(LB.onSite, d.delivery.contact);
+  cv.y -= 6; head(LB.parts);
+  // table: n · zone · designation · OEM · qty · remarks
+  const cx = [L, L + 22, L + 112, L + 262, L + 352, L + 388];
+  const header = () => { room(30); cv.rgbc(238, 241, 246); cv.rect(L, cv.y - 4, R - L, 16); cv.black(); [LB.colN, LB.colZone, LB.colDesignation, LB.colOem, LB.colQty, LB.colObs].forEach((s, i) => cv.T(cx[i] + 2, cv.y, s, 8.5, true)); cv.y -= 18; };
+  header();
+  for (const ln of d.lines) {
+    const des = wrapWidth(cv, ln.designation, cx[3] - cx[2] - 6, 9.5).slice(0, 3);
+    const obs = wrapWidth(cv, ln.observations || "", R - cx[5] - 4, 9).slice(0, 3);
+    const zone = wrapWidth(cv, ln.zone, cx[2] - cx[1] - 6, 9).slice(0, 3);
+    const rows = Math.max(des.length, obs.length, zone.length, 1);
+    if (cv.y - rows * 12 < 70) { cv.np(); cv.top(); cv.y -= 10; header(); }
+    cv.black();
+    cv.T(cx[0] + 2, cv.y, String(ln.n), 9.5);
+    zone.forEach((s, i) => cv.T(cx[1] + 2, cv.y - i * 12, s, 9));
+    des.forEach((s, i) => cv.T(cx[2] + 2, cv.y - i * 12, s, 9.5));
+    cv.T(cx[3] + 2, cv.y, ln.oem || LB.oemTbd, 9);
+    cv.T(cx[4] + 2, cv.y, String(ln.qty), 9.5, true);
+    obs.forEach((s, i) => cv.T(cx[5] + 2, cv.y - i * 12, s, 9));
+    cv.y -= rows * 12 + 4; cv.RG(225, 229, 236); cv.line(L, cv.y + 6, R, cv.y + 6, 0.4);
+  }
+  if (d.observations && d.observations.trim()) { cv.y -= 10; head(LB.observations); wrapWidth(cv, d.observations, R - L, 10).slice(0, 12).forEach((s) => { room(14); cv.T(L, cv.y, s, 10); cv.y -= 14; }); }
+  cv.y -= 14; room(40); cv.black();
+  wrapWidth(cv, LB.footer2, R - L, 9.5).forEach((s) => { room(14); cv.T(L, cv.y, s, 9.5); cv.y -= 13; });
+  drawFooters(cv, lh);
+  // the non-fiscal sentence is mandatory on every page, above the letterhead footer
+  cv.doc.getPages().forEach((pg) => { cv.page = pg; cv.rgbc(120, 20, 20); cv.T(L, 46, LB.footer1, 9, true); cv.black(); });
+  cv.doc.setTitle(title + " " + d.number);
   return cv.doc.save();
 }
 
