@@ -16,8 +16,10 @@ const SIDE: { key: string; x: number; y: number; w: number; h: number; hx: numbe
 ];
 const HOLM = [{ key: "dachholm_l", x: 112, y: 238, w: 20, h: 122 }, { key: "dachholm_r", x: 248, y: 238, w: 20, h: 122 }];
 
-export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
+export function CarSvg({ panels, glass, onPanel, onGlass, tint, partCounts }: {
   panels: Record<string, Panel>; glass?: { ws?: { on?: boolean }; rs?: { on?: boolean } };
+  /** V7: number of spare parts per element: a small blue badge 🔩 n on the element */
+  partCounts?: Record<string, number>;
   onPanel: (key: string) => void; onGlass: (k: "ws" | "rs") => void;
   /** field view: colour of a panel by what is done to it (null = nothing, grey); without it the panel is green when it has dents */
   tint?: (key: string) => { fill: string; stroke: string } | null;
@@ -27,6 +29,16 @@ export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
   const fillOf = (k: string) => (tint ? tint(k)?.fill ?? "#e7ebf1" : on(k) ? "#86b08a" : "#e7ebf1");
   const strokeOf = (k: string) => (tint ? tint(k)?.stroke ?? "#aab3c0" : on(k) ? "#5e8c63" : "#aab3c0");
   const sw = (a: boolean) => (a ? 2.4 : 1.3);
+  const pbadge = (k: string, x: number, y: number) => {
+    const n = partCounts?.[k] ?? 0;
+    if (n <= 0) return null;
+    return (
+      <g style={{ pointerEvents: "none" }} aria-label={`🔩 ${n}`}>
+        <circle cx={x} cy={y} r="11" fill="#1D4FB8" stroke="#fff" strokeWidth="1.5" />
+        <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="800" fill="#fff">{n}</text>
+      </g>
+    );
+  };
   const label = (k: string, cx: number, cy: number) => {
     const st = stat(k), a = on(k), counted = st.total > 0;
     return (
@@ -61,6 +73,7 @@ export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
             <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="15" fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
             {p.hx != null && <rect x={p.hx} y={p.y + p.h / 2 - 12} width="6" height="24" rx="3" fill={a ? "#fff" : "#aab3c0"} opacity=".85" />}
             {label(p.key, p.x + p.w / 2, p.y + p.h / 2)}
+            {pbadge(p.key, p.x + p.w - 6, p.y + 8)}
           </g>
         );
       })}
@@ -70,6 +83,7 @@ export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
           <g key={p.key} style={{ cursor: "pointer" }} onClick={() => onPanel(p.key)} role="button" aria-label={tOr("pn." + p.key, PANEL_MAP[p.key].de)}>
             <path d={p.d} fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
             {label(p.key, p.cx, p.cy)}
+            {pbadge(p.key, p.cx + 30, p.cy - 22)}
           </g>
         );
       })}
@@ -79,6 +93,7 @@ export function CarSvg({ panels, glass, onPanel, onGlass, tint }: {
           <g key={p.key} style={{ cursor: "pointer" }} onClick={() => onPanel(p.key)} role="button" aria-label={tOr("pn." + p.key, PANEL_MAP[p.key].de)}>
             <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="9" fill={fillOf(p.key)} stroke={strokeOf(p.key)} strokeWidth={sw(a)} />
             <text x={cx} y={cy} transform={`rotate(-90 ${cx} ${cy})`} textAnchor="middle" fontSize="11" fontWeight="800" fill={a ? "#fff" : "#16233f"} style={{ pointerEvents: "none" }}>{tOr("ps." + p.key, "Holm")}{st.total > 0 ? ` ${st.total}/${st.avgClass}` : ""}</text>
+            {pbadge(p.key, p.x + p.w / 2, p.y - 6)}
           </g>
         );
       })}

@@ -16,6 +16,7 @@ import { replyToFor } from "../reports/reply_to";
 import { companies, insurers, photos, repairEvents, reportSends, stations, users, vehicleHandovers, vehicles } from "../../schema";
 import type { Storage } from "../../storage";
 import { calcSettings, flatten, loadOrgSettings } from "../vehicles/sync";
+import { partLabelsFor } from "../parts/parts";
 
 export interface ReportDeps { db: Db; storage: Storage; mailer: Mailer }
 type VehicleRow = typeof vehicles.$inferSelect;
@@ -59,7 +60,7 @@ export async function buildRepairReportPdf(deps: Pick<ReportDeps, "db" | "storag
   const calc = computeVehicle(flat as unknown as CalcVehicle, calcSettings(await loadOrgSettings(db, row.orgId)), methodOf(await loadMethodMap(db, row.orgId), row));
   const doc = {
     ...flat, id: row.id, land, status: row.statut, stationName: st?.name ?? "", insurerName: ins?.name ?? "",
-    partsToReplace: Array.isArray(flat.partsToReplace) ? (flat.partsToReplace as string[]) : [],
+    partsToReplace: (await partLabelsFor(db, [{ id: row.id, header: row.header }])).get(row.id) ?? [],
   } as unknown as DocVehicle;
   const rows = await db.select().from(photos).where(and(eq(photos.vehicleId, row.id), isNull(photos.deletedAt))).orderBy(asc(photos.sort), asc(photos.takenAt));
   const list: DocPhoto[] = [];

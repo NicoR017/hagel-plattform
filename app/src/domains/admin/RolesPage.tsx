@@ -14,6 +14,7 @@ const GROUPS_DEF: { title: Key; keys: string[] }[] = [
   { title: "v6PermGroupDocs", keys: ["kva.envoyer", "rapport_reparation.envoyer", "photos.ajouter", "photos.supprimer", "export.excel"] },
   { title: "v6PermGroupDash", keys: ["colibri.importer", "dashboard.voir"] },
   { title: "v6PermGroupReports", keys: ["rapports.voir", "rapports.envoyer", "rapports.gerer"] },
+  { title: "v6PermGroupParts", keys: ["pieces.voir", "pieces.catalogue"] },
   { title: "v6PermGroupAdmin", keys: ["assurances.gerer", "stations.gerer", "parametres.gerer", "utilisateurs.gerer", "roles.gerer", "audit.voir"] },
 ];
 const PERM_GROUPS = (() => {

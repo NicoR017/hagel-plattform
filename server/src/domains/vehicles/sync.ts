@@ -6,6 +6,7 @@ import {
   type OrgSettings, type PullResponse, errorMessage,
 } from "@hagel/shared";
 import { audit } from "../../audit";
+import { applyPartOp, catalogueRefs, isPartOp, partsFor } from "../parts/parts";
 import { finishHandover } from "../repair/handover";
 import type { Mailer } from "../../email";
 import { loadMethodMap, methodForInsurer, methodOf, clientMethods, type MethodMap } from "../admin/methods";
@@ -210,6 +211,7 @@ async function applyOp(deps: SyncDeps, tx: Tx, u: Principal, op: Op): Promise<Op
   const at = stampOf(op.at);
   const db = tx as unknown as Db;
   if (isRepairOp(op)) return applyRepairOp(deps, tx, u, op, at);
+  if (isPartOp(op)) return applyPartOp(tx, u, op);
   switch (op.type) {
     case "vehicle.create": return createVehicle(tx, u, op, at);
 
@@ -634,6 +636,9 @@ export async function processPull(db: Db, u: Principal, orgId: string, sinceIn: 
   await attachMyAssign(db, u, outVehicles);
   const repair = await repairDataFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
   for (const cv of outVehicles) { const x = repair.get(cv.id); if (x) cv.repair = x; }
+  // V7: spare parts of each car (users with pieces.voir)
+  const partsMap = await partsFor(db, u, vs.filter((r) => sent.has(r.id)).map((r) => ({ row: r, ref: refOf(r, as.get(r.id) ?? []) })));
+  for (const cv of outVehicles) { const x = partsMap.get(cv.id); if (x) cv.parts = x; }
   const photoNames = await userNames(db, ps.map((p) => p.takenBy));
   const outPhotos: ClientPhoto[] = ps.filter((p) => visible.get(p.vehicleId)).map((p) => photoToClient(p, photoNames));
 
@@ -738,7 +743,7 @@ async function buildRefs(db: Db, u: Principal, orgId: string, settings: OrgSetti
       .map((s) => ({ id: s.id, name: s.name, type: s.type, country: s.country, repairsPerDay: s.repairsPerDay, azureTenant: s.azureTenant }))
     : [];
   return {
-    stations: st, bodyshops, repairLocations, occupancy: occ, drivers, settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
+    stations: st, bodyshops, repairLocations, occupancy: occ, drivers, ...(perms.has("pieces.voir") ? { parts: await catalogueRefs(db, orgId) } : {}), settings: priceSafe, me: { id: u.id, name: me?.name ?? "", language: me?.language ?? "de", permissions: [...perms], fieldView: fp ? { technicianId: fp.id, kind: fp.kind, name: fp.name, steps: roleRepairSteps(u, orgId), moves: fieldMovesOf(u, orgId, fp.kind), stationIds: [...(access.get(u.id)?.stationIds ?? [])] } : null }, people,
     insurers: insRows.filter((i) => internal || wantIns.has(i.id)).map((i) => ({ id: i.id, name: i.name })),
     stationInsurers: linkRows.map((l) => ({ stationId: l.station_insurers.stationId, insurerId: l.station_insurers.insurerId })).filter((l) => internal || visibleIds.has(l.stationId)),
     campaigns: campRows.filter((cp) => internal || wantCamp.has(cp.id)).map((cp) => ({ id: cp.id, name: cp.name, country: cp.country, start: cp.start, end: cp.end, stationIds: campLinks.filter((l) => l.campaignId === cp.id).map((l) => l.stationId) })),

@@ -11,6 +11,7 @@ import { StatusDialog } from "../../shared/Dialogs";
 import { SendReportDialog } from "../reports/SendReport";
 import { usePhotos, usePhotoUrl, useField } from "../../shared/store";
 import { toast } from "../../shared/toast";
+import { partLabels } from "../vehicles/partsLogic";
 import { NumInput } from "../../shared/ui";
 import type { LocalPhoto } from "../../shared/sync/db";
 
@@ -190,6 +191,12 @@ export function Kva({ v, beforeActions, technicians = true }: { v: LocalVehicle;
         </div>
       )}
       {split && <SharesBox v={v} c={c} technicians={technicians} />}
+      {partLabels(v as { parts?: never; partsToReplace?: unknown }).length > 0 && (
+        <div style={{ marginTop: 14, background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>🔩 {t("f2KvaParts")}</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>{partLabels(v as { parts?: never; partsToReplace?: unknown }).map((p) => <li key={p}>{p}</li>)}</ul>
+        </div>
+      )}
       {String(x.notiz ?? "").trim() && <div style={{ marginTop: 14, background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}><div style={{ fontWeight: 700, marginBottom: 4 }}>{X.notiz}</div><div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{x.notiz}</div></div>}
       {photos.some((p) => p.inPdf) && (
         <div style={{ marginTop: 16 }}><h3 style={{ margin: "0 0 8px" }}>{X.fotos}</h3>

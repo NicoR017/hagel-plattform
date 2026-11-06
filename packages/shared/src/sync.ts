@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { REPAIR_STAGES, STATUSES } from "./permissions";
+import type { ClientPart, ClientPartsRefs } from "./parts";
 
 export const uuidStr = z.string().uuid();
 const iso = z.string().datetime();
@@ -132,6 +133,18 @@ export const handoverInput = z.object({
 }).refine((h) => (h.moveConsent === undefined) === (h.moveConsentText === undefined), { message: "consent_text_required" });
 export type HandoverInput = z.infer<typeof handoverInput>;
 
+/** V7 (F2): a spare part of the car (a catalogue part, a free-text one, or the panel of a replaced element). The id is made on the phone: a replayed operation is applied once. */
+export const partInput = z.object({
+  id: uuidStr,
+  zoneKey: z.string().trim().min(1).max(40).nullable().default(null),
+  catalogId: uuidStr.nullable().default(null),
+  name: z.string().trim().min(1).max(120),
+  qty: z.number().int().min(1).max(99).default(1),
+  oemRef: z.string().trim().max(60).nullable().default(null),
+  source: z.enum(["assessment", "replace", "manual"]).default("assessment"),
+}).strict();
+export type PartInput = z.infer<typeof partInput>;
+
 export const opSchema = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("vehicle.create"),
@@ -176,6 +189,9 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("booking.create"), vehicleId: uuidStr, booking: bookingInput }),
   z.object({ ...base, type: z.literal("booking.move"), bookingId: uuidStr, date: ymd, time: hhmm }),
   z.object({ ...base, type: z.literal("booking.cancel"), bookingId: uuidStr }),
+  z.object({ ...base, type: z.literal("part.add"), vehicleId: uuidStr, part: partInput }),
+  z.object({ ...base, type: z.literal("part.update"), partId: uuidStr, fields: z.object({ qty: z.number().int().min(1).max(99), oemRef: z.string().trim().max(60).nullable(), name: z.string().trim().min(1).max(120) }).partial().strict() }),
+  z.object({ ...base, type: z.literal("part.remove"), partId: uuidStr }),
   z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]), recipients: z.array(z.string().trim().toLowerCase().email().max(200)).min(1).max(10).optional() }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
@@ -190,6 +206,7 @@ export const V3_OP_TYPES: readonly string[] = [
   "vehicle.repairStage", "vehicle.bodyshop", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
   "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
   "vehicle.handover", // v5: customer signature (kept queued on a server that does not know it yet)
+  "part.add", "part.update", "part.remove", // v7: spare parts of the car
 ];
 export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
 
@@ -248,6 +265,8 @@ export interface ClientVehicle extends Record<string, unknown> {
   bodyshopId?: string | null;
   /** repair data, only for users who may see it (see ClientRepair) */
   repair?: ClientRepair;
+  /** V7: spare parts of the car (users with `pieces.voir`; absent on an older server) */
+  parts?: ClientPart[];
   updatedAt: string;
   updatedBy: string | null;
   seq: number;
@@ -333,6 +352,8 @@ export interface PullResponse {
       /** set for a technician / headliner account that does not see the internal split: the app then shows the field interface (v4) */
       fieldView?: { technicianId: string; kind: "pdr" | "headliner"; name: string; stationIds: string[]; /** repair steps given by his role(s); empty = rule of his technician kind */ steps?: string[]; /** the moves he may make: [from, to] */ moves?: [string, string][] } | null;
     };
+    /** V7: catalogue of part names by zone (users with `pieces.voir`; absent on an older server) */
+    parts?: ClientPartsRefs;
     /** V7: people who can drive a car, with the stations they are assigned to — only for users who may move cars (absent on an older server) */
     drivers?: { id: string; name: string; stationIds: string[] }[];
     /** users that can be assigned (id, name) — only for users with `vehicules.assigner` */

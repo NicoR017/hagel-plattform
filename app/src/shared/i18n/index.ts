@@ -14,6 +14,7 @@ import { deV8, enV8, esV8, frV8 } from "./v8";
 import { deV9, enV9, esV9, frV9 } from "./v9";
 import { deV10, enV10, esV10, frV10 } from "./v10";
 import { deV11, enV11, esV11, frV11 } from "./v11";
+import { deV12, enV12, esV12, frV12 } from "./v12";
 import { deCitas, enCitas, esCitas, frCitas } from "./citas";
 import { frBase } from "./fr_base";
 import { frField } from "./fr_field";
@@ -89,7 +90,7 @@ const deBase = {
   "p.reparatur.board": "Reparatur-Board bedienen", "p.reparatur.endabnahme": "Endabnahme (Chef de station)", "p.termine.buchen": "Reparaturtermine buchen", "p.methoden.gerer": "Berechnungsmethoden verwalten", "p.wochenbericht.voir": "Wochenbericht ansehen", "p.kommentare.schreiben": "Kommentare lesen und schreiben",
 } as const;
 
-const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6, ...deV7, ...deV8, ...deV9, ...deV10, ...deV11, ...deCitas };
+const de = { ...deBase, ...deField, ...deV3, ...deV4, ...deV5, ...deV6, ...deV7, ...deV8, ...deV9, ...deV10, ...deV11, ...deV12, ...deCitas };
 export type Key = keyof typeof de;
 
 const enBase: Record<keyof typeof deBase, string> = {
@@ -156,10 +157,10 @@ const enBase: Record<keyof typeof deBase, string> = {
   "p.reparatur.board": "Use the repair board", "p.reparatur.endabnahme": "Final acceptance (station manager)", "p.termine.buchen": "Book repair appointments", "p.methoden.gerer": "Manage calculation methods", "p.wochenbericht.voir": "View the weekly report", "p.kommentare.schreiben": "Read and write comments",
 };
 
-const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6, ...enV7, ...enV8, ...enV9, ...enV10, ...enV11, ...enCitas };
+const en: Record<Key, string> = { ...enBase, ...enField, ...enV3, ...enV4, ...enV5, ...enV6, ...enV7, ...enV8, ...enV9, ...enV10, ...enV11, ...enV12, ...enCitas };
 
-const fr = { ...frBase, ...frField, ...frV, ...frV7, ...frV8, ...frV9, ...frV10, ...frV11, ...frCitas } as Record<Key, string>;
-const es = { ...esBase, ...esField, ...esV, ...esV7, ...esV8, ...esV9, ...esV10, ...esV11, ...esCitas } as Record<Key, string>;
+const fr = { ...frBase, ...frField, ...frV, ...frV7, ...frV8, ...frV9, ...frV10, ...frV11, ...frV12, ...frCitas } as Record<Key, string>;
+const es = { ...esBase, ...esField, ...esV, ...esV7, ...esV8, ...esV9, ...esV10, ...esV11, ...esV12, ...esCitas } as Record<Key, string>;
 
 export const dictionaries: Record<Lang, Record<Key, string>> = { de, en, fr, es };
 
@@ -194,6 +195,8 @@ export function useLang(): Lang {
 }
 
 export const t = (k: Key): string => dictionaries[current][k] ?? dictionaries.de[k];
+/** A label in a given language (not the language of the user): documents of a car are in the language of its country. Empty when the key does not exist. */
+export const tIn = (lang: Lang, k: Key): string => (dictionaries[lang] as Record<string, string>)[k] ?? "";
 /** Translated label if the key exists, otherwise the fallback (e.g. a custom, admin-defined name). */
 export function tOr(k: string, fallback: string): string {
   const d = dictionaries[current] as Record<string, string>;

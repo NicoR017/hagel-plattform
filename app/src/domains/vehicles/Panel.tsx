@@ -3,16 +3,21 @@ import { PANEL_MAP, SIZES, lookupAW, panelBollos, panelRepairAW, panelStats, tei
 import { eur, num } from "@hagel/documents";
 import { t, tOr } from "../../shared/i18n";
 import { Dialog, Field, NumInput, ToggleRow } from "../../shared/ui";
+import type { LocalVehicle } from "../../shared/sync/db";
+import { PartsTab } from "./PartsTab";
 
 export const panelName = (key: string) => tOr("pn." + key, PANEL_MAP[key]?.de ?? key);
 
 type Draft = Required<Pick<Panel, "dents" | "alu" | "kleber" | "method" | "finish" | "awManual" | "big" | "bigEur">> & { baseAW: number | null; key: string };
 
-export function PanelDialog({ panelKey, panel, land, teiler, rate, canPrice, onSave, onClose }: {
+export function PanelDialog({ panelKey, panel, land, teiler, rate, canPrice, onSave, onClose, vehicle, partsCount = 0, readOnly }: {
   panelKey: string; panel: Panel | undefined; land: "DE" | "ES"; teiler: number; rate: number; canPrice: boolean;
   onSave: (p: Panel | null) => void; onClose: () => void;
+  /** V7: with the car, the sheet gets the two tabs "Dent repair" / "Parts to replace" (without it: the dents only, as before) */
+  vehicle?: LocalVehicle; partsCount?: number; readOnly?: boolean;
 }) {
   const ES = land === "ES";
+  const [tab, setTab] = useState<"dents" | "parts">("dents");
   const [d, setD] = useState<Draft>({
     key: panelKey, dents: { ...(panel?.dents ?? {}) }, alu: !!panel?.alu, kleber: !!panel?.kleber, method: panel?.method ?? "sanft", finish: panel?.finish ?? true,
     awManual: !!panel?.awManual, baseAW: panel?.baseAW ?? null, big: panel?.big ?? 0, bigEur: panel?.bigEur ?? 0,
@@ -36,6 +41,22 @@ export function PanelDialog({ panelKey, panel, land, teiler, rate, canPrice, onS
   const stat = (a: string, b: string) => <div>{a}: <b style={{ color: "var(--text)" }}>{b}</b></div>;
   return (
     <Dialog title={<span style={{ textTransform: "uppercase" }}>{panelName(panelKey)}<div style={{ fontSize: 12, color: "var(--sub)", fontWeight: 400, textTransform: "none" }}>{def.orientation === "waagrecht" ? t("horizontalPanel") : t("verticalPanel")}</div></span>} onClose={() => { finish(); onClose(); }}>
+      {vehicle && (
+        <div role="tablist" style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button role="tab" aria-selected={tab === "dents"} className={"seg" + (tab === "dents" ? " on" : "")} style={{ lineHeight: 1.25, minHeight: 56 }} onClick={() => setTab("dents")}>
+            🔧 {t("f2TabDents")}<div style={{ fontSize: 11, fontWeight: 400 }}>{t("f2TabDentsSum").replace("{n}", String(st.total)).replace("{m}", t(("m." + d.method) as never))}</div>
+          </button>
+          <button role="tab" aria-selected={tab === "parts"} className={"seg" + (tab === "parts" ? " on" : "")} style={{ lineHeight: 1.25, minHeight: 56 }} onClick={() => setTab("parts")}>
+            🔩 {t("f2TabParts")}<div style={{ fontSize: 11, fontWeight: 400 }}>{t("f2TabPartsSum").replace("{n}", String(partsCount))}</div>
+          </button>
+        </div>
+      )}
+      {vehicle && tab === "parts" ? (
+        <>
+          <PartsTab v={vehicle} zone={panelKey} readOnly={readOnly} />
+          <button className="pbtn" style={{ marginTop: 14 }} onClick={() => { finish(); onClose(); }}>✓ {t("save")}</button>
+        </>
+      ) : (<>
       <div style={{ display: "flex", background: "var(--bg)", borderRadius: 14, padding: 16, marginTop: 8 }}>
         <div style={{ flex: 1, paddingRight: 14 }}>
           {ES ? (
@@ -102,6 +123,7 @@ export function PanelDialog({ panelKey, panel, land, teiler, rate, canPrice, onS
         <button className="pbtn danger" style={{ width: "auto", padding: "15px 18px", marginTop: 0 }} onClick={() => { onSave(null); onClose(); }}>{t("remove")}</button>
         <button className="pbtn" style={{ marginTop: 0 }} onClick={() => { finish(); onClose(); }}>✓ {t("save")}</button>
       </div>
+      </>)}
     </Dialog>
   );
 }

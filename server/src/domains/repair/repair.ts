@@ -17,6 +17,7 @@ import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
   vehicleComments, vehicleMoves, vehicleStatusHistory, vehicles,
 } from "../../schema";
+import { partLabelsFor } from "../parts/parts";
 import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
 
 const BOOKABLE = ["arrive", "besichtigung", "attente"] as const;
@@ -87,7 +88,7 @@ async function touchVehicle(tx: Tx, u: Principal | null, row: VehicleRow, set: P
 
 /** "Zu ersetzende Teile" of the expertise become to-dos when the vehicle enters the board (once per label). */
 export async function partsToTodos(tx: Tx, row: VehicleRow, userId: string | null) {
-  const parts = ((row.header as Record<string, unknown>).partsToReplace as unknown[] | undefined)?.filter((x): x is string => typeof x === "string" && !!x.trim()) ?? [];
+  const parts = (await partLabelsFor(tx, [{ id: row.id, header: row.header }])).get(row.id) ?? [];
   if (!parts.length) return;
   const have = await tx.select().from(repairTodos).where(and(eq(repairTodos.vehicleId, row.id), eq(repairTodos.source, "part")));
   const haveText = new Set(have.map((t) => t.text));

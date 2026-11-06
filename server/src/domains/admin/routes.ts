@@ -19,6 +19,7 @@ import type { Hub } from "../../hub";
 import { canOrg, hasOrgPermission, type Principal } from "../../permissions";
 import { bumpSystemMatrix, seedMethods } from "./methods";
 import { masterRoutes } from "./master_routes";
+import { partsAdminRoutes } from "../parts/admin";
 import { seedCompanies } from "./companies_seed";
 import type { Storage } from "../../storage";
 import { loadOrgSettings, occupancyOf, visibleSettings, visibleStations } from "../vehicles/sync";
@@ -545,6 +546,7 @@ export function adminRoutes({ db, cfg, mailer, hub, storage, needAuth, needOrg, 
   org.get("/permissions", (c) => c.json({ permissions: PERMISSIONS }));
 
   org.route("/", masterRoutes({ db, hub, storage, require, validationHook }));
+  org.route("/", partsAdminRoutes({ db, hub, require, validationHook }));
   admin.route("/", org);
 
   async function assertStationInOrg(stationId: string, orgId: string, kind: "place" | "bodyshop" = "place") {

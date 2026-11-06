@@ -183,6 +183,13 @@
       "when": 1793399216050,
       "tag": "0025_v7_move_consent_driver",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793485616050,
+      "tag": "0026_v7_parts_catalogue",
+      "breakpoints": true
     }
   ]
 }

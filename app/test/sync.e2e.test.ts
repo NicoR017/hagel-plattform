@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { LocalDb, refsKey } from "../src/shared/sync/db";
 import { SyncEngine, type Http } from "../src/shared/sync/engine";
-import { addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
+import { addPart, removePart, updatePart, addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
 import { call, driverAt, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { users, vehicleAssignments } from "../../server/src/schema";
 
@@ -368,6 +368,33 @@ describe("misc", () => {
     await sync(p);
     expect((await p.db.issues.toArray()).some((i) => i.opType === "vehicle.move" && i.code === "driver_required")).toBe(true);
     expect((await p.db.getMeta(refsKey(c.orgES)) as any).drivers.some((d: any) => d.stationIds.includes(A))).toBe(true);
+  });
+  it("V7 F2: spare parts added offline show at once, reach the server once and the other phone; the catalogue arrives with the refs; a removed part goes away", async () => {
+    const p = phone(tokens.assessor);
+    await sync(p);
+    const refs: any = await p.db.getMeta(refsKey(c.orgES));
+    expect(refs.parts.catalog.length).toBeGreaterThan(5);
+    expect(refs.parts.catalog[0].names).toEqual({ de: expect.any(String), en: expect.any(String), fr: expect.any(String), es: expect.any(String) });
+    const id = await createVehicle(p.ctx, { stationId: A, header: { kennzeichen: "PARTS 01" } });
+    await sync(p);
+    p.online = false;
+    const cat = refs.parts.catalog.find((x: any) => x.zoneKeys.includes("dach"));
+    const pid = await addPart(p.ctx, id, { zoneKey: "dach", catalogId: cat.id, name: cat.names.es });
+    await addPart(p.ctx, id, { zoneKey: "haube", catalogId: null, name: "Capó · panel", source: "replace" });
+    await addPart(p.ctx, id, { zoneKey: "haube", catalogId: null, name: "Capó · panel", source: "replace" }); // twice: still one
+    await updatePart(p.ctx, id, pid, { qty: 2 });
+    const local: any = await veh(p, id);
+    expect(local.parts.map((x: any) => [x.zoneKey, x.qty, x.source])).toEqual([["dach", 2, "assessment"], ["haube", 1, "replace"]]);
+    p.online = true;
+    await sync(p);
+    expect(await p.db.outbox.count()).toBe(0);
+    const other = phone(tokens.chefA);
+    await sync(other);
+    expect(((await veh(other, id)) as any).parts.map((x: any) => x.name)).toEqual([cat.names.es, "Capó · panel"]);
+    await removePart(p.ctx, id, pid);
+    await sync(p); await sync(other);
+    expect(((await veh(other, id)) as any).parts.map((x: any) => x.zoneKey)).toEqual(["haube"]);
+    expect((await p.db.issues.toArray()).length).toBe(0);
   });
   it("assigned technician list (people) and refs arrive with the first pull", async () => {
     const p = phone(tokens.assessor);

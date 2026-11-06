@@ -16,6 +16,7 @@ import { Dialog } from "../../shared/ui";
 import { REPAIR_STAGES, stageOf } from "../repair/boardLogic";
 import { alsoRemoval, countKinds, fieldPanels, hasStepPhoto, isActive, isFinished, isMine, nextStep, tally, type FieldKind, type FieldPanel, type FieldVehicle, type Intervention } from "./fieldLogic";
 import { Chip, KIND } from "../vehicles/kinds";
+import { partLabels } from "../vehicles/partsLogic";
 import { stageLabel } from "../repair/RepairBoard";
 import { typeLabel } from "../shell/Stations";
 import type { Key } from "../../shared/i18n";
@@ -133,7 +134,7 @@ function Work({ v, kind }: { v: LocalVehicle; kind: FieldKind }) {
 /** spare parts to fit: the parts to replace of the estimate (they became to-dos when the car entered the board); struck through once done */
 function sparePartsOf(v: LocalVehicle): { text: string; done: boolean }[] {
   const todos = todosOf(v).filter((x) => x.source === "part");
-  const header = (((v as Record<string, unknown>).partsToReplace as unknown[] | undefined) ?? []).filter((x): x is string => typeof x === "string" && !!x.trim());
+  const header = partLabels(v as { parts?: never; partsToReplace?: unknown }); // the parts of the car (or the old header list when the car has no parts list)
   const out = todos.map((x) => ({ text: x.text, done: x.done }));
   for (const h of header) if (!out.some((o) => o.text === h.trim())) out.push({ text: h.trim(), done: false });
   return out;

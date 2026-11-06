@@ -3,7 +3,8 @@ import { computeShares, vehicleSettings, type CalcVehicle, type Panel } from "@h
 import { eur, esFormula, esRange, h1, hA, num } from "@hagel/documents";
 import { t } from "../../shared/i18n";
 import type { LocalVehicle } from "../../shared/sync/db";
-import { setHeader, setPanel } from "../../shared/sync/mutations";
+import { addPart, removePart, setHeader, setPanel } from "../../shared/sync/mutations";
+import { hasPartsList, landLang, partsOfVehicle, replacePartName } from "./partsLogic";
 import { CarSvg } from "./CarSvg";
 import { GlassDialog, PanelDialog, panelName } from "./Panel";
 import { PartsBox } from "./PartsBox";
@@ -27,10 +28,21 @@ export function Erfassung({ v, coloured, readOnly }: { v: LocalVehicle; coloured
   const kinds = coloured ? fieldPanels({ panels: pmap }) : [];
   const tint = coloured ? (k: string) => { const p = kinds.find((q) => q.key === k); return p ? { fill: KIND[p.kind].fill, stroke: KIND[p.kind].stroke } : null; } : undefined;
   const counts = countKinds(kinds);
+  const partList = partsOfVehicle(v as { parts?: never });
+  const partCounts: Record<string, number> = {};
+  for (const p of partList) if (p.zoneKey) partCounts[p.zoneKey] = (partCounts[p.zoneKey] ?? 0) + 1;
+  // "Replace" = the element is changed: its panel becomes a part to order by itself (one per element); another method / removing the element takes it away again
+  const syncReplacePart = (key: string, p: Panel | null) => {
+    if (!hasPartsList(v as { parts?: never }) || !f.can("pieces.voir")) return;
+    const want = !!p && p.method === "erneuern";
+    const have = partList.find((x) => x.source === "replace" && x.zoneKey === key);
+    if (want && !have) void addPart(f.mut, v.id, { zoneKey: key, catalogId: null, name: replacePartName(key, landLang(v as { land?: unknown })), source: "replace" });
+    else if (!want && have) void removePart(f.mut, v.id, have.id);
+  };
 
   return (
     <div style={{ padding: "14px 14px 8px" }}>
-      <CarSvg panels={pmap} glass={cv.glass} tint={tint} onPanel={(k) => editable && setPanelKey(k)} onGlass={(k) => editable && f.can("prix.voir") && setGlass(k)} />
+      <CarSvg panels={pmap} glass={cv.glass} tint={tint} partCounts={partCounts} onPanel={(k) => editable && setPanelKey(k)} onGlass={(k) => editable && f.can("prix.voir") && setGlass(k)} />
       {coloured && (
         <div className="fv-counts" aria-label={t("fvLegend")}>
           {(["pdr", "ptp", "replace"] as const).map((k) => <Chip key={k} {...KIND[k]}>{t(KIND[k].label)}{counts[k] > 0 ? ` · ${counts[k]}` : ""}</Chip>)}
@@ -72,7 +84,8 @@ export function Erfassung({ v, coloured, readOnly }: { v: LocalVehicle; coloured
       <PartsBox v={v} readOnly={readOnly} />
       {panel && (
         <PanelDialog panelKey={panel} panel={pmap[panel]} land={cv.land === "ES" ? "ES" : "DE"} teiler={vs.teiler} rate={vs.stundensatz} canPrice={prices}
-          onSave={(p) => void setPanel(f.mut, v.id, panel, p as Record<string, unknown> | null)} onClose={() => setPanelKey(null)} />
+          vehicle={hasPartsList(v as { parts?: never }) && f.can("pieces.voir") ? v : undefined} partsCount={partCounts[panel] ?? 0} readOnly={!editable}
+          onSave={(p) => { void setPanel(f.mut, v.id, panel, p as Record<string, unknown> | null); syncReplacePart(panel, p); }} onClose={() => setPanelKey(null)} />
       )}
       {glass && (
         <GlassDialog k={glass} value={cv.glass?.[glass]} onClose={() => setGlass(null)}

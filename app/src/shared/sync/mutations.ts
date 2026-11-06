@@ -144,6 +144,16 @@ export const setParts = (c: MutCtx, vehicleId: string, parts: string[]) => setHe
 /** Change the calculation method of a vehicle that has not been measured yet (the server refuses it afterwards). */
 export const setMethod = (c: MutCtx, vehicleId: string, methodId: string, methodVersion: number) => setHeader(c, vehicleId, { methodId, methodVersion });
 
+/** V7 spare parts of the car (sent in batches of their own, like the other v3+ operations). `part.id` is made here: a replayed operation is applied once. */
+export interface NewPart { zoneKey: string | null; catalogId: string | null; name: string; qty?: number; oemRef?: string | null; source?: "assessment" | "replace" | "manual" }
+export async function addPart(c: MutCtx, vehicleId: string, p: NewPart): Promise<string> {
+  const id = uuid4();
+  await pushV(c, "part.add", { vehicleId, part: { id, zoneKey: p.zoneKey, catalogId: p.catalogId, name: p.name.trim().slice(0, 120), qty: p.qty ?? 1, oemRef: p.oemRef ?? null, source: p.source ?? "assessment" } }, vehicleId);
+  return id;
+}
+export const updatePart = (c: MutCtx, vehicleId: string, partId: string, fields: { qty?: number; oemRef?: string | null; name?: string }) => pushV(c, "part.update", { partId, fields }, vehicleId);
+export const removePart = (c: MutCtx, vehicleId: string, partId: string) => pushV(c, "part.remove", { partId }, vehicleId);
+
 export const setBodyshop = (c: MutCtx, vehicleId: string, bodyshopId: string | null) => pushV(c, "vehicle.bodyshop", { vehicleId, bodyshopId }, vehicleId);
 export const setRepairStage = (c: MutCtx, vehicleId: string, stage: string) => pushV(c, "vehicle.repairStage", { vehicleId, stage }, vehicleId);
 export const addTodo = (c: MutCtx, vehicleId: string, text: string) => pushV(c, "repair.todo.add", { vehicleId, todo: { id: uuid4(), text: text.trim() } }, vehicleId);

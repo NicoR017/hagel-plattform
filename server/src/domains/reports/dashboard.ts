@@ -6,6 +6,7 @@ import { effectivePermissions, type Principal } from "../../permissions";
 import { insurers, repairBookings, roleAssignments, stations, users, vehicleAssignments, vehicleMoves, vehicleStatusHistory, vehicles } from "../../schema";
 import { loadMethodMap, methodOf } from "../admin/methods";
 import { calcSettings, flatten, loadOrgSettings, occupancyOf, refOf } from "../vehicles/sync";
+import { partLabelsFor } from "../parts/parts";
 
 export interface DashboardFilters { sites?: string[]; campaign?: string; client?: string; insurer?: string; from?: string; to?: string }
 
@@ -411,6 +412,7 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
   const people = userIds.length ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, userIds)) : [];
   const personName = (id: string) => people.find((p) => p.id === id)?.name || people.find((p) => p.id === id)?.email || "";
 
+  const partLabels = await partLabelsFor(db, rows.map((r) => ({ id: r.id, header: r.header })));
   const out: FinishedExportRow[] = [];
   for (const r of rows) {
     const h = histBy.get(r.id) ?? [];
@@ -445,7 +447,7 @@ export async function buildFinishedExport(db: Db, u: Principal, orgId: string, f
       other = calc.awNetto - calc.repairEur + calc.hohlMat + calc.bigEur;
     }
     const lines = pdrBase + kleber + ptp + alu + replace + other + calc.demEur + calc.glassEur;
-    const parts = Array.isArray(header.partsToReplace) ? (header.partsToReplace as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+    const parts = partLabels.get(r.id) ?? [];
     const firstAssignee = (assignees.get(r.id) ?? []).map(personName).find(Boolean) ?? "";
     out.push({
       id: r.id, station: r.stationId ? stName.get(r.stationId) ?? "" : "", statut: r.statut,

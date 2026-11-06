@@ -4,6 +4,7 @@ import { hrefOf, type Route } from "../../shared/route";
 import { t } from "../../shared/i18n";
 import { AppShell } from "../shell/AppShell";
 import { BodyShopsPage } from "./BodyShops";
+import { PartsCatalogPage } from "./PartsPage";
 import { InsurerReportsPage } from "../reports/InsurerReports";
 import { ColibriDevicesPage } from "../scans/ColibriDevices";
 import { ALIAS, menuGroups, type Section } from "./menu";
@@ -71,6 +72,7 @@ export function AdminApp({ me, org, onOrg, route }: { me: Me; org: string; onOrg
     case "technicians": body = <TechniciansPage canUsers={has("utilisateurs.gerer")} />; break;
     case "weekly": body = <WeeklyPage />; break;
     case "reports": body = <InsurerReportsPage canSend={hasAny("rapports.envoyer")} canManage={hasAny("rapports.gerer")} />; break;
+    case "parts": body = <PartsCatalogPage />; break;
     case "azure": body = <AzurePage />; break;
     case "audit": body = <AuditPage />; break;
     case "orgs": body = <OrgsPage />; break;

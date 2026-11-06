@@ -1,4 +1,4 @@
-import type { ClientRepair, ClientVehicle, Op } from "@hagel/shared";
+import type { ClientPart, ClientRepair, ClientVehicle, Op } from "@hagel/shared";
 import type { LocalVehicle } from "./db";
 
 const LINKS = ["clientStationId", "insurerId", "campaignId"] as const;
@@ -79,6 +79,15 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
     case "repair.todo.delete": return v ? withRepair(v, at, (r) => ({ ...r, todos: r.todos.filter((x) => x.id !== op.todoId) })) : v;
     case "repair.check": return v ? withRepair(v, at, (r) => ({ ...r, checks: { ...r.checks, [op.key]: op.done ? { by: "…", at } : null } })) : v;
     case "vehicle.comment": return v ? withRepair(v, at, (r) => ({ ...r, comments: [...r.comments, { id: op.comment.id, userId: null, userName: "…", at, text: op.comment.text.trim() }] })) : v;
+    case "part.add": {
+      if (!v) return v;
+      const cur = (v.parts as ClientPart[] | undefined) ?? [];
+      const p = op.part;
+      if (cur.some((x) => x.id === p.id || (p.source === "replace" && x.source === "replace" && x.zoneKey === p.zoneKey && x.status !== "cancelled"))) return v; // already there (replay / another phone)
+      return { ...v, parts: [...cur, { id: p.id, zoneKey: p.zoneKey, catalogId: p.catalogId, name: p.name, qty: p.qty, oemRef: p.oemRef, source: p.source, status: "to_order" }], updatedAt: at };
+    }
+    case "part.update": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).map((x) => (x.id === op.partId ? { ...x, ...(op.fields.qty !== undefined ? { qty: op.fields.qty } : {}), ...(op.fields.oemRef !== undefined ? { oemRef: op.fields.oemRef } : {}), ...(op.fields.name !== undefined && !x.catalogId ? { name: op.fields.name } : {}) } : x)), updatedAt: at } : v;
+    case "part.remove": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).filter((x) => x.id !== op.partId), updatedAt: at } : v;
     case "vehicle.assign": return v ? { ...v, assigneeIds: op.userIds, updatedAt: at } : v;
     case "vehicle.colibri": return v ? { ...v, colibri: op.colibri, colibriFile: op.file ? { name: op.file.name, size: op.file.size } : v.colibriFile, updatedAt: at } : v;
     default: return v;

@@ -4,6 +4,7 @@ import { appendScanPdf, generateKvaPdf, generateRepairPhotoReport, kvaFileName, 
 import type { LocalDb, LocalPhoto, LocalVehicle, Refs } from "./sync/db";
 import type { SyncEngine } from "./sync/engine";
 import type { Settings } from "@hagel/calc";
+import { partLabels } from "../domains/vehicles/partsLogic";
 
 export function toDoc(v: LocalVehicle, refs: Refs | undefined): DocVehicle {
   const x = v as Record<string, any>;
@@ -11,7 +12,7 @@ export function toDoc(v: LocalVehicle, refs: Refs | undefined): DocVehicle {
     ...x, id: v.id, land: x.land === "ES" ? "ES" : "DE", status: v.statut,
     stationName: refs?.stations.find((s) => s.id === v.stationId)?.name ?? "", colibriFile: v.colibriFile,
     insurerName: refs?.insurers.find((i) => i.id === v.insurerId)?.name ?? "",
-    partsToReplace: Array.isArray(x.partsToReplace) ? (x.partsToReplace as string[]) : [],
+    partsToReplace: partLabels(x as { parts?: never; partsToReplace?: unknown }), // the parts of the car (no price); the old header list for a car without the parts list
     method: methodDefOf(refs, v), methodName: printableMethodName(methodOfVehicle(refs, v)),
   } as DocVehicle;
 }

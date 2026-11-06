@@ -664,6 +664,62 @@ export const colibriDeviceAssignments = pgTable("colibri_device_assignments", {
  * never for technician / headliner profiles, never in an Excel export. A signature is never edited: signing again creates a new row and
  * the previous one gets `replaced_by`. The id is created on the phone, so a replayed offline operation is applied once.
  */
+/** V7 (F2) catalogue of generic part names (no reference, no car model) with a name in each of the four languages. */
+export const partCatalog = pgTable("part_catalog", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  nameDe: text("name_de").notNull().default(""),
+  nameEn: text("name_en").notNull().default(""),
+  nameFr: text("name_fr").notNull().default(""),
+  nameEs: text("name_es").notNull().default(""),
+  /** false = the automatic translation of some language was not checked by a person yet */
+  translationValidated: boolean("translation_validated").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => ({ byOrg: index("part_catalog_org_idx").on(t.orgId) }));
+
+/** a part can belong to several zones (zone key = element of the car schema, an interior area, or a custom zone) */
+export const partCatalogZones = pgTable("part_catalog_zones", {
+  catalogId: uuid("catalog_id").notNull().references(() => partCatalog.id, { onDelete: "cascade" }),
+  zoneKey: text("zone_key").notNull(),
+}, (t) => ({ pk: primaryKey({ columns: [t.catalogId, t.zoneKey] }) }));
+
+/** zones added by an admin (the default zones are in code) */
+export const partZones = pgTable("part_zones", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  key: text("key").notNull(),
+  group: text("group").notNull(),
+  nameDe: text("name_de").notNull().default(""),
+  nameEn: text("name_en").notNull().default(""),
+  nameFr: text("name_fr").notNull().default(""),
+  nameEs: text("name_es").notNull().default(""),
+  sort: integer("sort").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+}, (t) => ({ uq: uniqueIndex("part_zones_org_key_uq").on(t.orgId, t.key) }));
+
+/** V7 (F2) spare parts of a car. id = made on the phone (idempotent). A part is never deleted for good: deleted_at (and status "cancelled" once F3 orders exist). */
+export const vehicleParts = pgTable("vehicle_parts", {
+  id: uuid("id").primaryKey(),
+  vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
+  zoneKey: text("zone_key"),
+  catalogId: uuid("catalog_id").references(() => partCatalog.id),
+  name: text("name").notNull(),
+  qty: integer("qty").notNull().default(1),
+  oemRef: text("oem_ref"),
+  /** assessment | replace | manual | migrated */
+  source: text("source").notNull().default("assessment"),
+  status: text("status").notNull().default("to_order"),
+  /** migrated free-text parts: the label (lower case) so the migration can run twice */
+  migratedKey: text("migrated_key"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => ({ byVehicle: index("vehicle_parts_vehicle_idx").on(t.vehicleId) }));
+
 export const vehicleHandovers = pgTable("vehicle_handovers", {
   id: uuid("id").primaryKey(),
   vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
