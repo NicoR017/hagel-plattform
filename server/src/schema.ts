@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn,
+  bigint, boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
@@ -714,6 +714,15 @@ export const vehicleParts = pgTable("vehicle_parts", {
   status: text("status").notNull().default("to_order"),
   /** migrated free-text parts: the label (lower case) so the migration can run twice */
   migratedKey: text("migrated_key"),
+  /** V7 F3a: announced / expected delivery day (set by the order in F3b), who and when delivered / installed, the two photos of the installation, how often it came back */
+  expectedAt: date("expected_at"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  deliveredBy: uuid("delivered_by").references(() => users.id),
+  installedAt: timestamp("installed_at", { withTimezone: true }),
+  installedBy: uuid("installed_by").references(() => users.id),
+  photoBeforeId: uuid("photo_before_id"),
+  photoAfterId: uuid("photo_after_id"),
+  returnCount: integer("return_count").notNull().default(0),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

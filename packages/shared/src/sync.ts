@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { REPAIR_STAGES, STATUSES } from "./permissions";
 import type { ClientPart, ClientPartsRefs } from "./parts";
+import { PART_RETURN_REASONS } from "./parts";
 
 export const uuidStr = z.string().uuid();
 const iso = z.string().datetime();
@@ -192,6 +193,9 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("part.add"), vehicleId: uuidStr, part: partInput }),
   z.object({ ...base, type: z.literal("part.update"), partId: uuidStr, fields: z.object({ qty: z.number().int().min(1).max(99), oemRef: z.string().trim().max(60).nullable(), name: z.string().trim().min(1).max(120) }).partial().strict() }),
   z.object({ ...base, type: z.literal("part.remove"), partId: uuidStr }),
+  z.object({ ...base, type: z.literal("part.deliver"), partId: uuidStr }),
+  z.object({ ...base, type: z.literal("part.install"), partId: uuidStr, photoBeforeId: uuidStr, photoAfterId: uuidStr }),
+  z.object({ ...base, type: z.literal("part.return"), partId: uuidStr, reason: z.enum(PART_RETURN_REASONS), note: z.string().trim().max(300).optional() }),
   z.object({ ...base, type: z.literal("report.send"), vehicleId: uuidStr, report: z.object({ id: uuidStr, type: z.enum(["kva", "reparation"]), lang: z.enum(["de", "es"]), recipients: z.array(z.string().trim().toLowerCase().email().max(200)).min(1).max(10).optional() }).strict() }),
 ]);
 export type Op = z.infer<typeof opSchema>;
@@ -206,7 +210,7 @@ export const V3_OP_TYPES: readonly string[] = [
   "vehicle.repairStage", "vehicle.bodyshop", "photo.stage", "repair.todo.add", "repair.todo.toggle", "repair.todo.delete", "repair.check", "vehicle.comment",
   "appointment.add", "appointment.update", "appointment.delete", "booking.create", "booking.move", "booking.cancel",
   "vehicle.handover", // v5: customer signature (kept queued on a server that does not know it yet)
-  "part.add", "part.update", "part.remove", // v7: spare parts of the car
+  "part.add", "part.update", "part.remove", "part.deliver", "part.install", "part.return", // v7: spare parts of the car
 ];
 export const isV3Op = (type: string): boolean => V3_OP_TYPES.includes(type);
 

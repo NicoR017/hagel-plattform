@@ -48,6 +48,7 @@ export const arrivedToday = (v: BoardVehicle, today: string) => v.repair?.autoSt
 export function blockerKey(code: string): string {
   if (code === "todos_open") return "v5BlkTodos";
   if (code === "no_technician") return "v5BlkTech";
+  if (code === "parts_not_installed") return "f3BlkParts";
   if (code.startsWith("check:")) return "v5BlkCheck_" + code.slice(6);
   if (code.startsWith("photos:")) return "v5BlkPhoto";
   return code;

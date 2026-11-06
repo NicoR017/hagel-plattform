@@ -13,7 +13,7 @@ export const PERMISSIONS = [
   // V6: automatic insurer reports (see / send now / set up)
   "rapports.voir", "rapports.envoyer", "rapports.gerer",
   // V7 (Repair v2): spare parts — see them / manage the catalogue of part names and zones
-  "pieces.voir", "pieces.catalogue",
+  "pieces.voir", "pieces.catalogue", "pieces.reception", "pieces.installer",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -84,11 +84,11 @@ export const SYSTEM_ROLES: SystemRole[] = [
   },
   {
     key: "technicien", name: "Technicien", description: "Ses véhicules assignés, sans prix", scope: "assigne",
-    permissions: ["vehicules.voir", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben", "pieces.voir"],
+    permissions: ["vehicules.voir", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben", "pieces.voir", "pieces.installer"],
   },
   {
     key: "freelance", name: "Freelance", description: "Véhicules d'une campagne, accès à durée limitée", scope: "campagne",
-    permissions: ["vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben", "pieces.voir"],
+    permissions: ["vehicules.voir", "vehicules.creer", "vehicules.modifier", "vehicules.changer_statut", "ma_part.voir", "photos.ajouter", "reparatur.board", "termine.buchen", "kommentare.schreiben", "pieces.voir", "pieces.installer"],
   },
   {
     key: "carrosserie", name: "Carrosserie", description: "Compte externe : ses véhicules, où qu'ils soient", scope: "client",

@@ -9,6 +9,7 @@ import { AppShell, type Crumb } from "./AppShell";
 import { Stations } from "./Stations";
 import { VehicleDetail } from "../vehicles/VehicleDetail";
 import { RepairDetail } from "../repair/RepairDetail";
+import { PartsBoard } from "../parts/PartsBoard";
 import { VehicleList } from "../vehicles/VehicleList";
 import { NewScans } from "../scans/NewScans";
 import { CitasCalendar } from "../citas/CitasCalendar";
@@ -74,6 +75,9 @@ export function AppRoutes({ me, org, onOrg, route }: { me: Me; org: string; onOr
     const ctx = route.ctx ?? (vehicle?.stationId ? { stationId: vehicle.stationId as string, mode: "kalk" as const } : undefined);
     crumbs = ctx ? trail(ctx.stationId, ctx.mode, { label: `${t("v4Expertise")} · ${plate}` }) : [home, { label: `${t("v4Expertise")} · ${plate}` }];
     body = <Expertise id={route.id} step={route.step} ctx={route.ctx} />;
+  } else if (route.page === "parts") {
+    crumbs = trail(route.stationId, "rep", { label: t("f3PartsTitle") });
+    body = <PartsBoard key={route.stationId + route.view + (route.car ?? "")} stationId={route.stationId} view={route.view} car={route.car} />;
   } else if (route.page === "repair") {
     crumbs = trail(route.stationId, "rep", { label: plate });
     body = <RepairDetail id={route.id} tab={route.tab} stationId={route.stationId} />;

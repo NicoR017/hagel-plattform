@@ -154,6 +154,11 @@ export async function addPart(c: MutCtx, vehicleId: string, p: NewPart): Promise
 export const updatePart = (c: MutCtx, vehicleId: string, partId: string, fields: { qty?: number; oemRef?: string | null; name?: string }) => pushV(c, "part.update", { partId, fields }, vehicleId);
 export const removePart = (c: MutCtx, vehicleId: string, partId: string) => pushV(c, "part.remove", { partId }, vehicleId);
 
+/** F3a: a part arrived / was installed (with the before photo taken at disassembly and an after photo) / goes back to "to order" */
+export const deliverPart = (c: MutCtx, vehicleId: string, partId: string) => pushV(c, "part.deliver", { partId }, vehicleId);
+export const installPart = (c: MutCtx, vehicleId: string, partId: string, photoBeforeId: string, photoAfterId: string) => pushV(c, "part.install", { partId, photoBeforeId, photoAfterId }, vehicleId);
+export const returnPart = (c: MutCtx, vehicleId: string, partId: string, reason: "wrong_ref" | "damaged" | "other", note?: string) => pushV(c, "part.return", { partId, reason, ...(note ? { note } : {}) }, vehicleId);
+
 export const setBodyshop = (c: MutCtx, vehicleId: string, bodyshopId: string | null) => pushV(c, "vehicle.bodyshop", { vehicleId, bodyshopId }, vehicleId);
 export const setRepairStage = (c: MutCtx, vehicleId: string, stage: string) => pushV(c, "vehicle.repairStage", { vehicleId, stage }, vehicleId);
 export const addTodo = (c: MutCtx, vehicleId: string, text: string) => pushV(c, "repair.todo.add", { vehicleId, todo: { id: uuid4(), text: text.trim() } }, vehicleId);

@@ -2,7 +2,12 @@
 export const PART_SOURCES = ["assessment", "replace", "manual", "migrated"] as const;
 export type PartSource = (typeof PART_SOURCES)[number];
 /** status of a part (F3 adds the ordering steps); F2 only knows the first and "cancelled" */
-export const PART_STATUSES = ["to_order", "cancelled"] as const;
+export const PART_STATUSES = ["to_order", "order_sent", "ordered", "delivered", "installed", "cancelled"] as const;
+export type PartStatus = (typeof PART_STATUSES)[number];
+/** columns of the Parts board, in order ("returned" parts are back in "to_order" with a counter) */
+export const PART_BOARD_COLUMNS = ["to_order", "order_sent", "ordered", "delivered", "installed"] as const;
+/** why a part comes back: wrong reference, damaged, other */
+export const PART_RETURN_REASONS = ["wrong_ref", "damaged", "other"] as const;
 
 /** Default zones = the elements of the car schema (exterior) and the interior areas; the admin can add more (stored). Names of the default ones are in the app dictionaries (`pn.<key>` / `zn.<key>`). */
 export const EXTERIOR_ZONES = ["haube", "dach", "dachholm_l", "dachholm_r", "heck", "heck_u", "kfl_vl", "tuer_vl", "tuer_hl", "sw_hl", "kfl_vr", "tuer_vr", "tuer_hr", "sw_hr", "ws", "rs"] as const;
@@ -23,6 +28,8 @@ export interface ClientPart {
   oemRef: string | null;
   source: string;
   status: string;
+  /** F3a: announced / expected delivery day (YYYY-MM-DD), delivered / installed instants, the installation photos, how often it came back */
+  expectedAt?: string | null; deliveredAt?: string | null; installedAt?: string | null; photoBeforeId?: string | null; photoAfterId?: string | null; returnCount?: number;
 }
 export interface ClientCatalogPart { id: string; names: PartNames; zoneKeys: string[]; validated: boolean }
 export interface ClientCustomZone { key: string; group: "exterior" | "interior"; names: PartNames }

@@ -15,7 +15,7 @@ import { recipientsForStation, recipientsOfVehicle } from "../reports/reports";
 import { replyToFor } from "../reports/reply_to";
 import {
   photos, repairAppointments, repairBookings, repairChecks, repairEvents, repairTodos, reportSends, stations, technicians, users, vehicleAssignments,
-  vehicleComments, vehicleMoves, vehicleStatusHistory, vehicles,
+  vehicleComments, vehicleMoves, vehicleParts, vehicleStatusHistory, vehicles,
 } from "../../schema";
 import { partLabelsFor } from "../parts/parts";
 import { Reject, calcSettings, flatten, loadOrgSettings, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
@@ -40,7 +40,7 @@ export function fieldMovesOf(u: Principal, orgId: string, kind: "pdr" | "headlin
 }
 
 /** is this car his: assigned to his account for his kind of work (PDR / removal-refit), or his name in the split */
-async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from?: string): Promise<boolean> {
+export async function isHisCar(tx: Tx, row: VehicleRow, u: Principal, fp: { name: string; kind: "pdr" | "headliner" }, from?: string): Promise<boolean> {
   // by role steps: the PDR step is PDR work, disassembly / reassembly are removal-refit work; otherwise by the kind of his record
   const roleSteps = roleRepairSteps(u, row.orgId).length > 0;
   const removal = roleSteps && from ? from !== "pdr" : fp.kind === "headliner";
@@ -115,6 +115,9 @@ export async function finishBlockers(db: Pick<Db, "select">, vehicleId: string):
   const [veh] = await db.select({ shares: vehicles.shares }).from(vehicles).where(eq(vehicles.id, vehicleId));
   const named = String(((veh?.shares ?? {}) as Record<string, unknown>).techName ?? "").trim();
   if (!tech && !named) out.push("no_technician");
+  // V7 F3a: a part that was ordered (sent, ordered or delivered) must be installed first; a part never ordered does not hold the car back
+  const [open] = await db.select({ id: vehicleParts.id }).from(vehicleParts).where(and(eq(vehicleParts.vehicleId, vehicleId), isNull(vehicleParts.deletedAt), inArray(vehicleParts.status, ["order_sent", "ordered", "delivered"]))).limit(1);
+  if (open) out.push("parts_not_installed");
   return out;
 }
 

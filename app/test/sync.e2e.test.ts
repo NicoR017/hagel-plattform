@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { LocalDb, refsKey } from "../src/shared/sync/db";
 import { SyncEngine, type Http } from "../src/shared/sync/engine";
-import { addPart, removePart, updatePart, addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
+import { addPart, removePart, updatePart, deliverPart, installPart, returnPart, tagPhoto, addPhoto, assignVehicle, createVehicle, deletePhoto, deleteVehicle, moveVehicle, setHeader, signHandover, setPanel, setShares, setStatus, updatePhoto, type MutCtx } from "../src/shared/sync/mutations";
 import { call, driverAt, inviteAndAccept, setup, type Ctx } from "../../server/test/helpers";
 import { users, vehicleAssignments } from "../../server/src/schema";
 
@@ -395,6 +395,37 @@ describe("misc", () => {
     await sync(p); await sync(other);
     expect(((await veh(other, id)) as any).parts.map((x: any) => x.zoneKey)).toEqual(["haube"]);
     expect((await p.db.issues.toArray()).length).toBe(0);
+  });
+  it("V7 F3a: delivered / installed (with a before photo taken at disassembly and an after photo) / returned, offline, in order; the server refuses an install without the right photos and the phone is told", async () => {
+    const chef = phone(tokens.chefA);
+    await sync(chef);
+    const id = await createVehicle(chef.ctx, { stationId: A, header: { kennzeichen: "PARTS 02" } });
+    await sync(chef);
+    const pid = await addPart(chef.ctx, id, { zoneKey: "dach", catalogId: null, name: "Antena" });
+    await sync(chef);
+    await deliverPart(chef.ctx, id, pid);
+    expect(((await veh(chef, id)) as any).parts[0].status).toBe("delivered"); // at once, before the server answers
+    await sync(chef);
+    // an install without a disassembly photo: refused by the server, shown as an issue, the part stays delivered
+    const p1 = await addPhoto(chef.ctx, { vehicleId: id, blob: JPG(), phase: "reparatur" });
+    const p2 = await addPhoto(chef.ctx, { vehicleId: id, blob: JPG(), phase: "reparatur" });
+    await installPart(chef.ctx, id, pid, p1, p2);
+    await sync(chef);
+    expect((await chef.db.issues.toArray()).some((i) => i.opType === "part.install" && i.code === "part_photos_required")).toBe(true);
+    expect(((await veh(chef, id)) as any).parts[0].status).toBe("delivered");
+    // with the photo taken at disassembly it goes through (offline too)
+    await tagPhoto(chef.ctx, id, p1, "demontage", null);
+    chef.online = false;
+    await installPart(chef.ctx, id, pid, p1, p2);
+    expect(((await veh(chef, id)) as any).parts[0].status).toBe("installed");
+    chef.online = true;
+    await sync(chef);
+    const other = phone(tokens.chefA2);
+    await sync(other);
+    expect(((await veh(other, id)) as any).parts[0]).toMatchObject({ status: "installed", photoBeforeId: p1, photoAfterId: p2, installedAt: expect.any(String) });
+    await returnPart(chef.ctx, id, pid, "damaged", "cracked");
+    await sync(chef); await sync(other);
+    expect(((await veh(other, id)) as any).parts[0]).toMatchObject({ status: "to_order", returnCount: 1, installedAt: null });
   });
   it("assigned technician list (people) and refs arrive with the first pull", async () => {
     const p = phone(tokens.assessor);

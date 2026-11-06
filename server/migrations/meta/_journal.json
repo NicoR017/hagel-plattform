@@ -190,6 +190,13 @@
       "when": 1793485616050,
       "tag": "0026_v7_parts_catalogue",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793572016050,
+      "tag": "0027_v7_parts_board",
+      "breakpoints": true
     }
   ]
 }

@@ -6,8 +6,8 @@ export type Tab4 = "basis" | "erfassung" | "bilder" | "kva";
 export type Tab = Tab4 | "termin" | "techniker" | "planung" | "dokumente" | "kommunikation" | "gtmotive" | "verlauf";
 export type Step = Tab4;
 /** tabs of the repair detail (the card of the Kanban board) */
-export type RTab = "uebersicht" | "fotos" | "abschluss" | "verlauf";
-export const RTABS: RTab[] = ["uebersicht", "fotos", "abschluss", "verlauf"];
+export type RTab = "uebersicht" | "teile" | "fotos" | "abschluss" | "verlauf";
+export const RTABS: RTab[] = ["uebersicht", "teile", "fotos", "abschluss", "verlauf"];
 /** Kalkulation / Reparatur / Alle Fahrzeuge */
 export type Mode = "kalk" | "rep" | "all";
 export const MODES: Mode[] = ["kalk", "rep", "all"];
@@ -37,6 +37,8 @@ export type Route =
   | { page: "vehicle"; id: string; tab: Tab; ctx?: Ctx }
   /** repair detail: #/s/:station/rep/r/:id/:tab */
   | { page: "repair"; id: string; tab: RTab; stationId: string }
+  /** V7: Parts board of a station: #/s/:station/rep/parts?view=part|car|all[&car=:id] */
+  | { page: "parts"; stationId: string; view: "part" | "car" | "all"; car?: string }
   | { page: "admin"; tab?: string };
 
 export const TABS: Tab[] = ["basis", "erfassung", "bilder", "kva", "dokumente", "termin", "techniker", "planung", "kommunikation", "gtmotive", "verlauf"];
@@ -60,6 +62,10 @@ export function parseRoute(hash: string): Route {
   if (p[0] === "admin") return { page: "admin", tab: p[1] };
   if (p[0] === "s" && p[1]) {
     const stationId = p[1];
+    if (p[2] === "rep" && p[3] === "parts") {
+      const q = new URLSearchParams(query), v = q.get("view");
+      return { page: "parts", stationId, view: v === "car" || v === "all" ? v : "part", ...(q.get("car") ? { car: q.get("car")! } : {}) };
+    }
     if (p[2] === "rep" && p[3] === "r" && p[4]) return { page: "repair", id: p[4], tab: (RTABS as string[]).includes(p[5] ?? "") ? (p[5] as RTab) : "uebersicht", stationId };
     if (p[2] === "cal") return { page: "calendar", stationId, month: /^d{4}-d{2}$/.test(p[3] ?? "") ? p[3] : undefined, date: /^d{4}-d{2}-d{2}$/.test(p[4] ?? "") ? p[4] : undefined };
     if (p[2] === "citas" && /^\d{4}-\d{2}-\d{2}$/.test(p[3] ?? "") && p[4]) return { page: "citas", stationId, date: p[3], appointmentId: decodeURIComponent(p[4]) };
@@ -93,6 +99,7 @@ export const hrefOf = (r: Route): string => {
     case "newexp": return `#/s/${r.stationId}/${r.mode}/neu`;
     case "citas": return `#/s/${r.stationId}/citas/${r.date}/${encodeURIComponent(r.appointmentId)}`;
     case "repair": return `#/s/${r.stationId}/rep/r/${r.id}/${r.tab}`;
+    case "parts": return `#/s/${r.stationId}/rep/parts?view=${r.view}${r.car ? "&car=" + r.car : ""}`;
     case "calendar": return `#/s/${r.stationId}/cal${r.month ? "/" + r.month + (r.date ? "/" + r.date : "") : ""}`;
     case "expertise": return r.ctx ? `#/s/${r.ctx.stationId}/${r.ctx.mode}/exp/${r.id}/${r.step}` : `#/expertise/${r.id}/${r.step}`;
     case "mode": return `#/s/${r.stationId}`;
@@ -122,6 +129,7 @@ export function parentRoute(r: Route, vehicleStationId?: string | null): Route |
     case "citas": return { page: "mode", stationId: r.stationId };
     case "calendar": return { page: "mode", stationId: r.stationId };
     case "repair": return { page: "list", stationId: r.stationId, mode: "rep" };
+    case "parts": return { page: "list", stationId: r.stationId, mode: "rep" };
     case "list": return r.stationId ? { page: "mode", stationId: r.stationId } : r.dash ? { page: "list" } : null;
     case "mode": return { page: "list" };
     case "dashboard":

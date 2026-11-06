@@ -88,6 +88,9 @@ export function applyOpLocal(v: LocalVehicle | null, op: Op, orgId: string): Loc
     }
     case "part.update": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).map((x) => (x.id === op.partId ? { ...x, ...(op.fields.qty !== undefined ? { qty: op.fields.qty } : {}), ...(op.fields.oemRef !== undefined ? { oemRef: op.fields.oemRef } : {}), ...(op.fields.name !== undefined && !x.catalogId ? { name: op.fields.name } : {}) } : x)), updatedAt: at } : v;
     case "part.remove": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).filter((x) => x.id !== op.partId), updatedAt: at } : v;
+    case "part.deliver": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).map((x) => (x.id === op.partId && ["to_order", "order_sent", "ordered"].includes(x.status) ? { ...x, status: "delivered", deliveredAt: at } : x)), updatedAt: at } : v;
+    case "part.install": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).map((x) => (x.id === op.partId && x.status === "delivered" ? { ...x, status: "installed", installedAt: at, photoBeforeId: op.photoBeforeId, photoAfterId: op.photoAfterId } : x)), updatedAt: at } : v;
+    case "part.return": return v && v.parts ? { ...v, parts: (v.parts as ClientPart[]).map((x) => (x.id === op.partId && (x.status === "delivered" || x.status === "installed") ? { ...x, status: "to_order", deliveredAt: null, installedAt: null, photoBeforeId: null, photoAfterId: null, returnCount: (x.returnCount ?? 0) + 1 } : x)), updatedAt: at } : v;
     case "vehicle.assign": return v ? { ...v, assigneeIds: op.userIds, updatedAt: at } : v;
     case "vehicle.colibri": return v ? { ...v, colibri: op.colibri, colibriFile: op.file ? { name: op.file.name, size: op.file.size } : v.colibriFile, updatedAt: at } : v;
     default: return v;

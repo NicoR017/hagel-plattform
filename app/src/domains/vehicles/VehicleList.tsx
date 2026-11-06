@@ -97,9 +97,10 @@ export function VehicleList({ stationId, mode }: { stationId: string; mode: Mode
       </div>
 
       {mode === "rep" && (
-        <div role="group" aria-label={t("v3View")} style={{ display: "flex", gap: 6 }}>
+        <div role="group" aria-label={t("f3ViewLabel")} style={{ display: "flex", gap: 6 }}>
           <button className={"chip" + (!asList ? " on" : "")} aria-pressed={!asList} onClick={() => setAsList(false)}>{t("v5ViewBoard")}</button>
           <button className={"chip" + (asList ? " on" : "")} aria-pressed={asList} onClick={() => setAsList(true)}>{t("v5ViewList")}</button>
+          {f.can("pieces.voir") && <button className="chip" onClick={() => go({ page: "parts", stationId, view: "part" })}>🔩 {t("f3ViewParts")}</button>}
         </div>
       )}
       {mode === "rep" && !asList && <RepairBoard stationId={stationId} />}

@@ -2,13 +2,14 @@
 // Every rule is enforced HERE, not only in the UI.
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DEFAULT_ZONE_KEYS, type ClientCatalogPart, type ClientCustomZone, type ClientPart, type ClientPartsRefs, type Op, type PartNames } from "@hagel/shared";
-import { effectivePermissions, type Principal, type VehicleRef } from "../../permissions";
+import { effectivePermissions, fieldProfile, type Principal, type VehicleRef } from "../../permissions";
+import { isHisCar } from "../repair/repair";
 import type { Db } from "../../db";
-import { partCatalog, partCatalogZones, partZones, repairEvents, vehicleParts, vehicles } from "../../schema";
+import { partCatalog, partCatalogZones, partZones, photos, repairEvents, vehicleParts, vehicles } from "../../schema";
 import { Reject, lockVehicle, need, nextSeq, type OpOutcome, type Tx, type VehicleRow } from "../vehicles/sync";
 
-type PartOp = Extract<Op, { type: "part.add" | "part.update" | "part.remove" }>;
-export const isPartOp = (op: Op): op is PartOp => op.type === "part.add" || op.type === "part.update" || op.type === "part.remove";
+type PartOp = Extract<Op, { type: "part.add" | "part.update" | "part.remove" | "part.deliver" | "part.install" | "part.return" }>;
+export const isPartOp = (op: Op): op is PartOp => op.type.startsWith("part.");
 
 type PartRow = typeof vehicleParts.$inferSelect;
 
@@ -61,9 +62,46 @@ export async function applyPartOp(tx: Tx, u: Principal, op: PartOp): Promise<OpO
       await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_updated", payload: { partId: part.id, fields: Object.keys(op.fields) } as never });
       return touch(tx, u, row);
     }
+    case "part.deliver": {
+      const { part, row, ref } = await partOf(tx, u, op.partId, "pieces.reception");
+      if (!part) throw new Reject("part_not_deliverable");
+      if (part.status === "delivered" || part.status === "installed") return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id }; // twice: nothing happens
+      if (!["to_order", "order_sent", "ordered"].includes(part.status)) throw new Reject("part_not_deliverable");
+      await tx.update(vehicleParts).set({ status: "delivered", deliveredAt: new Date(), deliveredBy: u.id, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
+      await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_delivered", payload: { partId: part.id, name: part.name } as never });
+      void ref;
+      return touch(tx, u, row);
+    }
+    case "part.install": {
+      const { part, row, ref } = await partOf(tx, u, op.partId, "pieces.installer");
+      if (!part) throw new Reject("part_not_delivered");
+      const fp = fieldProfile(u, row.orgId);
+      if (fp && !(await isHisCar(tx, row, u, fp))) throw new Reject("not_your_vehicle"); // a technician / headliner installs on his own cars only
+      if (part.status === "installed") return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
+      if (part.status !== "delivered") throw new Reject("part_not_delivered");
+      // a before photo (taken at disassembly) and an after photo, both of this car and not deleted: the same rule as the photo before a move
+      const ph = await tx.select({ id: photos.id, stage: photos.repairStage }).from(photos).where(and(eq(photos.vehicleId, row.id), isNull(photos.deletedAt)));
+      const before = ph.find((p) => p.id === op.photoBeforeId), after = ph.find((p) => p.id === op.photoAfterId);
+      if (!before || !after || before.id === after.id || before.stage !== "demontage") throw new Reject("part_photos_required");
+      await tx.update(vehicleParts).set({ status: "installed", installedAt: new Date(), installedBy: u.id, photoBeforeId: before.id, photoAfterId: after.id, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
+      await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_installed", payload: { partId: part.id, name: part.name } as never });
+      void ref;
+      return touch(tx, u, row);
+    }
+    case "part.return": {
+      // the person who receives parts or the one who fits them can send a part back (wrong reference, damaged, other); it goes back to "to order"
+      let ctx: Awaited<ReturnType<typeof partOf>>;
+      try { ctx = await partOf(tx, u, op.partId, "pieces.reception"); } catch (e) { if (!(e instanceof Reject) || e.code !== "not_allowed") throw e; ctx = await partOf(tx, u, op.partId, "pieces.installer"); }
+      const { part, row } = ctx;
+      if (!part || (part.status !== "delivered" && part.status !== "installed")) throw new Reject("part_not_returnable");
+      await tx.update(vehicleParts).set({ status: "to_order", deliveredAt: null, deliveredBy: null, installedAt: null, installedBy: null, photoBeforeId: null, photoAfterId: null, returnCount: part.returnCount + 1, updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
+      await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_returned", payload: { partId: part.id, name: part.name, reason: op.reason, note: op.note ?? null } as never });
+      return touch(tx, u, row);
+    }
     case "part.remove": {
       const { part, row } = await partOf(tx, u, op.partId);
       if (!part) return { status: "ok", orgId: row.orgId, seq: row.seq, vehicleId: row.id };
+      if (part.status !== "to_order") throw new Reject("part_locked"); // once ordered, delivered or installed a part is cancelled / returned through its own steps, not removed
       // never deleted for good: kept with deleted_at and the status "cancelled" (the history keeps who and when)
       await tx.update(vehicleParts).set({ deletedAt: new Date(), status: "cancelled", updatedAt: new Date() }).where(eq(vehicleParts.id, part.id));
       await tx.insert(repairEvents).values({ vehicleId: row.id, userId: u.id, type: "part_removed", payload: { partId: part.id, name: part.name } as never });
@@ -72,11 +110,12 @@ export async function applyPartOp(tx: Tx, u: Principal, op: PartOp): Promise<OpO
   }
 }
 
-async function partOf(tx: Tx, u: Principal, partId: string): Promise<{ part: PartRow | null; row: VehicleRow; ref: VehicleRef }> {
+async function partOf(tx: Tx, u: Principal, partId: string, perm?: "pieces.reception" | "pieces.installer"): Promise<{ part: PartRow | null; row: VehicleRow; ref: VehicleRef }> {
   const [p] = await tx.select().from(vehicleParts).where(eq(vehicleParts.id, partId));
   if (!p) throw new Reject("part_not_found");
   const { row, ref } = await lockVehicle(tx, u, p.vehicleId).catch(() => { throw new Reject("part_not_found"); });
-  need(u, "vehicules.modifier", ref); need(u, "pieces.voir", ref);
+  if (perm) need(u, perm, ref); else need(u, "vehicules.modifier", ref);
+  need(u, "pieces.voir", ref);
   return { part: p.deletedAt ? null : p, row, ref };
 }
 
@@ -88,7 +127,10 @@ export async function partsFor(db: Pick<Db, "select">, u: Principal, items: { ro
   const ids = eligible.map((x) => x.row.id);
   const rows = await db.select().from(vehicleParts).where(and(inArray(vehicleParts.vehicleId, ids), isNull(vehicleParts.deletedAt))).orderBy(asc(vehicleParts.createdAt));
   for (const { row } of eligible) out.set(row.id, []);
-  for (const r of rows) out.get(r.vehicleId)?.push({ id: r.id, zoneKey: r.zoneKey, catalogId: r.catalogId, name: r.name, qty: r.qty, oemRef: r.oemRef, source: r.source, status: r.status });
+  for (const r of rows) out.get(r.vehicleId)?.push({
+    id: r.id, zoneKey: r.zoneKey, catalogId: r.catalogId, name: r.name, qty: r.qty, oemRef: r.oemRef, source: r.source, status: r.status,
+    expectedAt: r.expectedAt, deliveredAt: r.deliveredAt?.toISOString() ?? null, installedAt: r.installedAt?.toISOString() ?? null, photoBeforeId: r.photoBeforeId, photoAfterId: r.photoAfterId, returnCount: r.returnCount,
+  });
   return out;
 }
 
